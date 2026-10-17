@@ -1,4 +1,4 @@
-import { collection, addDoc, deleteDoc, doc, updateDoc, setDoc, increment, onSnapshot, getDocs, writeBatch, runTransaction, serverTimestamp, query, where, orderBy } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+import { collection, doc, setDoc, onSnapshot, getDocs, writeBatch, runTransaction, serverTimestamp, query, where, orderBy } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 import { onAuthStateChanged, signInWithEmailAndPassword, signOut } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
 
 import { CONFIG, db, auth } from "./firebase/client.js";
@@ -9,7 +9,11 @@ import { $, $$, esc, setHTML } from "./ui/dom.js";
 import { createTurfRecordHelpers } from "./domain/turf-records.js";
 import { createCostAnalytics } from "./analytics/cost-analytics.js";
 import { createLiveDataListeners } from "./firebase/live-listeners.js";
+import { createFirestoreRepository } from "./firebase/repository.js";
 
+const firestoreData = createFirestoreRepository({
+  db, CONFIG, collection, doc, addDoc, updateDoc, deleteDoc, increment
+});
 const FUEL_RATE = 92.50; // Legacy reference rate; operational costing is managed in the local cost model.
 /* ================= CONFIG ================= */
 
@@ -108,7 +112,7 @@ function openForm({ title, html, submit = 'Save', danger = false, onSubmit }) {
 }
 function confirmDelete(col, id, label) {
   openForm({ title: 'Delete record', html: `<p style="margin:0">Permanently delete <b>${esc(label)}</b>? This cannot be undone.</p>`, submit: 'Delete', danger: true,
-    onSubmit: async () => { await deleteDoc(doc(db, CONFIG.COL[col] || col, id)); toast(`${label} deleted`); } });
+    onSubmit: async () => { await firestoreData.remove(col, id); toast(`${label} deleted`); } });
 }
 function openDrawer(title, sub, body) { $('#dTitle').textContent = title; $('#dSub').textContent = sub; $('#dBody').innerHTML = body; $('#drawerOv').classList.add('open'); }
 function closeDrawer() { $('#drawerOv').classList.remove('open'); }
@@ -732,7 +736,7 @@ function editInventoryCost(id) {
     `<div class="row2">${fld('Stock quantity',`<input id="editPartStock" type="number" min="0" step="any" value="${num(i.stockQuantity)}">`)}${fld('Automatic reorder policy',`<div class="auto-reorder-form-note"><b>${fmt(effectiveReorderLevel(i),2)} ${esc(i.unit||'units')}</b><small>${autoReorderDetails(i).method} · ${autoReorderDetails(i).leadDays}-day lead time</small></div>` )}</div>`+
     fld('Unit',`<select id="editPartUnit">${['Nos','Kg','Litre','Gram','ML','Bag','Pack'].map(u=>`<option ${i.unit===u?'selected':''}>${u}</option>`).join('')}</select>`)+
     fld('Unit cost · ₹ per stock unit',`<input id="editPartCost" type="number" min="0" step="0.01" value="${num(i.unitCost)}">`,'Set 0 if price is not yet known. Stock value uses quantity × unit cost.'),
-    onSubmit:async()=>{const name=$('#editPartName').value.trim();if(!name){toast('Part name is required','err');return false;}await updateDoc(doc(db,CONFIG.COL.inventory,id),{partName:name,category:$('#editPartCat').value,stockQuantity:Math.max(0,num($('#editPartStock').value)),unit:$('#editPartUnit').value,unitCost:Math.max(0,num($('#editPartCost').value))});toast('Inventory and cost updated');}
+    onSubmit:async()=>{const name=$('#editPartName').value.trim();if(!name){toast('Part name is required','err');return false;}await firestoreData.update('inventory', id, {partName:name,category:$('#editPartCat').value,stockQuantity:Math.max(0,num($('#editPartStock').value)),unit:$('#editPartUnit').value,unitCost:Math.max(0,num($('#editPartCost').value))});toast('Inventory and cost updated');}
   });
 }
 
@@ -784,8 +788,8 @@ function machineForm(m) {
       if (S.machines.some(x => x.assetName?.toLowerCase() === name.toLowerCase() && x.id !== m?.id)) { toast('A machine with this name already exists', 'err'); return false; }
       const hrs = num($('#fHrs').value), lastRaw = $('#fLast').value.trim();
       const data = { assetName: name, category: $('#fCat').value.trim() || 'Utility Vehicle', fuelType: $('#fFuel').value, currentHours: hrs, lastServiceHours: lastRaw === '' ? (edit && m.lastServiceHours != null ? m.lastServiceHours : hrs) : num(lastRaw) };
-      if (edit) { await updateDoc(doc(db, CONFIG.COL.machines, m.id), data); toast('Machine updated'); }
-      else { await addDoc(collection(db, CONFIG.COL.machines), { ...data, status: 'Active' }); toast('Machine registered'); }
+      if (edit) { await firestoreData.update('machines', m.id, data); toast('Machine updated'); }
+      else { await firestoreData.add('machines', { ...data, status: 'Active' }); toast('Machine registered'); }
     }
   });
 }
@@ -1139,7 +1143,7 @@ function zoneForm() {
       if (!drawCoords || drawCoords.length < 3) { toast('Polygon is incomplete', 'err'); return false; }
       try {
         const zType = $('#zType').value;
-        await addDoc(collection(db, CONFIG.COL.zones), {
+        await firestoreData.add('zones', {
           zoneName: name,
           zoneType: zType,
           coordinates: drawCoords
@@ -1395,7 +1399,7 @@ const H = {
   'close-modal': closeModal, 'close-drawer': closeDrawer,
   fcat: d => { F.cat = d.v; renderFleet(); }, ffuel: d => { F.fuel = d.v; renderFleet(); },
   'add-machine': () => machineForm(null), 'edit-machine': d => machineForm(mx().get(d.id)),
-  'svc-done': d => { const m = mx().get(d.id); openForm({ title: 'Mark as serviced', submit: 'Confirm service', html: `<p style="margin:0">Record that <b>${esc(m.assetName)}</b> was serviced at <b>${fmt(num(m.currentHours))} hrs</b>? The ${CONFIG.SERVICE_INTERVAL}-hr cycle restarts from here.</p>`, onSubmit: async () => { await updateDoc(doc(db, CONFIG.COL.machines, m.id), { lastServiceHours: num(m.currentHours), lastServiceDate: today() }); toast('Service recorded'); } }); },
+  'svc-done': d => { const m = mx().get(d.id); openForm({ title: 'Mark as serviced', submit: 'Confirm service', html: `<p style="margin:0">Record that <b>${esc(m.assetName)}</b> was serviced at <b>${fmt(num(m.currentHours))} hrs</b>? The ${CONFIG.SERVICE_INTERVAL}-hr cycle restarts from here.</p>`, onSubmit: async () => { await firestoreData.update('machines', m.id, { lastServiceHours: num(m.currentHours), lastServiceDate: today() }); toast('Service recorded'); } }); },
   del: d => confirmDelete(d.col, d.id, d.label),
   kebab: (d, el, e) => { e.stopPropagation(); const menu = el.nextElementSibling, open = menu.classList.contains('open'); $$('.kmenu.open').forEach(x => x.classList.remove('open')); if (!open) menu.classList.add('open'); },
   'add-spray': d => openAddSprayTaskForm(d.day, d.date), 
@@ -1488,15 +1492,15 @@ const H = {
   'export-inwards': () => downloadCSV('goods_inwards.csv',[['Date','Invoice','Supplier','Category','Item','Unit','Qty','Rate','GST %','Taxable','GST amount','Total'],...S.inwards.map(r=>[r.receiptDate,r.invoiceNumber,r.supplier,r.category,r.itemName,r.unit,r.quantity,r.rate,r.gstPercent,r.taxableAmount,r.gstAmount,r.total])]),
   'add-user': () => openForm({ title: 'Register workforce member', submit: 'Add user',
     html: fld('Full name', '<input id="uName" placeholder="e.g. Rajesh Kumar">') + fld('Mobile number', '<input id="uMob" inputmode="tel" placeholder="98765 43210">', 'Saved as +91XXXXXXXXXX so the app login can match it.') + fld('Role', '<select id="uRole"><option value="operator">Operator</option><option value="incharge">Incharge</option><option value="storekeeper">Storekeeper (Fuel Ledger)</option><option value="storekeeper_fertilizer">Storekeeper (Fertilizers & Pesticides)</option></select>'),
-    onSubmit: async () => { const name = $('#uName').value.trim(), mob = normMobile($('#uMob').value); if (!name) { toast('Name is required', 'err'); return false; } if (!/^\+\d{10,14}$/.test(mob)) { toast('Enter a valid mobile number', 'err'); return false; } if (S.users.some(u => u.mobileNumber === mob)) { toast('This mobile number is already registered', 'err'); return false; } await addDoc(collection(db, CONFIG.COL.users), { fullName: name, mobileNumber: mob, role: $('#uRole').value, username: name }); toast('User registered for mobile login'); } }),
+    onSubmit: async () => { const name = $('#uName').value.trim(), mob = normMobile($('#uMob').value); if (!name) { toast('Name is required', 'err'); return false; } if (!/^\+\d{10,14}$/.test(mob)) { toast('Enter a valid mobile number', 'err'); return false; } if (S.users.some(u => u.mobileNumber === mob)) { toast('This mobile number is already registered', 'err'); return false; } await firestoreData.add('users', { fullName: name, mobileNumber: mob, role: $('#uRole').value, username: name }); toast('User registered for mobile login'); } }),
   'add-part': () => openForm({ title: 'Create item master', submit: 'Create item',
     html: fld('Part / Product name', '<input id="pName" placeholder="e.g. Diesel or Petrol">', 'For Fuel Ops insights, use the exact item names Diesel or Petrol and choose category Fuel.') + fld('Category', '<select id="pCat" data-chg="part-category"><option value="Spare Parts">Spare Parts</option><option value="Fuel">Fuel</option><option value="Fertilizers">Fertilizers</option><option value="Pesticides">Pesticides</option><option value="Turf Enhancements">Turf Enhancements</option><option value="Tools">Tools</option><option value="Other">Other</option></select>') + `<div id="pModelWrap">${fld('Applicable Machine / Model', `<select id="pModel">${machineOptions("", "Generic (Use for All Machines)")}</select>`, 'Only relevant for machine spare parts.')}</div>` + `<div class="row2">${fld('Opening stock', '<input id="pStock" type="number" min="0" step="any" value="0">')}${fld('Automatic reorder threshold', '<div class="auto-reorder-form-note"><b>Calculated automatically</b><small>Uses recent issue history, lead-time policy and a safety buffer.</small></div>')}</div>` + fld('Unit of measure', '<select id="pUnit"><option>Nos</option><option>Kg</option><option>Litre</option><option>Gram</option><option>ML</option><option>Bag</option><option>Pack</option></select>') + fld('Unit cost · ₹ per stock unit', '<input id="pUnitCost" type="number" min="0" step="0.01" value="0">', '0 = unknown. Enter supplier cost to unlock stock valuation and turf plan costing.'),
-    onSubmit: async () => { const n = $('#pName').value.trim(); if (!n) { toast('Part name is required', 'err'); return false; } const cat = $('#pCat').value, mVal = cat === 'Spare Parts' ? $('#pModel').value : ''; const item = { partName: n, category: cat, stockQuantity: Math.max(0,num($('#pStock').value)), unit: $('#pUnit').value, reorderLevel: 0, unitCost: Math.max(0, num($('#pUnitCost').value)) }; if (cat === 'Spare Parts') item.compatibleModel = mVal ? mName(mVal) : 'Generic'; await addDoc(collection(db, CONFIG.COL.inventory), item); toast('Item master created'); } }),
-  stock: async d => { try { await updateDoc(doc(db, CONFIG.COL.inventory, d.id), { stockQuantity: increment(+d.d) }); } catch (e) { toast('Could not update stock', 'err'); } },
+    onSubmit: async () => { const n = $('#pName').value.trim(); if (!n) { toast('Part name is required', 'err'); return false; } const cat = $('#pCat').value, mVal = cat === 'Spare Parts' ? $('#pModel').value : ''; const item = { partName: n, category: cat, stockQuantity: Math.max(0,num($('#pStock').value)), unit: $('#pUnit').value, reorderLevel: 0, unitCost: Math.max(0, num($('#pUnitCost').value)) }; if (cat === 'Spare Parts') item.compatibleModel = mVal ? mName(mVal) : 'Generic'; await firestoreData.add('inventory', item); toast('Item master created'); } }),
+  stock: async d => { try { await firestoreData.increment('inventory', d.id, 'stockQuantity', +d.d); } catch (e) { toast('Could not update stock', 'err'); } },
   'add-inc': () => openForm({ title: 'Report incident', submit: 'Submit report',
     html: fld('Machine', `<select id="iMach">${machineOptions('', 'General / no machine')}</select>`) + fld('Type', '<select id="iType"><option>Breakdown</option><option>Maintenance</option><option>Safety</option><option>Other</option></select>') + fld('What happened?', '<textarea id="iDesc" placeholder="Describe the issue"></textarea>') + fld('Estimated downtime · hours (optional)', '<input id="iDownHours" type="number" min="0" step="0.5" value="0">', 'Planning estimate only. Record actual downtime separately if you need realised loss reporting.'),
-    onSubmit: async () => { const desc = $('#iDesc').value.trim(); if (!desc) { toast('Please describe the issue', 'err'); return false; } const mid = $('#iMach').value; await addDoc(collection(db, CONFIG.COL.logs), { machineId: mid ? mName(mid) : 'General', logType: $('#iType').value, issueDescription: desc, repairStatus: 'Pending', estimatedDowntimeHours: Math.max(0, num($('#iDownHours').value)), createdAt: Date.now(), reportedDate: today() }); toast('Incident reported'); } }),
-  'inc-toggle': async d => { const l = S.logs.find(x => x.id === d.id); if (!l) return; try { await updateDoc(doc(db, CONFIG.COL.logs, d.id), { repairStatus: l.repairStatus === 'Resolved' ? 'Pending' : 'Resolved' }); } catch (e) { toast('Could not update incident', 'err'); } }
+    onSubmit: async () => { const desc = $('#iDesc').value.trim(); if (!desc) { toast('Please describe the issue', 'err'); return false; } const mid = $('#iMach').value; await firestoreData.add('logs', { machineId: mid ? mName(mid) : 'General', logType: $('#iType').value, issueDescription: desc, repairStatus: 'Pending', estimatedDowntimeHours: Math.max(0, num($('#iDownHours').value)), createdAt: Date.now(), reportedDate: today() }); toast('Incident reported'); } }),
+  'inc-toggle': async d => { const l = S.logs.find(x => x.id === d.id); if (!l) return; try { await firestoreData.update('logs', d.id, { repairStatus: l.repairStatus === 'Resolved' ? 'Pending' : 'Resolved' }); } catch (e) { toast('Could not update incident', 'err'); } }
 };
 const C = {
   rfrom: (v, d) => { const st = R[d.k]; if (!v) return; st.from = v; st.preset = 'custom'; if (st.to < v) st.to = v; RER[d.k](); },
@@ -1687,7 +1691,7 @@ function openAddSprayTaskForm(dayIdx, dateStr) {
       if (!unit) { toast('Set this product’s stock unit in Inventory Master before scheduling', 'err'); return false; }
       if (qty > num(product.stockQuantity)) toast(`Planned quantity exceeds available stock for ${itemName(product)}. Check replenishment.`, "warn");
 
-      await addDoc(collection(db, CONFIG.COL.plans), {
+      await firestoreData.add('plans', {
         weekStart: currentTurfWeekStart,
         date: dateStr,
         dayIndex: parseInt(dayIdx),
