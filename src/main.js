@@ -8,6 +8,7 @@ import { fmt, money, fmtHrs } from "./utils/format.js";
 import { $, $$, esc, setHTML } from "./ui/dom.js";
 import { createTurfRecordHelpers } from "./domain/turf-records.js";
 import { createCostAnalytics } from "./analytics/cost-analytics.js";
+import { createLiveDataListeners } from "./firebase/live-listeners.js";
 
 const FUEL_RATE = 92.50; // Legacy reference rate; operational costing is managed in the local cost model.
 /* ================= CONFIG ================= */
@@ -1356,55 +1357,15 @@ function renderAll() { try { (RENDER[cur] || (() => {}))(); updateBadges(); if (
 
 /* ================= FIRESTORE LISTENERS ================= */
 let unsubs = [];
-const VIEW_COLLECTIONS = {
-  overview: ['fuel','machines','shifts','inventory','plans','maintenance','logs'],
-  fleet: ['machines','live','fuel','shifts'],
-  fuel: ['fuel','machines'],
-  shifts: ['shifts','machines'],
-  records: ['maintenance','assignments','fuel','machines','inventory'],
-  radar: ['live','zones'],
-  zones: ['zones'],
-  registry: ['inventory','inwards'],
-  users: ['users'],
-  incidents: ['logs'],
-  turfcare: ['inventory','plans']
-};
-function collectionAffectsCurrentView(k) {
-  return (VIEW_COLLECTIONS[cur] || []).includes(k);
-}
-function startListeners() {
-  stopListeners(); setConn('');
-  const caches = Object.fromEntries(Object.keys(CONFIG.COL).map(k => [k, new Map()]));
-  Object.keys(CONFIG.COL).forEach(k => { LOADED[k] = false; S[k] = []; });
-  Object.keys(CONFIG.COL).forEach(k => {
-    unsubs.push(onSnapshot(collection(db, CONFIG.COL[k]), snap => {
-      const firstSnapshot = !LOADED[k];
-      const changes = snap.docChanges();
-      changes.forEach(change => {
-        if (change.type === 'removed') caches[k].delete(change.doc.id);
-        else {
-          const row = { id: change.doc.id, ...change.doc.data() };
-          if (k === 'fuel') row._d = normDate(row.issueDate ?? row.issuedDate ?? row.date ?? row.transactionDate ?? row.createdDate, row.issuedAt ?? row.issueTimestamp ?? row.timestamp ?? row.createdAt ?? row.createdOn ?? row.updatedAt ?? row.recordedAt);
-          if (k === 'plans') row._d = normDate(row.date ?? row.issuedDate ?? row.applicationDate ?? row.appliedDate ?? row.issueDate ?? row.transactionDate ?? row.logDate ?? row.plannedDate, row.issuedAt ?? row.issueTimestamp ?? row.timestamp ?? row.appliedAt ?? row.completedAt ?? row.createdAt ?? row.createdOn ?? row.updatedAt ?? row.recordedAt ?? row.createdTime);
-          if (k === 'shifts') row._d = normDate(row.shiftDate, row.timestamp ?? row.startTime ?? row.endTime);
-          caches[k].set(change.doc.id, row);
-        }
-      });
-      if (firstSnapshot || changes.length) S[k] = [...caches[k].values()];
-      LOADED[k] = true; S._v++; setConn('ok');
-      if (k === 'zones') drawZones();
-      updateBadges(k);
-      if (firstSnapshot || changes.length) {
-        if (collectionAffectsCurrentView(k)) scheduleRender();
-      }
-    }, err => {
-      console.error(k, err); LOADED[k] = true; setConn('err');
-      toast(`Cannot read “${CONFIG.COL[k]}”: ${err.code || err.message}`, 'err');
-      if (collectionAffectsCurrentView(k)) scheduleRender();
-    }));
-  });
-}
-function stopListeners() { unsubs.forEach(u => u()); unsubs = []; }
+const { startListeners, stopListeners } = createLiveDataListeners({
+  db, CONFIG, state: S, loaded: LOADED, normDate, collection, onSnapshot,
+  getCurrentView: () => cur,
+  setConnection: setConn,
+  onZonesUpdated: () => drawZones(),
+  updateBadges: key => updateBadges(key),
+  scheduleRender: () => scheduleRender(),
+  onReadError: (key, err) => toast(`Cannot read “${CONFIG.COL[key]}”: ${err.code || err.message}`, "err")
+});
 // Only the radar needs a timed refresh for stale/live age labels. The Insights dashboard is event-driven.
 setInterval(() => { if (cur === 'radar') { updateBadges('live'); scheduleRender(); } }, 10000);
 
