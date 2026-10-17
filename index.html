@@ -18,6 +18,7 @@
 <link rel="stylesheet" href="/src/styles/app.css">
 </head>
 <body>
+<div id="startupError" class="startup-error" role="alert" hidden></div>
 
 <!-- LOGIN (only used when CONFIG.REQUIRE_LOGIN = true) -->
 <div id="login" hidden>
@@ -42,6 +43,7 @@
     <div class="th-left"><div id="wxChip" class="wx-chip" title="Course conditions · weather model"><span class="wx-text">Syncing weather&hellip;</span></div><button type="button" id="wxRainNotice" class="wx-rain-notice calm" data-act="weather-outlook" title="Seven-day rainfall forecast"><span class="material-symbols-rounded">rainy</span><span class="wx-rain-label">Checking rain forecast…</span></button></div>
     <div class="th-right">
       <span id="dateChip" class="th-date"></span>
+      <span id="firebaseStatus" class="firebase-status connecting" role="status" aria-live="polite">Connecting to Firestore…</span>
       <span class="th-brand">CLOVER GREENS RESORT &amp; GOLF</span>
       <button class="cmd-hint" onclick="toggleCmdPal()">Cmd + K</button><button class="icon-btn" data-act="signout" id="signoutBtn" title="Sign out" aria-label="Sign out" hidden><span class="material-symbols-rounded">logout</span></button>
     </div>
@@ -268,6 +270,26 @@
 <div id="toasts"></div>
 
 
+<script>
+(function () {
+  function showStartupError(message) {
+    var box = document.getElementById("startupError");
+    if (!box) return;
+    box.hidden = false;
+    box.textContent = "DARK-OPS startup error: " + message + " · Open browser DevTools Console for details.";
+  }
+  window.addEventListener("error", function (event) {
+    var isResourceError = event && event.target && (event.target.tagName === "SCRIPT" || event.target.tagName === "LINK");
+    if (isResourceError || (event && event.message)) {
+      showStartupError((event && event.message) || ("Failed to load " + ((event.target && (event.target.src || event.target.href)) || "a required resource")));
+    }
+  }, true);
+  window.addEventListener("unhandledrejection", function (event) {
+    var reason = event && event.reason;
+    showStartupError(reason && reason.message ? reason.message : String(reason || "Unhandled promise rejection"));
+  });
+})();
+</script>
 <script type="module" src="/src/main.js"></script>
 </body>
 </html>
