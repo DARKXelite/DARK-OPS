@@ -12,6 +12,7 @@ The existing single-page dashboard is preserved in `reference/clover-greens-ops-
 - `src/main.js`: dashboard composition, view renderers, event routing, and live application orchestration.
 - `src/firebase/client.js`: existing Firebase client initialization and collection/config constants.
 - `src/firebase/live-listeners.js`: Firestore subscription lifecycle, incremental cache updates, and current-view render gating.
+- `src/firebase/repository.js`: injectable CRUD boundary for ordinary collection writes; transactions and batches stay explicit.
 - `src/utils/`: date/time, number, and display formatting helpers.
 - `src/ui/dom.js`: DOM query, escaping, and incremental HTML update helpers.
 - `src/domain/turf-records.js`: turf record category, status, date, quantity, and inventory matching normalization.
