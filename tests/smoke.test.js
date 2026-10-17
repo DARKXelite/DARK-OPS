@@ -29,6 +29,8 @@ test("Firebase client preserves SDK version and Firestore collections", async ()
 test("dashboard entry imports the extracted services", async () => {
   const js = await read("../src/main.js");
   const css = await read("../src/styles/app.css");
+  assert.match(js, /import \{[^}]*\baddDoc\b[^}]*\bupdateDoc\b[^}]*\bincrement\b[^}]*\} from .*firebase-firestore\.js/);
+  assert.match(js, /createFirestoreRepository\(/);
   for (const modulePath of ["./firebase/client.js", "./utils/date.js", "./utils/format.js", "./ui/dom.js", "./domain/turf-records.js", "./analytics/cost-analytics.js"]) {
     assert.ok(js.includes(modulePath), "missing import " + modulePath);
   }
