@@ -2,30 +2,44 @@
 
 Operations platform for Clover Greens Golf Resort.
 
-## Project status
+## Current migration stage
 
-The repository is being initialized around the existing single-page Clover Greens Ops dashboard. The first objective is to preserve current behavior and establish a safe baseline before incremental modularization.
+The existing single-page dashboard has been preserved in `reference/clover-greens-ops-production-redesign.html`. The first refactor is intentionally mechanical: shared styling and the existing module script have been extracted into separate files, without intentionally changing business logic or Firestore operations.
 
-## Architecture direction
+## Project layout
 
-- **Frontend:** Single-page application with modular JavaScript and CSS.
-- **Firebase:** Existing Firebase project and Firestore data model. Preserve current configuration, collection names, listeners, and access rules unless a reviewed change explicitly requires otherwise.
-- **Modules:** Dashboard, Fleet Ops, Fuel Ops, Turf Ops, Inventory, Users, Maintenance & Records, and shared analytics.
-- **Workflow:** Feature branches, focused commits, syntax checks, and pull requests. Keep `main` stable.
-- **Safety:** Never commit service-account keys, private credentials, or real secrets.
+- `index.html`: application shell.
+- `src/styles/app.css`: extracted dashboard styling.
+- `src/main.js`: existing dashboard logic, now loaded as a module file.
+- `reference/`: preserved source snapshot for comparisons and rollback.
+- `tests/smoke.test.js`: source-loading and Firebase import smoke tests.
+- `.github/workflows/ci.yml`: test and production-build checks.
 
-## Source baseline
+## Local development
 
-Preserve the current dashboard as a reference before refactoring. The migration must keep the production dashboard intact while new modules are introduced and compared.
+Requires Node.js 22 or compatible.
 
-## Development principles
+```sh
+npm install
+npm run dev
+npm test
+npm run build
+```
 
-1. Make behavior-preserving changes first.
-2. Keep Firestore access centralized and auditable.
-3. Distinguish planned, issued, and verified quantities.
-4. Keep operational and cost calculations traceable to source records.
-5. Verify with tests and realistic data before deployment.
+## Firebase and data safety
 
-## Current limitations
+The dashboard continues to use the existing Firebase browser SDK imports pinned to version 10.7.1. Treat collection names, query/listener behavior, authentication assumptions, and current Firebase configuration as compatibility constraints. Do not replace the Firebase project or rename collections as part of a UI refactor.
 
-The connected GitHub integration supports creating and updating repository files and branches, but does not expose a new-repository creation action in this session. This project uses the existing private `DARKXelite/DARK-OPS` repository.
+Do not commit service-account credentials, private keys, or other server-side secrets. Keep this repository private while reviewing the browser configuration and deployment rules.
+
+## Development sequence
+
+1. Preserve a baseline and make behavior-preserving structural changes.
+2. Verify the SPA can run and build in CI.
+3. Extract Firebase/data access into tested services in small steps.
+4. Add tests for cost calculations, fuel inventory, planned-versus-issued turf usage, and reorder suggestions.
+5. Change the working `main` only after review and verification.
+
+## Verification status
+
+The source extraction passed JavaScript syntax checks and three Node.js smoke tests in the working environment. A local Vite install/build could not be completed because dependency installation timed out; the GitHub Actions workflow now performs the test and build checks on the branch. A successful CI run and a real browser/Firestore smoke test are still required before deployment.
