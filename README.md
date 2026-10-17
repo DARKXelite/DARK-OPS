@@ -19,7 +19,7 @@ The existing single-page dashboard is preserved in `reference/clover-greens-ops-
 - `src/analytics/cost-analytics.js`: fuel costing, inventory valuation, and monthly cost snapshot calculations.
 - `src/styles/app.css`: extracted dashboard styling.
 - `reference/`: preserved source snapshot for comparison and rollback.
-- `tests/`: smoke, domain, analytics, and Firestore listener lifecycle tests.
+- `tests/`: smoke, domain, analytics, Fleet Ops, Turf Ops, planner batch, inventory transaction, repository, navigation and Firestore listener tests.
 - `.github/workflows/ci.yml`: automated tests and production build.
 
 ## Local development
