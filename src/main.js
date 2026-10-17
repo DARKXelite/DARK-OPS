@@ -13,6 +13,7 @@ import { createFirestoreRepository } from "./firebase/repository.js";
 import { createNavigation } from "./ui/navigation.js";
 import { createFleetModule } from "./modules/fleet/fleet-module.js";
 import { createTurfOpsModule } from "./modules/turf/turf-ops-module.js";
+import { createTurfPlannerService } from "./modules/turf/planner-service.js";
 
 const firestoreData = createFirestoreRepository({
   db, CONFIG, collection, doc, addDoc, updateDoc, deleteDoc, increment
@@ -24,6 +25,10 @@ const FUEL_RATE = 92.50; // Legacy reference rate; operational costing is manage
 /* ================= HELPERS ================= */
 /* ================= STATE ================= */
 const S = { users: [], machines: [], fuel: [], shifts: [], zones: [], live: [], inventory: [], logs: [], maintenance: [], assignments: [], plans: [], inwards: [], _v: 0 };
+const turfPlannerService = createTurfPlannerService({
+  db, CONFIG, collection, doc, writeBatch, ymd, addDays,
+  getInventory: () => S.inventory, now: () => Date.now()
+});
 const { isTurfCategory, turfCategoryLabel, turfRecordDate, turfRecordProductName, turfRecordQuantity, turfRecordStatus, turfProductForPlan, turfPlanCategory, turfCategoryClass } = createTurfRecordHelpers({
   getInventory: () => S.inventory, normDate, num, itemName: item => itemName(item)
 });
@@ -1341,36 +1346,11 @@ const H = {
     if (invalidLine) { toast("A planned product is missing or its stock unit changed. Recheck the plan.", "err"); if(btn) btn.disabled = false; return; }
 
     try {
-      const b = writeBatch(db);
-      const baseDate = new Date(tpState.start + "T00:00:00");
-
-      for (let w = 0; w < tpState.weeks; w++) {
-        const weekStartStr = ymd(new Date(baseDate.getTime() + w * 7 * 86400000));
-
-        tpState.days.forEach((apps, dIdx) => {
-          const targetDateStr = addDays(weekStartStr, dIdx);
-          apps.forEach(app => {
-            const prod = S.inventory.find(i => i.id === app.pId);
-            const docRef = doc(collection(db, CONFIG.COL.plans));
-            b.set(docRef, {
-              weekStart: weekStartStr,
-              date: targetDateStr,
-              dayIndex: dIdx,
-              productId: app.pId,
-              productName: prod ? prod.partName : "Unknown",
-              category: prod ? prod.category : "Fertilizers",
-              targetQty: app.totQty,
-              unit: app.unit,
-              targetArea: app.area,
-              scope: app.scope,
-              notes: "Planned via Weekly Planner",
-              status: "Planned",
-              createdAt: Date.now()
-            });
-          });
-        });
-      }
-      await b.commit();
+      await turfPlannerService.saveWeeklyPlan({
+        start: tpState.start,
+        weeks: tpState.weeks,
+        days: tpState.days
+      });
       toast("Weekly plan saved successfully!");
       closeModal();
       currentTurfWeekStart = tpState.start;
