@@ -14,6 +14,7 @@ import { createNavigation } from "./ui/navigation.js";
 import { createFleetModule } from "./modules/fleet/fleet-module.js";
 import { createTurfOpsModule } from "./modules/turf/turf-ops-module.js";
 import { createTurfPlannerService } from "./modules/turf/planner-service.js";
+import { createInventoryService } from "./modules/store/inventory-service.js";
 
 const firestoreData = createFirestoreRepository({
   db, CONFIG, collection, doc, addDoc, updateDoc, deleteDoc, increment
@@ -25,6 +26,9 @@ const FUEL_RATE = 92.50; // Legacy reference rate; operational costing is manage
 /* ================= HELPERS ================= */
 /* ================= STATE ================= */
 const S = { users: [], machines: [], fuel: [], shifts: [], zones: [], live: [], inventory: [], logs: [], maintenance: [], assignments: [], plans: [], inwards: [], _v: 0 };
+const inventoryService = createInventoryService({
+  db, CONFIG, doc, collection, runTransaction, serverTimestamp, num
+});
 const turfPlannerService = createTurfPlannerService({
   db, CONFIG, collection, doc, writeBatch, ymd, addDays,
   getInventory: () => S.inventory, now: () => Date.now()
@@ -1207,15 +1211,12 @@ function openInward() {
       const ref=$('#inInvoice').value.trim(),supplier=$('#inSupplier').value.trim(),receiptDate=$('#inDate').value;
       if(!receiptDate||!supplier||!ref){toast('Date, supplier and invoice / GRN are required','err');return false;}
       const taxable=+(qty*rate).toFixed(2),tax=+(taxable*gst/100).toFixed(2),total=+(taxable+tax).toFixed(2);
-      const receiptRef=doc(collection(db,CONFIG.COL.inwards));
-      await runTransaction(db,async tx=>{
-        const itemRef=doc(db,CONFIG.COL.inventory,itemId),snap=await tx.get(itemRef);
-        if(!snap.exists())throw new Error('Item no longer exists');
-        const current=snap.data();if(current.category!==item.category)throw new Error('Item category changed. Refresh and retry');
-        const oldQty=Math.max(0,num(current.stockQuantity)),newQty=oldQty+qty;
-        tx.update(itemRef,{stockQuantity:newQty,unitCost:rate,updatedAt:serverTimestamp()});
-        tx.set(receiptRef,{itemId,itemName:itemName(item),category:item.category,unit:item.unit||'Nos',quantity:qty,rate,gstPercent:gst,taxableAmount:taxable,gstAmount:tax,total,supplier,invoiceNumber:ref,receiptDate,notes:$('#inNotes').value.trim(),createdAt:serverTimestamp(),transactionType:'INWARD'});
-      });toast('Goods inward posted and stock updated');
+      await inventoryService.postGoodsInward({
+        itemId, expectedCategory:item.category, itemName:itemName(item), unit:item.unit||'Nos',
+        quantity:qty, rate, gstPercent:gst, taxableAmount:taxable, gstAmount:tax, total,
+        supplier, invoiceNumber:ref, receiptDate, notes:$('#inNotes').value.trim()
+      });
+      toast('Goods inward posted and stock updated');
     }
   });
   updateInwardItems();
