@@ -4,16 +4,21 @@ Operations platform for Clover Greens Golf Resort.
 
 ## Current migration stage
 
-The existing single-page dashboard has been preserved in `reference/clover-greens-ops-production-redesign.html`. The first refactor is intentionally mechanical: shared styling and the existing module script have been extracted into separate files, without intentionally changing business logic or Firestore operations.
+The existing single-page dashboard is preserved in `reference/clover-greens-ops-production-redesign.html`. The application remains a single-page app, but shared concerns are being separated into imported modules so that operational logic can be tested without rewriting every screen at once.
 
 ## Project layout
 
 - `index.html`: application shell.
+- `src/main.js`: dashboard composition, view renderers, event routing, and live application orchestration.
+- `src/firebase/client.js`: existing Firebase client initialization and collection/config constants.
+- `src/utils/`: date/time, number, and display formatting helpers.
+- `src/ui/dom.js`: DOM query, escaping, and incremental HTML update helpers.
+- `src/domain/turf-records.js`: turf record category, status, date, quantity, and inventory matching normalization.
+- `src/analytics/cost-analytics.js`: fuel costing, inventory valuation, and monthly cost snapshot calculations.
 - `src/styles/app.css`: extracted dashboard styling.
-- `src/main.js`: existing dashboard logic, now loaded as a module file.
-- `reference/`: preserved source snapshot for comparisons and rollback.
-- `tests/smoke.test.js`: source-loading and Firebase import smoke tests.
-- `.github/workflows/ci.yml`: test and production-build checks.
+- `reference/`: preserved source snapshot for comparison and rollback.
+- `tests/`: smoke and unit tests.
+- `.github/workflows/ci.yml`: automated tests and production build.
 
 ## Local development
 
@@ -28,21 +33,21 @@ npm run build
 
 ## Firebase and data safety
 
-The dashboard continues to use the existing Firebase browser SDK imports pinned to version 10.7.1. Treat collection names, query/listener behavior, authentication assumptions, and current Firebase configuration as compatibility constraints. Do not replace the Firebase project or rename collections as part of a UI refactor.
+The dashboard retains its existing Firebase browser SDK imports pinned to version 10.7.1. Collection names and the current client configuration are preserved. Keep collection names, query/listener behavior, authentication assumptions, and Firebase access rules as compatibility constraints during the refactor.
 
-Do not commit service-account credentials, private keys, or other server-side secrets. Keep this repository private while reviewing the browser configuration and deployment rules.
+Do not commit service-account credentials, private keys, or other server-side secrets. Keep this repository private while reviewing deployment settings.
 
 ## Development sequence
 
-1. Preserve a baseline and make behavior-preserving structural changes.
-2. Keep the SPA build and CI passing.
-3. Extract Firebase/data access into tested services in small steps.
-4. Add tests for cost calculations, fuel inventory, planned-versus-issued turf usage, and reorder suggestions.
+1. Keep the single-page user experience while separating concerns into modules.
+2. Preserve a known-good HTML reference and behavior-preserving changes.
+3. Extract Firebase reads/writes into explicit services in small, tested changes.
+4. Add tests for fuel costing, stock valuation, planned-versus-issued turf usage, and auto-reorder suggestions.
 5. Change the working `main` only after review and verification.
 
 ## Verification status
 
-- JavaScript syntax checks passed locally.
-- Node.js smoke tests passed locally: 3/3.
-- GitHub Actions completed successfully for this branch, including dependency installation, smoke tests, and the production Vite build.
-- A real browser and live Firestore smoke test has not yet been performed. Do not deploy based solely on a successful bundle build.
+- JavaScript syntax check and Node.js smoke tests have passed in the initial modular bootstrap.
+- The modular helper/service extraction now has automated unit coverage for date normalization, turf record normalization, and cost calculations.
+- GitHub Actions runs `npm test` and `npm run build` for this branch.
+- A real browser and live Firestore smoke test remains required before deployment.
