@@ -108,7 +108,7 @@ function toast(msg, type = 'ok') {
   t.innerHTML = `<span class="material-symbols-rounded">${type === 'err' ? 'error' : type === 'warn' ? 'warning' : 'check_circle'}</span><span>${esc(msg)}</span>`;
   $('#toasts').appendChild(t); setTimeout(() => { t.style.opacity = '0'; setTimeout(() => t.remove(), 250); }, type === 'err' ? 6000 : 3500);
 }
-function setConn(state) { document.documentElement.dataset.firebaseState = state || 'connecting'; const dot=$('#connDot'); if(dot) dot.className='dot '+state; const label=$('#connText'); if(label) label.textContent=state==='ok'?'Connected':state==='err'?'Connection error':'Connecting'; }
+function setConn(state) { document.documentElement.dataset.firebaseState = state || 'connecting'; const dot=$('#connDot'); if(dot) dot.className='dot '+state; const label=$('#connText'); if(label) label.textContent=state==='ok'?'Connected':state==='err'?'Connection error':'Connecting'; const status=$('#firebaseStatus'); if(status) { status.className='firebase-status '+(state||'connecting'); status.textContent=state==='ok'?'Firestore connected':state==='err'?'Firestore read error':'Connecting to Firestore…'; } }
 function openModal({ title, sub = '', body = '', footer = '', size = '' }) {
   $('#modal').className = 'modal ' + size; $('#mTitle').textContent = title; $('#mSub').textContent = sub;
   $('#mBody').innerHTML = body; $('#mBody')._h = null; $('#mFoot').innerHTML = footer; $('#mFoot').style.display = footer ? 'flex' : 'none';
@@ -1425,7 +1425,7 @@ let turfProductCategory = 'All categories';
 
 /* ================= BOOT ================= */
 $('#dateChip').textContent = new Date().toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' });
-buildNav(); toggleDock(false); renderWeather(); loadWeather(); setInterval(loadWeather, 30 * 60 * 1000);
+buildNav(); toggleDock(window.innerWidth >= 900); renderWeather(); loadWeather(); setInterval(loadWeather, 30 * 60 * 1000);
 if (CONFIG.REQUIRE_LOGIN) {
   $('#signoutBtn').hidden = false; $('#login').hidden = false;
   $('#loginForm').addEventListener('submit', async e => { e.preventDefault(); $('#loginErr').textContent = ''; try { await signInWithEmailAndPassword(auth, $('#loginEmail').value.trim(), $('#loginPass').value); } catch (err) { $('#loginErr').textContent = 'Sign-in failed. Check your email and password.'; } });
