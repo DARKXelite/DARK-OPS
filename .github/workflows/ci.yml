@@ -1,0 +1,23 @@
+name: CI
+
+on:
+  push:
+    branches: [main, "chore/**", "feature/**", "fix/**"]
+  pull_request:
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+      - name: Run smoke tests
+        run: npm test
+      - name: Build production assets
+        run: npm run build
