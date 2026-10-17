@@ -1,68 +1,24 @@
-import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-import { getFirestore, collection, addDoc, deleteDoc, doc, updateDoc, setDoc, increment, onSnapshot, getDocs, writeBatch, runTransaction, serverTimestamp, query, where, orderBy } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
-import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, signOut } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
+import { collection, addDoc, deleteDoc, doc, updateDoc, setDoc, increment, onSnapshot, getDocs, writeBatch, runTransaction, serverTimestamp, query, where, orderBy } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+import { onAuthStateChanged, signInWithEmailAndPassword, signOut } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
 
+import { CONFIG, db, auth } from "./firebase/client.js";
+import { num, sum } from "./utils/number.js";
+import { pad, ymd, today, addDays, monthStart, MON, dShort, dLong, tsMs, timeOf, ago, normDate, daysBetween } from "./utils/date.js";
+import { fmt, money, fmtHrs } from "./utils/format.js";
+import { $, $$, esc, setHTML } from "./ui/dom.js";
+import { createTurfRecordHelpers } from "./domain/turf-records.js";
+import { createCostAnalytics } from "./analytics/cost-analytics.js";
 
 const FUEL_RATE = 92.50; // Legacy reference rate; operational costing is managed in the local cost model.
 /* ================= CONFIG ================= */
-const firebaseConfig = {
-  apiKey: "AIzaSyB5jXD6snQsRahIL7rr-gHIwvZZFSgzBes",
-  authDomain: "clover-greens-ops.firebaseapp.com",
-  projectId: "clover-greens-ops",
-  storageBucket: "clover-greens-ops.firebasestorage.app",
-  messagingSenderId: "48049661517",
-  appId: "1:48049661517:android:98bb300b59755541d61e04"   // TODO: replace with the WEB app id from Firebase console
-};
-const CONFIG = {
-  REQUIRE_LOGIN: false,        // set true once Firebase Auth (email/password) is enabled and a dashboard user exists
-  SERVICE_INTERVAL: 250,       // engine hours between services
-  SERVICE_WARN: 25,            // amber when this many hours (or fewer) remain
-  LAT: 12.756, LNG: 77.822,
-  // For commercial production, set this to an HTTPS server-side proxy using a licensed Open-Meteo API plan.
-  // Leave blank only for evaluation/development against Open-Meteo's public endpoint (non-commercial terms).
-  WEATHER_PROXY_URL: '',
-  STALE_SEC: 180,              // radar pin turns grey after this many seconds without an update
-  WIND_LIMIT: 25,              // km/h, spraying advisory
-  COL: { users:'users', machines:'machines', fuel:'fuel_logs', shifts:'shifts', zones:'CourseZones', live:'live_telemetry', inventory:'inventory', logs:'logs', maintenance:'maintenance_logs', assignments:'assignment_logs', plans:'turf_plans', inwards:'store_inwards' }
-};
 
-const app = initializeApp(firebaseConfig);
-const db = getFirestore(app);
-const auth = getAuth(app);
 
 /* ================= HELPERS ================= */
-const $ = (s, r=document) => r.querySelector(s);
-const $$ = (s, r=document) => [...r.querySelectorAll(s)];
-const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-const num = v => { const n = parseFloat(v); return isFinite(n) ? n : 0; };
-const fmt = (n, d=1) => Number(n || 0).toLocaleString('en-IN', { maximumFractionDigits: d });
-const money = (n, d=0) => '₹' + Number(n || 0).toLocaleString('en-IN', { minimumFractionDigits: d, maximumFractionDigits: d === 0 ? 0 : 2 });
-const pad = n => String(n).padStart(2, '0');
-const ymd = d => `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
-const today = () => ymd(new Date());
-const addDays = (s, n) => { const d = new Date(s + 'T00:00:00'); d.setDate(d.getDate() + n); return ymd(d); };
-const monthStart = s => s.slice(0, 8) + '01';
-const MON = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-const dShort = s => s ? `${+s.slice(8,10)} ${MON[+s.slice(5,7)-1]}` : '';
-const dLong = s => s ? `${+s.slice(8,10)} ${MON[+s.slice(5,7)-1]} ${s.slice(0,4)}` : '—';
-const fmtHrs = h => { h = num(h); return `${Math.floor(h)}h ${pad(Math.round((h % 1) * 60) % 60)}m`; };
-const sum = (a, k) => a.reduce((t, x) => t + num(x[k]), 0);
-const tsMs = v => !v ? 0 : typeof v === 'number' ? (v < 1e12 ? v * 1000 : v) : v.toMillis ? v.toMillis() : (Date.parse(v) || 0);
-const timeOf = ms => ms ? new Date(ms).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }) : '';
-const ago = ms => { if (!ms) return 'just now'; const s = Math.max(0, (Date.now() - ms) / 1000); return s < 60 ? `${Math.round(s)}s ago` : s < 3600 ? `${Math.round(s/60)}m ago` : `${Math.round(s/3600)}h ago`; };
-function normDate(v, ts) {
-  if (typeof v === 'string') {
-    let m = v.match(/^(\d{4})-(\d{2})-(\d{2})/); if (m) return `${m[1]}-${m[2]}-${m[3]}`;
-    m = v.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})/); if (m) return `${m[3]}-${pad(m[2])}-${pad(m[1])}`;
-  } else if (v && v.toDate) return ymd(v.toDate());
-  else if (typeof v === 'number') return ymd(new Date(v < 1e12 ? v * 1000 : v));
-  const t = tsMs(ts); return t ? ymd(new Date(t)) : '';
-}
-function daysBetween(a, b) { const out = []; let d = a, n = 0; while (d <= b && n++ < 400) { out.push(d); d = addDays(d, 1); } return out; }
-function setHTML(el, html) { if (el && el._h !== html) { el.innerHTML = html; el._h = html; } }
-
 /* ================= STATE ================= */
 const S = { users: [], machines: [], fuel: [], shifts: [], zones: [], live: [], inventory: [], logs: [], maintenance: [], assignments: [], plans: [], inwards: [], _v: 0 };
+const { isTurfCategory, turfCategoryLabel, turfRecordDate, turfRecordProductName, turfRecordQuantity, turfRecordStatus, turfProductForPlan, turfPlanCategory, turfCategoryClass } = createTurfRecordHelpers({
+  getInventory: () => S.inventory, normDate, num, itemName: item => itemName(item)
+});
 const COST_DEFAULTS = { dieselRate: 92.50, petrolRate: 0, labourPerHour: 0, downtimePerHour: 0, savingsPct: 10, improvementCost: 0 };
 function loadCostModel() {
   try { const saved = JSON.parse(localStorage.getItem('cloverOpsCostModel') || '{}'); return { ...COST_DEFAULTS, ...Object.fromEntries(Object.keys(COST_DEFAULTS).map(k => [k, Number.isFinite(+saved[k]) && +saved[k] >= 0 ? +saved[k] : COST_DEFAULTS[k]])) }; }
@@ -70,55 +26,6 @@ function loadCostModel() {
 }
 const COST = loadCostModel();
 function saveCostModel() { try { localStorage.setItem('cloverOpsCostModel', JSON.stringify(COST)); } catch (_) {} }
-function rateForFuelLog(f) {
-  const recorded = num(f.ratePerLitre ?? f.fuelRate ?? f.unitPrice ?? f.pricePerLitre);
-  if (recorded > 0) return recorded;
-  // Do not invent a fallback price: use the matching Fuel Inventory Master rate or leave it unpriced.
-  return fuelMasterRate(fuelTypeForCost(f)).rate;
-}
-function fuelLogCost(f) { return Math.max(0, num(f.litres ?? f.quantity ?? f.qty)) * rateForFuelLog(f); }
-function fuelCostSummary(rows) {
-  let litres = 0, pricedLitres = 0, cost = 0;
-  rows.forEach(f => { const L = Math.max(0, num(f.litres)), rate = rateForFuelLog(f); litres += L; if (rate > 0) { pricedLitres += L; cost += L * rate; } });
-  return { litres, pricedLitres, unpricedLitres: Math.max(0, litres - pricedLitres), cost, coverage: litres > 0 ? pricedLitres / litres * 100 : 100 };
-}
-function inventoryCostSummary(items=S.inventory) {
-  const priced = items.filter(i => num(i.unitCost) > 0);
-  const unpriced = items.filter(i => num(i.stockQuantity) > 0 && num(i.unitCost) <= 0);
-  return { value: priced.reduce((a, i) => a + Math.max(0, num(i.stockQuantity)) * num(i.unitCost), 0), pricedCount: priced.length, unpricedCount: unpriced.length, total: items.length,
-    reorderValue: items.reduce((a, i) => a + Math.max(0, effectiveReorderLevel(i) - num(i.stockQuantity)) * Math.max(0, num(i.unitCost)), 0), low: items.filter(i => num(i.stockQuantity) <= effectiveReorderLevel(i)) };
-}
-function monthPlansCost(from, to) {
-  const rows = (S.plans || []).filter(p => p.date && p.date >= from && p.date <= to);
-  let cost = 0, priced = 0, unpriced = 0, totalQty = 0;
-  rows.forEach(p => { const prod = S.inventory.find(i => i.id === p.productId) || S.inventory.find(i => i.partName === p.productName); const qty = Math.max(0, num(p.targetQty)); totalQty += qty; if (prod && num(prod.unitCost) > 0) { cost += qty * num(prod.unitCost); priced++; } else unpriced++; });
-  return { rows, cost, priced, unpriced, totalQty };
-}
-function monthlyCostSnapshot() {
-  const t = today(), from = monthStart(t), thirty = addDays(t, -29);
-  const mFuel = fuelCostSummary(fuelIn(from, t)), d30Fuel = fuelCostSummary(fuelIn(thirty, t));
-  const mHours = sum(shiftsIn(from, t), 'engineHoursLogged'), d30Hours = sum(shiftsIn(thirty, t), 'engineHoursLogged');
-  const elapsed = Math.max(1, Number(t.slice(8, 10))), dim = new Date(+t.slice(0,4), +t.slice(5,7), 0).getDate();
-  const plans = monthPlansCost(from, t), inv = inventoryCostSummary();
-  const openIncidents = S.logs.filter(l => (l.repairStatus || 'Pending') !== 'Resolved');
-  const downtimeHours = openIncidents.reduce((a, l) => a + Math.max(0, num(l.estimatedDowntimeHours)), 0);
-  const maintenanceCost = (S.maintenance || []).filter(r => { const d = r.date || normDate(null, r.timestamp); return d >= from && d <= t; }).reduce((a, r) => a + Math.max(0, num(r.totalCost ?? r.cost ?? r.amount ?? r.serviceCost)), 0);
-  const machineCosts = S.machines.map(m => {
-    const fl = fuelIn(thirty, t).filter(f => f.machineId === m.id || f.machineId === m.assetName || f.machineName === m.assetName);
-    const sh = shiftsIn(thirty, t).filter(x => x.machineId === m.id || x.machineId === m.assetName || x.machineName === m.assetName);
-    const fuel = fuelCostSummary(fl), hours = sum(sh, 'engineHoursLogged');
-    return { name: m.assetName || 'Unnamed machine', category: m.category || 'Machine', litres: fuel.litres, pricedLitres: fuel.pricedLitres, fuelCost: fuel.cost, hours, lph: hours > 0 ? fuel.litres / hours : null, costPerHour: hours > 0 ? fuel.cost / hours : null, fuelCoverage: fuel.coverage };
-  }).filter(m => m.hours > 0 && m.litres > 0).sort((a,b) => (b.costPerHour ?? -1) - (a.costPerHour ?? -1));
-  const projectedFuel = mFuel.cost / elapsed * dim;
-  const savingsScenario = projectedFuel * COST.savingsPct / 100;
-  const annualSavingsScenario = savingsScenario * 12;
-  const paybackMonths = savingsScenario > 0 && COST.improvementCost > 0 ? COST.improvementCost / savingsScenario : null;
-  const firstYearROI = COST.improvementCost > 0 ? ((annualSavingsScenario - COST.improvementCost) / COST.improvementCost) * 100 : null;
-  return { t, from, thirty, mFuel, d30Fuel, mHours, d30Hours, elapsed, dim, projectedFuel, savingsScenario, annualSavingsScenario, paybackMonths, firstYearROI,
-    fuelCostPerHour: d30Hours > 0 ? d30Fuel.cost / d30Hours : null, modeledVariableCostPerHour: d30Hours > 0 ? (d30Fuel.cost + d30Hours * COST.labourPerHour) / d30Hours : null, labourCostMTD: mHours * COST.labourPerHour, labourCost30d: d30Hours * COST.labourPerHour, plans, inv, openIncidents, downtimeHours, downtimeExposure: downtimeHours * COST.downtimePerHour,
-    maintenanceCost, machineCosts, serviceDue: S.machines.filter(m => svc(m).remaining <= CONFIG.SERVICE_WARN), lowStock: inv.low };
-}
-
 const LOADED = {};
 let cur = 'overview', curModalRender = null, W = null, Wfail = false;
 const F = { q: '', cat: 'All', fuel: 'All', sort: 'service' };
@@ -703,6 +610,10 @@ function fuelMasterRate(type) {
   const rate = num(matches[0].unitCost);
   return rate > 0 ? { rate, source: 'Inventory Master' } : { rate: 0, source: 'Fuel unit cost not set' };
 }
+const { rateForFuelLog, fuelLogCost, fuelCostSummary, inventoryCostSummary, monthPlansCost, monthlyCostSnapshot } = createCostAnalytics({
+  state: S, cost: COST, num, today, monthStart, addDays, fuelIn, shiftsIn, sum, svc, CONFIG,
+  effectiveReorderLevel, fuelMasterRate, fuelTypeForCost, normDate
+});
 function fuelCostLine(f) {
   const qty = Math.max(0, num(f.litres ?? f.quantity ?? f.qty));
   const transactionRate = num(f.ratePerLitre ?? f.fuelRate ?? f.unitPrice ?? f.pricePerLitre);
@@ -1678,66 +1589,6 @@ function getSunday(d) {
   const day = dt.getDay();
   const diff = dt.getDate() - day;
   return ymd(new Date(dt.setDate(diff)));
-}
-function isTurfCategory(category) {
-  const c = String(category || '').toLowerCase();
-  return /fertiliz|fertilis|pesticid|enhancement|turf enhancer|turf improver|growth enhancer/.test(c);
-}
-function turfCategoryLabel(category) {
-  const c = String(category || '').toLowerCase();
-  if (/fertiliz|fertilis/.test(c)) return 'Fertilizers';
-  if (/pesticid/.test(c)) return 'Pesticides';
-  if (/enhancement|turf enhancer|turf improver|growth enhancer/.test(c)) return 'Turf Enhancements';
-  return 'Other';
-}
-function turfRecordDate(plan) {
-  if (plan && plan._d) return plan._d;
-  const dateValue = plan && (plan.date ?? plan.issuedDate ?? plan.applicationDate ?? plan.appliedDate ?? plan.issueDate ?? plan.transactionDate ?? plan.logDate ?? plan.plannedDate ?? plan.createdDate);
-  return normDate(dateValue, plan && (plan.issuedAt ?? plan.issueTimestamp ?? plan.appliedAt ?? plan.completedAt ?? plan.timestamp ?? plan.createdAt ?? plan.createdOn ?? plan.updatedAt ?? plan.recordedAt ?? plan.createdTime));
-}
-function turfRecordProductName(plan) {
-  if (!plan) return '';
-  const nested = plan.product && typeof plan.product === 'object' ? (plan.product.name ?? plan.product.productName ?? plan.product.partName ?? plan.product.itemName) : plan.product;
-  const nestedItem = plan.item && typeof plan.item === 'object' ? (plan.item.name ?? plan.item.productName ?? plan.item.partName ?? plan.item.itemName) : plan.item;
-  return String(plan.productName ?? plan.itemName ?? plan.inventoryItemName ?? plan.inventoryName ?? plan.partName ?? plan.stockItemName ?? plan.productLabel ?? nested ?? nestedItem ?? plan.chemicalName ?? plan.fertilizerName ?? plan.materialName ?? plan.name ?? plan.title ?? '').trim();
-}
-function turfRecordQuantity(plan) {
-  return num(plan && (plan.actualQty ?? plan.appliedQty ?? plan.applicationQty ?? plan.issuedQty ?? plan.issuedQuantity ?? plan.issueQty ?? plan.issueQuantity ?? plan.quantityIssued ?? plan.qtyIssued ?? plan.quantityOut ?? plan.qtyOut ?? plan.quantityUsed ?? plan.usedQuantity ?? plan.qtyUsed ?? plan.dispensedQty ?? plan.quantity ?? plan.qty ?? plan.targetQty ?? plan.plannedQty ?? plan.requestedQty));
-}
-function turfRecordStatus(plan) {
-  const raw = String(plan && (plan.status ?? plan.applicationStatus ?? plan.issueStatus ?? plan.transactionType ?? plan.movementType ?? plan.recordType ?? plan.entryType ?? plan.logType ?? plan.actionType ?? plan.state ?? plan.action) || 'Planned').trim().toLowerCase().replace(/[_-]+/g, ' ');
-  if (/\bnot applied\b|\bpending\b|\bplanned\b|\bscheduled\b/.test(raw)) return 'Planned';
-  if (/\b(applied|completed|complete|consumed|used|done)\b/.test(raw)) return 'Applied';
-  if (/\b(issued|issue|dispensed|released|given out|outward|withdrawn|consumption|stock out|quantity out|out)\b/.test(raw)) return 'Issued';
-  if (/\b(cancelled|canceled|void|rejected)\b/.test(raw)) return 'Cancelled';
-  return 'Planned';
-}
-function turfProductForPlan(plan) {
-  if (!plan) return null;
-  const productId = plan.productId ?? plan.productID ?? plan.itemId ?? plan.inventoryId ?? plan.inventoryItemId ?? plan.inventoryItemDocId ?? plan.productDocId ?? plan.stockItemId ?? plan.skuId ?? (plan.product && typeof plan.product === 'object' ? (plan.product.id ?? plan.product.productId ?? plan.product.itemId) : null);
-  const name = turfRecordProductName(plan).toLowerCase();
-  return S.inventory.find(i => productId && i.id === productId)
-    || S.inventory.find(i => name && itemName(i).trim().toLowerCase() === name)
-    || S.inventory.find(i => name && String(i.name || i.productName || '').trim().toLowerCase() === name)
-    || null;
-}
-function turfPlanCategory(plan) {
-  const product = turfProductForPlan(plan);
-  const fromPlan = plan && (plan.category ?? plan.productCategory ?? plan.itemCategory ?? plan.materialCategory ?? plan.productType ?? plan.itemType ?? plan.fertilizerType ?? plan.product?.category ?? plan.type);
-  // Trust a recognized product-master category over a generic/mismatched label saved on the log.
-  const productLabel = turfCategoryLabel(product && product.category);
-  if (product && productLabel !== 'Other') return productLabel;
-  const planLabel = turfCategoryLabel(fromPlan);
-  if (planLabel !== 'Other') return planLabel;
-  const name = turfRecordProductName(plan);
-  const nameLabel = turfCategoryLabel(name);
-  return nameLabel !== 'Other' ? nameLabel : 'Other';
-}
-function turfCategoryClass(category) {
-  const c = String(category || '').toLowerCase();
-  if (c.includes('pesticide')) return 'pesticide';
-  if (c.includes('enhancement') || c.includes('enhancer')) return 'enhancer';
-  return 'fertilizer';
 }
 function setTurfSection(section) {
   turfSection = ['workboard','applications','products'].includes(section) ? section : 'workboard';
