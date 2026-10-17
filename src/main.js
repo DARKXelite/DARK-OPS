@@ -1423,17 +1423,6 @@ let turfAppStatus = 'All statuses';
 let turfAppSearch = '';
 let turfProductCategory = 'All categories';
 
-/* ================= BOOT ================= */
-$('#dateChip').textContent = new Date().toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' });
-buildNav(); toggleDock(window.innerWidth >= 900); renderWeather(); loadWeather(); setInterval(loadWeather, 30 * 60 * 1000);
-if (CONFIG.REQUIRE_LOGIN) {
-  $('#signoutBtn').hidden = false; $('#login').hidden = false;
-  $('#loginForm').addEventListener('submit', async e => { e.preventDefault(); $('#loginErr').textContent = ''; try { await signInWithEmailAndPassword(auth, $('#loginEmail').value.trim(), $('#loginPass').value); } catch (err) { $('#loginErr').textContent = 'Sign-in failed. Check your email and password.'; } });
-  onAuthStateChanged(auth, u => { if (u) { $('#login').hidden = true; startListeners(); } else { stopListeners(); $('#login').hidden = false; } });
-} else startListeners();
-switchView((location.hash || '').slice(1) || 'overview');
-
-
 
 function getSunday(d) {
   const dt = new Date(d + "T00:00:00");
@@ -1658,3 +1647,15 @@ function renderCmd(q) {
   const html = htmlArray.join("");
   $("#cmdRes").innerHTML = html || "<div class=\"empty\" style=\"padding:40px 12px\">No results found</div>";
 }
+
+
+
+/* ================= BOOT ================= */
+$('#dateChip').textContent = new Date().toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' });
+buildNav(); toggleDock(window.innerWidth >= 900); renderWeather(); loadWeather(); setInterval(loadWeather, 30 * 60 * 1000);
+if (CONFIG.REQUIRE_LOGIN) {
+  $('#signoutBtn').hidden = false; $('#login').hidden = false;
+  $('#loginForm').addEventListener('submit', async e => { e.preventDefault(); $('#loginErr').textContent = ''; try { await signInWithEmailAndPassword(auth, $('#loginEmail').value.trim(), $('#loginPass').value); } catch (err) { $('#loginErr').textContent = 'Sign-in failed. Check your email and password.'; } });
+  onAuthStateChanged(auth, u => { if (u) { $('#login').hidden = true; startListeners(); } else { stopListeners(); $('#login').hidden = false; } });
+} else startListeners();
+switchView((location.hash || '').slice(1) || 'overview');
