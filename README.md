@@ -35,11 +35,14 @@ Do not commit service-account credentials, private keys, or other server-side se
 ## Development sequence
 
 1. Preserve a baseline and make behavior-preserving structural changes.
-2. Verify the SPA can run and build in CI.
+2. Keep the SPA build and CI passing.
 3. Extract Firebase/data access into tested services in small steps.
 4. Add tests for cost calculations, fuel inventory, planned-versus-issued turf usage, and reorder suggestions.
 5. Change the working `main` only after review and verification.
 
 ## Verification status
 
-The source extraction passed JavaScript syntax checks and three Node.js smoke tests in the working environment. A local Vite install/build could not be completed because dependency installation timed out; the GitHub Actions workflow now performs the test and build checks on the branch. A successful CI run and a real browser/Firestore smoke test are still required before deployment.
+- JavaScript syntax checks passed locally.
+- Node.js smoke tests passed locally: 3/3.
+- GitHub Actions completed successfully for this branch, including dependency installation, smoke tests, and the production Vite build.
+- A real browser and live Firestore smoke test has not yet been performed. Do not deploy based solely on a successful bundle build.
