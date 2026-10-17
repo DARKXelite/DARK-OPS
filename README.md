@@ -11,13 +11,14 @@ The existing single-page dashboard is preserved in `reference/clover-greens-ops-
 - `index.html`: application shell.
 - `src/main.js`: dashboard composition, view renderers, event routing, and live application orchestration.
 - `src/firebase/client.js`: existing Firebase client initialization and collection/config constants.
+- `src/firebase/live-listeners.js`: Firestore subscription lifecycle, incremental cache updates, and current-view render gating.
 - `src/utils/`: date/time, number, and display formatting helpers.
 - `src/ui/dom.js`: DOM query, escaping, and incremental HTML update helpers.
 - `src/domain/turf-records.js`: turf record category, status, date, quantity, and inventory matching normalization.
 - `src/analytics/cost-analytics.js`: fuel costing, inventory valuation, and monthly cost snapshot calculations.
 - `src/styles/app.css`: extracted dashboard styling.
 - `reference/`: preserved source snapshot for comparison and rollback.
-- `tests/`: smoke and unit tests.
+- `tests/`: smoke, domain, analytics, and Firestore listener lifecycle tests.
 - `.github/workflows/ci.yml`: automated tests and production build.
 
 ## Local development
@@ -48,6 +49,6 @@ Do not commit service-account credentials, private keys, or other server-side se
 ## Verification status
 
 - JavaScript syntax check and Node.js smoke tests have passed in the initial modular bootstrap.
-- The modular helper/service extraction now has automated unit coverage for date normalization, turf record normalization, and cost calculations.
+- The modular helper/service extraction now has automated unit coverage for date normalization, turf record normalization, cost calculations, and Firestore listener lifecycle with mocked snapshots.
 - GitHub Actions runs `npm test` and `npm run build` for this branch.
 - A real browser and live Firestore smoke test remains required before deployment.
