@@ -31,7 +31,7 @@ test("dashboard entry imports the extracted services", async () => {
   const css = await read("../src/styles/app.css");
   assert.match(js, /import \{[^}]*\baddDoc\b[^}]*\bupdateDoc\b[^}]*\bincrement\b[^}]*\} from .*firebase-firestore\.js/);
   assert.match(js, /createFirestoreRepository\(/);
-  for (const modulePath of ["./ui/navigation.js", "./firebase/client.js", "./utils/date.js", "./utils/format.js", "./ui/dom.js", "./domain/turf-records.js", "./analytics/cost-analytics.js"]) {
+  for (const modulePath of ["./modules/fleet/fleet-module.js", "./ui/navigation.js", "./firebase/client.js", "./utils/date.js", "./utils/format.js", "./ui/dom.js", "./domain/turf-records.js", "./analytics/cost-analytics.js"]) {
     assert.ok(js.includes(modulePath), "missing import " + modulePath);
   }
   assert.ok(css.includes(":root"));
