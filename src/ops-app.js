@@ -1603,32 +1603,37 @@ function renderStoreRecordsEditor() {
     body = `<div class="muted sm" style="margin-bottom:10px">Edit item details from the Store tab. Deleting an item removes its master record; review linked history before deleting.</div><div class="table-wrap"><table><thead><tr><th>Item</th><th>Category</th><th class="num">Stock</th><th>Unit</th><th></th></tr></thead><tbody>${rows.length?rows.map(i=>`<tr><td><b>${esc(itemName(i))}</b><div class="muted sm">ID: ${esc(i.id)}</div></td><td>${esc(i.category||'Other')}</td><td class="num">${fmt(i.stockQuantity,3)}</td><td>${esc(i.unit||'—')}</td><td class="right" style="white-space:nowrap"><button class="btn btn-sm" data-act="edit-part" data-id="${esc(i.id)}">Edit</button> <button class="btn btn-danger btn-sm" data-act="store-delete-item" data-id="${esc(i.id)}">Delete</button></td></tr>`).join(''):'<tr><td colspan="5" class="empty">No item master records.</td></tr>'}</tbody></table></div>`;
   } else {
     const rows = [...S.inwards].sort((a,b)=>String(b.receiptDate||'').localeCompare(String(a.receiptDate||'')));
-    body = `<div class="muted sm" style="margin-bottom:10px">Deleting a receipt also reverses its quantity from the linked item's current stock. If the current balance is lower than the receipt quantity, deletion is blocked to prevent a negative stock balance.</div><div class="table-wrap"><table><thead><tr><th>Date / GRN</th><th>Item</th><th>Supplier</th><th class="num">Qty</th><th class="num">Total</th><th></th></tr></thead><tbody>${rows.length?rows.map(r=>`<tr><td>${esc(r.receiptDate||'—')}<div class="muted sm">${esc(r.invoiceNumber||r.id)}</div></td><td><b>${esc(r.itemName||'—')}</b><div class="muted sm">${esc(r.category||'')}</div></td><td>${esc(r.supplier||'—')}</td><td class="num">${fmt(r.quantity,3)} ${esc(r.unit||'')}</td><td class="num">${money(r.total,2)}</td><td class="right"><button class="btn btn-danger btn-sm" data-act="store-delete-inward" data-id="${esc(r.id)}">Delete</button></td></tr>`).join(''):'<tr><td colspan="6" class="empty">No goods receipt records.</td></tr>'}</tbody></table></div>`;
+    body = `<div class="muted sm" style="margin-bottom:10px">Deleting a receipt also reverses its quantity from the linked item's current stock. If the current balance is lower than the receipt quantity, deletion is blocked to prevent a negative stock balance.</div><div class="table-wrap"><table><thead><tr><th>Date / GRN</th><th>Item</th><th>Supplier</th><th class="num">Qty</th><th class="num">Total</th><th></th></tr></thead><tbody>${rows.length?rows.map(r=>`<tr><td>${esc(r.receiptDate||'—')}<div class="muted sm">${esc(r.invoiceNumber||r.id)} ${r.voided?'<span class="badge bad">Reversed</span>':''}</div></td><td><b>${esc(r.itemName||'—')}</b><div class="muted sm">${esc(r.category||'')}</div></td><td>${esc(r.supplier||'—')}</td><td class="num">${fmt(r.quantity,3)} ${esc(r.unit||'')}</td><td class="num">${money(r.total,2)}</td><td class="right"><button class="btn btn-danger btn-sm" data-act="store-delete-inward" data-id="${esc(r.id)}" ${r.voided?"disabled":""}>${r.voided?"Reversed":"Reverse"}</button></td></tr>`).join(''):'<tr><td colspan="6" class="empty">No goods receipt records.</td></tr>'}</tbody></table></div>`;
   }
   openModal({title:'Store records editor',sub:'Review, edit or permanently delete store records',size:'lg',body:tabButtons+body,footer:'<button class="btn" data-act="close-modal">Close</button>'});
 }
 function deleteStoreItemFromEditor(id) {
   const item=S.inventory.find(x=>x.id===id); if(!item)return;
+  const hasReceipts=S.inwards.some(r=>r.itemId===id), hasMovements=(S.movements||[]).some(m=>m.itemId===id);
+  if(num(item.stockQuantity)>0||hasReceipts||hasMovements){toast('This item has stock or transaction history. Zero the balance through an approved adjustment and archive it instead of deleting its audit trail.','err');return;}
   openForm({title:'Delete item master',submit:'Delete item',danger:true,html:`<p style="margin:0 0 10px">Permanently delete <b>${esc(itemName(item))}</b>?</p><p class="muted sm">Current stock: ${fmt(item.stockQuantity,3)} ${esc(item.unit||'units')}. This does not delete historical receipts or issue/application records linked to the item.</p>`,onSubmit:async()=>{await deleteDoc(doc(db,CONFIG.COL.inventory,id));toast('Item master deleted');}});
 }
 function deleteStoreInwardFromEditor(id) {
   const receipt=S.inwards.find(x=>x.id===id); if(!receipt)return;
-  openForm({title:'Delete goods receipt',submit:'Delete receipt & reverse stock',danger:true,html:`<p style="margin:0 0 10px">Delete GRN <b>${esc(receipt.invoiceNumber||receipt.id)}</b> for <b>${esc(receipt.itemName||'item')}</b>?</p><p class="muted sm">This will subtract ${fmt(receipt.quantity,3)} ${esc(receipt.unit||'units')} from the linked item's current stock. This cannot be undone.</p>`,onSubmit:async()=>{
+  if(receipt.voided){toast('This receipt has already been reversed','err');return;}
+  openForm({title:'Reverse goods receipt',submit:'Reverse receipt & stock',danger:true,html:`<p style="margin:0 0 10px">Reverse GRN <b>${esc(receipt.invoiceNumber||receipt.id)}</b> for <b>${esc(receipt.itemName||'item')}</b>?</p><p class="muted sm">This posts a compensating stock movement and marks the receipt reversed. The original receipt remains in the audit trail.</p>`,onSubmit:async()=>{
+    const receiptRef=doc(db,CONFIG.COL.inwards,id), itemRef=doc(db,CONFIG.COL.inventory,receipt.itemId), movementRef=doc(collection(db,CONFIG.COL.movements));
     await runTransaction(db,async tx=>{
-      const receiptRef=doc(db,CONFIG.COL.inwards,id), receiptSnap=await tx.get(receiptRef);
+      const receiptSnap=await tx.get(receiptRef);
       if(!receiptSnap.exists())throw new Error('Receipt no longer exists. Refresh and retry.');
-      const r=receiptSnap.data(), itemId=r.itemId;
-      if(itemId){
-        const itemRef=doc(db,CONFIG.COL.inventory,itemId), itemSnap=await tx.get(itemRef);
-        if(itemSnap.exists()){
-          const current=Math.max(0,num(itemSnap.data().stockQuantity)), qty=Math.max(0,num(r.quantity));
-          if(current+1e-9<qty)throw new Error(`Cannot reverse receipt: current stock (${fmt(current,3)}) is below receipt quantity (${fmt(qty,3)}). Correct stock first.`);
-          tx.update(itemRef,{stockQuantity:+(current-qty).toFixed(4),updatedAt:serverTimestamp()});
-        }
-      }
-      tx.delete(receiptRef);
+      const r=receiptSnap.data(); if(r.voided)throw new Error('Receipt has already been reversed');
+      if(!r.itemId)throw new Error('Receipt has no linked inventory item');
+      const itemSnap=await tx.get(itemRef);
+      if(!itemSnap.exists())throw new Error('Linked inventory item no longer exists');
+      const item=itemSnap.data(), current=Number(item.stockQuantity), qty=Number(r.quantity);
+      if(!Number.isFinite(current)||current<0||!Number.isFinite(qty)||qty<=0)throw new Error('Stock balance or receipt quantity is invalid');
+      if(current+1e-9<qty)throw new Error(`Cannot reverse receipt: current stock (${fmt(current,3)}) is below receipt quantity (${fmt(qty,3)}). Correct stock first.`);
+      const after=Math.max(0,+(current-qty).toFixed(4)), cost=Math.max(0,num(item.unitCost)), now=serverTimestamp();
+      tx.update(itemRef,{stockQuantity:after,updatedAt:now});
+      tx.update(receiptRef,{voided:true,voidedAt:now,voidReason:'Receipt reversed through Store Records Editor'});
+      tx.set(movementRef,{itemId:r.itemId,itemName:r.itemName||item.partName||item.itemName||'Unnamed item',category:r.category||item.category||'Other',unit:r.unit||item.unit||'Nos',movementType:'REVERSAL',quantityDelta:-qty,quantityBefore:current,quantityAfter:after,unitCost:cost,value:+(qty*cost).toFixed(2),reason:'Goods receipt reversal',reference:r.invoiceNumber||id,receiptId:id,createdAt:now});
     });
-    toast('Receipt deleted and stock reversed');
+    toast('Receipt reversed; original record retained');
   }});
 }
 
