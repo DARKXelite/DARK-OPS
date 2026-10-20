@@ -1962,7 +1962,7 @@ const VIEW_COLLECTIONS = {
   fleet: ['machines','live','fuel','shifts'],
   fuel: ['fuel','machines','expenses'],
   shifts: ['shifts','machines'],
-  records: ['maintenance','assignments','fuel','machines','inventory'],
+  records: ['maintenance','assignments','fuel','machines','inventory','plans','movements','inwards','stockCounts','logs','shifts','expenses'],
   radar: ['live','zones'],
   zones: ['zones'],
   registry: ['inventory','inwards','movements','stockCounts'],
@@ -2012,6 +2012,61 @@ function stopListeners() { unsubs.forEach(u => u()); unsubs = []; }
 setInterval(() => { if (cur === 'radar') { updateBadges('live'); scheduleRender(); } }, 10000);
 
 /* ================= EVENTS ================= */
+function openTurfIssueForm(planId){
+ const plan=(S.plans||[]).find(p=>p.id===planId);if(!plan)return toast("Turf plan not found","err");
+ const item=S.inventory.find(i=>i.id===(plan.productId||plan.itemId));
+ if(!item)return toast("This turf plan has no linked inventory item. Open its record and reconcile the product link before issuing stock.","err");
+ if(String(plan.status||"Planned").toLowerCase()!=="planned")return toast("Only a Planned record can be issued","err");
+ const planned=num(plan.targetQty??plan.plannedQty??plan.requestedQty??plan.quantity??plan.qty);
+ if(!(planned>0))return toast("The saved plan has no valid planned quantity","err");
+ openForm({title:"Issue stock against turf plan",submit:"Post linked stock issue",html:
+   '<div class="alert-box" style="margin-bottom:12px"><b>'+esc(itemName(item))+'</b> · '+esc(plan.targetArea||plan.area||"Course")+' · Planned '+fmt(planned,3)+' '+esc(item.unit||plan.unit||"units")+' · Available '+fmt(item.stockQuantity,3)+' '+esc(item.unit||"units")+'. This action posts a stock movement and updates the plan together.</div>'+
+   '<div class="row2">'+fld("Issue quantity "+(item.unit||plan.unit||""),'<input id="turfIssueQty" type="number" min="0.001" max="'+planned+'" step="any" value="'+Math.min(planned,num(item.stockQuantity))+'" required>')+fld("Issued to / course area",'<input id="turfIssueTo" required>')+'</div>'+
+   '<div class="row2">'+fld("Issued by",'<input id="turfIssueBy" required placeholder="Storekeeper name">')+fld("Issue reference",'<input id="turfIssueRef" placeholder="Auto-linked to turf plan if blank">')+'</div>'+
+   fld("Reason / task note",'<textarea id="turfIssueReason" rows="2">Issue for scheduled turf application</textarea>'),
+   onSubmit:async()=>{
+     const quantity=Number($("#turfIssueQty").value),issuedTo=$("#turfIssueTo").value.trim(),performedBy=$("#turfIssueBy").value.trim(),reference=$("#turfIssueRef").value.trim(),reason=$("#turfIssueReason").value.trim();
+     if(!Number.isFinite(quantity)||quantity<=0||quantity>planned+1e-9){toast("Issue quantity must be positive and cannot exceed the planned quantity","err");return false;}
+     if(!issuedTo||!performedBy||!reason){toast("Issued-to, issued-by and reason are required","err");return false;}
+     await inventoryService.issueStockForTurfPlan({planId,itemId:item.id,quantity,reason,reference,issuedTo,performedBy});
+     closeDrawer();toast("Stock issue posted and turf plan advanced to Issued. The linked movement is in the stock ledger.");scheduleRender();
+   }});
+ setTimeout(()=>{if($("#turfIssueTo"))$("#turfIssueTo").value=plan.targetArea||plan.area||"";},0);
+}
+function openTurfCompletionForm(planId){
+ const plan=(S.plans||[]).find(p=>p.id===planId);if(!plan)return toast("Turf plan not found","err");
+ const issued=num(plan.issuedQty);
+ if(String(plan.status||"").toLowerCase()!=="issued"||!plan.issueMovementId||!(issued>0))return toast("This record lacks a linked stock issue. Reconcile the original issue before completing it.","err");
+ openForm({title:"Record turf application & reconcile",submit:"Save application record",html:
+   '<div class="alert-box" style="margin-bottom:12px"><b>'+esc(turfRecordProductName(plan)||plan.productName||"Turf product")+'</b> · '+esc(plan.targetArea||plan.area||"Course")+' · Issued '+fmt(issued,3)+' '+esc(plan.unit||"units")+'. Reconcile the complete issued quantity; returned stock will be put back into inventory with a return movement.</div>'+
+   '<div class="row2">'+fld("Actually applied "+(plan.unit||""),'<input id="turfAppliedQty" type="number" min="0.001" step="any" value="'+issued+'" required>')+fld("Returned to store "+(plan.unit||""),'<input id="turfReturnedQty" type="number" min="0" step="any" value="0" required>')+'</div>'+
+   '<div class="row2">'+fld("Waste / unaccounted quantity "+(plan.unit||""),'<input id="turfUnaccountedQty" type="number" min="0" step="any" value="0" required>')+fld("Applied by",'<input id="turfAppliedBy" required placeholder="Operator / supervisor">')+'</div>'+
+   fld("Application notes / discrepancy explanation",'<textarea id="turfApplicationNotes" rows="3" placeholder="Required if any quantity is unaccounted"></textarea>')+
+   '<p class="muted sm">Applied + returned + unaccounted must equal the recorded issue. Only returned-to-store quantity is added back into stock; unaccounted quantity is not silently adjusted.</p>',
+   onSubmit:async()=>{
+     const appliedQty=Number($("#turfAppliedQty").value),returnedQty=Number($("#turfReturnedQty").value),unaccountedQty=Number($("#turfUnaccountedQty").value),appliedBy=$("#turfAppliedBy").value.trim(),applicationNotes=$("#turfApplicationNotes").value.trim();
+     if(![appliedQty,returnedQty,unaccountedQty].every(Number.isFinite)||appliedQty<=0||returnedQty<0||unaccountedQty<0||Math.abs(appliedQty+returnedQty+unaccountedQty-issued)>1e-6){toast("Applied + returned + unaccounted quantities must equal "+issued+" "+(plan.unit||"units"),"err");return false;}
+     if(unaccountedQty>1e-9&&!applicationNotes){toast("Explain any unaccounted quantity in the application notes","err");return false;}
+     if(!appliedBy){toast("Applied by is required","err");return false;}
+     await inventoryService.completeTurfPlan({planId,appliedQty,returnedQty,unaccountedQty,appliedBy,applicationNotes});
+     closeDrawer();toast(returnedQty>0?"Application saved and unused stock returned to the inventory ledger":"Application saved and the issued quantity reconciled");scheduleRender();
+   }});
+}
+function openTurfCancelForm(planId){
+ const plan=(S.plans||[]).find(p=>p.id===planId);if(!plan)return toast("Turf plan not found","err");
+ openForm({title:"Cancel planned turf task",submit:"Cancel plan",html:
+   '<p class="muted sm">This preserves the record and its history. Only tasks that have not been issued can be cancelled.</p>'+
+   fld("Cancelled by",'<input id="turfCancelBy" required placeholder="Name">')+
+   fld("Cancellation reason",'<textarea id="turfCancelReason" rows="3" required placeholder="Reason for cancellation"></textarea>'),
+   onSubmit:async()=>{const cancelledBy=$("#turfCancelBy").value.trim(),reason=$("#turfCancelReason").value.trim();if(!cancelledBy||!reason){toast("Name and cancellation reason are required","err");return false;}await inventoryService.cancelTurfPlan({planId,cancelledBy,reason});closeDrawer();toast("Turf plan cancelled; record history retained");scheduleRender();}
+ });
+}
+function exportOperationalRecords(format="csv"){
+ const rows=recordsForCurrentFilters().map(row=>({date:row.date,source:row.source,sourceLabel:RECORD_SOURCE_LABELS[row.source]||row.source,title:recordTitle(row.source,row.record),quantityOrValue:recordQuantityText(row.source,row.record),status:recordStatusText(row.source,row.record),id:row.id,record:row.record}));
+ if(format==="json"){const blob=new Blob([JSON.stringify({exportedAt:new Date().toISOString(),filters:{source:recordsTab,query:recordsSearchText,from:recordsFrom,to:recordsTo},records:rows},null,2)],{type:"application/json;charset=utf-8"}),a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download="clover-ops-records.json";document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),1500);return;}
+ downloadCSV("clover-ops-records.csv",[["Date","Source","Record","Quantity / value","Status","Record ID","Raw source record"],...rows.map(r=>[r.date,r.sourceLabel,r.title,r.quantityOrValue,r.status,r.id,JSON.stringify(r.record)])]);
+}
+
 const H = {
   'cost-model': () => openCostModel(),
   'open-day-cost': d => d.domain === 'turf' ? openTurfCostAnalytics() : openDayCostLedger(d.domain),
@@ -2031,12 +2086,20 @@ const H = {
   'turf-tab': d => setTurfSection(d.tab),
   'turf-category-products': d => { turfProductCategory = d.category || 'All categories'; setTurfSection('products'); },
   'export-turf-applications': () => { const rows=[...S.plans].filter(p=>isTurfCategory(turfPlanCategory(p))).sort((a,b)=>turfRecordDate(a).localeCompare(turfRecordDate(b))); downloadCSV('turf-application-records.csv', [['Date','Category','Product','Quantity','Unit','Treated area','Status','Notes','Created at'], ...rows.map(p=>[turfRecordDate(p),turfPlanCategory(p),turfRecordProductName(p),turfRecordQuantity(p),p.unit||p.stockUnit||p.uom||'',p.targetArea||p.area||p.location||'',turfRecordStatus(p),p.notes||p.reason||'',p.createdAt ? new Date(tsMs(p.createdAt)).toISOString() : ''])]); },
-  'rec-tab': d => { recordsTab = d.tab; renderRecords(); },
-  'export-records': () => {
-    if (recordsTab === 'maintenance') downloadCSV('maintenance.csv', [['Date','Type','Machine','Hours','Parts','By','Notes'], ...(S.maintenance||[]).map(r => [r.date, r.type, r.machineName||r.machineId, r.hoursAtEvent, JSON.stringify(r.partsUsed||[]), r.performedBy, r.notes])]);
-    else if (recordsTab === 'assignments') downloadCSV('assignments.csv', [['At','Action','Machine','Operator','Mobile','By'], ...(S.assignments||[]).map(r => [r.at, r.action, r.machineName, r.operatorName, r.operatorMobile, r.by])]);
-    else H['export-ledger']();
-  },
+  'rec-tab': d => { recordsTab = d.tab; recordsSelectedView = ''; recordsPageSize = 100; persistRecordExplorerPrefs(); renderRecords(); },
+  'records-save-view': () => saveRecordExplorerView(),
+  'records-clear-filters': () => clearRecordExplorerFilters(),
+  'records-load-more': () => { recordsPageSize += 100; renderRecords(); },
+  'records-saved-view': d => applySavedRecordView(d.id),
+  'records-from': v => { recordsFrom = v || ''; recordsSelectedView = ''; recordsPageSize = 100; persistRecordExplorerPrefs(); renderRecords(); },
+  'records-to': v => { recordsTo = v || ''; recordsSelectedView = ''; recordsPageSize = 100; persistRecordExplorerPrefs(); renderRecords(); },
+  'record-view': d => openRecordDetail(d.source, d.id),
+  'record-related-movements': d => { recordsTab = 'movements'; recordsSearchText = d.itemId || d.itemName || ''; recordsFrom = ''; recordsTo = ''; recordsSelectedView = ''; recordsPageSize = 100; closeDrawer(); persistRecordExplorerPrefs(); switchView('records'); },
+  'plan-issue': d => openTurfIssueForm(d.id),
+  'plan-complete': d => openTurfCompletionForm(d.id),
+  'plan-cancel': d => openTurfCancelForm(d.id),
+  'export-records': () => exportOperationalRecords('csv'),
+  'export-records-json': () => exportOperationalRecords('json'),
   dock: () => toggleDock(),
   signout: () => signOut(auth),
   'open-fuel': openFuelModal, 'open-run': openRunModal,
@@ -2195,6 +2258,9 @@ const C = {
   rto: (v, d) => { const st = R[d.k]; if (!v) return; st.to = v; st.preset = 'custom'; if (st.from > v) st.from = v; RER[d.k](); },
   lmachine: (v, d) => { R.ledger.machine = v; RER.ledger(); }, ltype: (v) => { R.ledger.type = v; RER.ledger(); },
   'turf-week': v => { if(v) { currentTurfWeekStart = getSunday(v); renderTurfCare(); } },
+  'records-saved-view': v => applySavedRecordView(v),
+  'records-from': v => { recordsFrom=v||''; recordsSelectedView=''; recordsPageSize=100; persistRecordExplorerPrefs(); renderRecords(); },
+  'records-to': v => { recordsTo=v||''; recordsSelectedView=''; recordsPageSize=100; persistRecordExplorerPrefs(); renderRecords(); },
   'turf-app-category': v => { turfAppCategory = v; renderTurfApplications(); },
   'turf-app-status': v => { turfAppStatus = v; renderTurfApplications(); },
   'turf-product-category': v => { turfProductCategory = v; renderTurfCare(); },
@@ -2206,7 +2272,10 @@ const C = {
   'inward-gst': () => previewInward(),
   'part-category': v => { const w = $('#pModelWrap'); if (w) w.hidden = v !== 'Spare Parts'; const unit = $('#pUnit'); if (unit && v === 'Fuel') unit.value = 'Litre'; }
 };
-document.addEventListener('input', e => { if (e.target?.id === 'usersSearch') { const pos=e.target.selectionStart; usersSearchText=e.target.value||''; renderUsersMaster(); const next=$('#usersSearch'); if(next){next.focus();try{next.setSelectionRange(pos,pos)}catch(_){}} } });
+document.addEventListener('input', e => {
+  if (e.target?.id === 'usersSearch') { const pos=e.target.selectionStart; usersSearchText=e.target.value||''; renderUsersMaster(); const next=$('#usersSearch'); if(next){next.focus();try{next.setSelectionRange(pos,pos)}catch(_){}} }
+  if (e.target?.id === 'recordsSearch') { const pos=e.target.selectionStart; recordsSearchText=e.target.value||''; recordsSelectedView=''; recordsPageSize=100; persistRecordExplorerPrefs(); renderRecords(); const next=$('#recordsSearch'); if(next){next.focus();try{next.setSelectionRange(pos,pos)}catch(_){}} }
+});
 document.addEventListener('change', e => { if (e.target?.id === 'usersRoleFilter') { usersRoleFilter=e.target.value||'all'; renderUsersMaster(); } });
 document.addEventListener('click', e => {
   const el = e.target.closest('[data-act]');
