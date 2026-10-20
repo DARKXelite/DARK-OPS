@@ -283,16 +283,41 @@
 
     <!-- RECORDS -->
     <section class="view" id="v-records">
-      <div class="toolbar">
-        <div class="chips" id="recordsChips">
-          <button class="chip on" data-act="rec-tab" data-tab="maintenance">Maintenance</button>
-          <button class="chip" data-act="rec-tab" data-tab="assignments">Assignments</button>
-          <button class="chip" data-act="rec-tab" data-tab="fuel">Fuel history</button>
+      <div class="card record-hub">
+        <div class="card-h record-hub-header">
+          <div><h3>Operational record explorer</h3><p class="muted sm">Search, inspect, reconcile and export the records behind daily operations.</p></div>
+          <div class="record-hub-actions">
+            <button class="btn btn-sm" data-act="records-save-view"><span class="material-symbols-rounded">bookmark_add</span>Save view</button>
+            <button class="btn btn-sm" data-act="export-records-json"><span class="material-symbols-rounded">data_object</span>Export JSON</button>
+            <button class="btn btn-sm" data-act="export-records"><span class="material-symbols-rounded">download</span>Export CSV</button>
+          </div>
         </div>
-        <div class="grow"></div>
-        <button class="btn" data-act="export-records"><span class="material-symbols-rounded">download</span>Export</button>
+        <div class="chips records-source-tabs" id="recordsChips" role="tablist" aria-label="Operational record types">
+          <button class="chip on" data-act="rec-tab" data-tab="all" role="tab">All activity</button>
+          <button class="chip" data-act="rec-tab" data-tab="maintenance" role="tab">Maintenance</button>
+          <button class="chip" data-act="rec-tab" data-tab="assignments" role="tab">Assignments</button>
+          <button class="chip" data-act="rec-tab" data-tab="fuel" role="tab">Fuel issues</button>
+          <button class="chip" data-act="rec-tab" data-tab="plans" role="tab">Turf plans &amp; applications</button>
+          <button class="chip" data-act="rec-tab" data-tab="movements" role="tab">Stock issues &amp; movements</button>
+          <button class="chip" data-act="rec-tab" data-tab="inwards" role="tab">Goods receipts</button>
+          <button class="chip" data-act="rec-tab" data-tab="stockCounts" role="tab">Closing counts</button>
+          <button class="chip" data-act="rec-tab" data-tab="logs" role="tab">Incidents</button>
+          <button class="chip" data-act="rec-tab" data-tab="shifts" role="tab">Run logs</button>
+          <button class="chip" data-act="rec-tab" data-tab="expenses" role="tab">Expenses</button>
+        </div>
+        <div class="record-filter-grid">
+          <label class="record-search"><span class="material-symbols-rounded">search</span><input id="recordsSearch" type="search" placeholder="Search item, machine, area, supplier, reference, notes…" autocomplete="off" data-inp="records-search"></label>
+          <label>From date<input id="recordsFrom" type="date" data-chg="records-from"></label>
+          <label>To date<input id="recordsTo" type="date" data-chg="records-to"></label>
+          <label>Saved views<select id="recordsSavedViews" data-chg="records-saved-view"><option value="">Choose saved view…</option></select></label>
+          <button class="btn" data-act="records-clear-filters"><span class="material-symbols-rounded">filter_alt_off</span>Clear filters</button>
+        </div>
+        <div id="recordsSummary" class="record-summary-grid"></div>
+        <div class="record-feed-caption"><span id="recordsFeedMeta">Preparing record index…</span><span>Live source records · read-only explorer</span></div>
+        <div class="card" id="recordsCard"></div>
+        <div class="record-load-more"><span id="recordsCount" class="muted sm">0 records</span><button class="btn btn-sm" id="recordsLoadMore" data-act="records-load-more" hidden>Load more records</button></div>
+        <p class="muted sm record-hub-footnote">The explorer does not create substitute records. Stock issues, receipts and turf-plan issue/return transactions remain linked to their original source records.</p>
       </div>
-      <div class="card" id="recordsCard"></div>
     </section>
 
     <!-- INVENTORY MASTER / GOODS RECEIPTS -->
@@ -327,6 +352,10 @@
         <div class="card"><div class="card-h"><h3>Unusual issue-volume days</h3></div><div class="table-wrap" id="analyticsAnomalyTbl"></div></div>
       </div>
       <div class="card mt"><div class="card-h"><h3>Models, assumptions and data confidence</h3></div><div id="analyticsMethodology" class="muted sm" style="padding:14px"></div></div>
+      <div class="grid2 mt">
+        <section class="card"><div class="card-h"><h3>Turf plan execution &amp; reconciliation</h3><span class="muted sm">Lifecycle status, overdue work and traceability</span></div><div id="analyticsTurfLifecycle" class="record-analytics-panel"></div></section>
+        <section class="card"><div class="card-h"><h3>Data quality &amp; record completeness</h3><span class="muted sm">Missing fields and disconnected records to review</span></div><div id="analyticsDataQuality" class="record-analytics-panel"></div></section>
+      </div>
     </section>
     <section class="view" id="v-expenses">
       <div class="card" id="localExpenseLedgerCard"><div id="localExpenseLedger"></div></div>
