@@ -2074,43 +2074,32 @@ function initPinGate() {
   gate.dataset.initialized = 'true';
   let lockedUntil = 0, failures = 0, busy = false;
   const refresh = () => {
-    const value = input.value.replace(/\D/g, '').slice(0, 8);
-    if (input.value !== value) input.value = value;
-    dots.forEach((dot, i) => {
-      dot.classList.toggle('filled', i < value.length);
-      dot.textContent = value[i] || '';
-    });
-    $('#pinDots').setAttribute('aria-label', value.length + ' of 8 digits entered');
-    if (value.length === 8 && !busy) { busy = true; window.setTimeout(unlock, 100); }
+    input.value = input.value.replace(/\D/g, '').slice(0, 8);
+    dots.forEach((dot, i) => { dot.classList.toggle('filled', i < input.value.length); dot.textContent = input.value[i] || ''; });
+    $('#pinDots').setAttribute('aria-label', input.value.length + ' of 8 digits entered');
+    if (input.value.length === 8 && !busy) { busy = true; window.setTimeout(unlock, 100); }
   };
   const clear = (message='') => { input.value = ''; busy = false; refresh(); error.textContent = message; };
   const unlock = () => {
-    if (Date.now() < lockedUntil) { clear('Please wait before trying again.'); return; }
+    if (Date.now() < lockedUntil) { clear(''); return; }
     if (input.value === '99114559') {
       RBAC.session.role = 'admin'; RBAC.session.authenticated = true;
       gate.hidden = true; document.body.classList.remove('pin-locked');
-      $('#signoutBtn').hidden = false;
-      clear(); startListeners(); toast('Welcome, Admin');
-      return;
+      $('#signoutBtn').hidden = false; clear(); startListeners(); toast('Welcome, Admin'); return;
     }
     failures++;
     if (failures >= 5) { lockedUntil = Date.now() + 30000; failures = 0; clear('Too many attempts. Try again in 30 seconds.'); }
     else clear('Incorrect PIN. ' + (5 - failures) + ' attempts remaining.');
   };
   input.addEventListener('input', refresh);
-  input.addEventListener('keydown', e => {
-    if (e.key === 'Enter' && input.value.length === 8) { e.preventDefault(); if (!busy) { busy = true; unlock(); } }
-    if (e.key === 'Escape') clear();
-  });
-  gate.addEventListener('pointerdown', e => {
-    if (!e.target.closest('#pinInput')) input.focus({preventScroll:true});
-  });
+  input.addEventListener('keydown', e => { if (e.key === 'Escape') clear(''); });
+  gate.addEventListener('pointerdown', e => { if (!e.target.closest('#pinInput')) input.focus({preventScroll:true}); });
   $('#signoutBtn').addEventListener('click', () => {
     RBAC.session.role = null; RBAC.session.authenticated = false;
     stopListeners(); gate.hidden = false; $('#signoutBtn').hidden = true; clear(''); input.focus();
   });
   gate.hidden = false; document.body.classList.add('pin-locked'); refresh();
-  window.setTimeout(() => input.focus({preventScroll:true}), 50);
+  window.setTimeout(() => input.focus({preventScroll:true}), 80);
 }
 
 
