@@ -97,8 +97,8 @@ export function analyzeInventory({
     const cost=fs.reduce((s,f)=>s+Math.max(0,n(f.litres??f.quantity))*Math.max(0,n(f.ratePerLitre??f.fuelRate??f.unitPrice)),0);
     return {id:m.id,name:m.assetName||m.machineName||"Unnamed machine",litres,hours,lph:hours>0?litres/hours:null,costPerHour:hours>0?cost/hours:null};
   }).filter(m=>m.hours>0&&m.litres>0).sort((a,b)=>(b.lph||0)-(a.lph||0));
-  const turfRecent=plans.filter(p=>dateOf(p)>=recentDate&&dateOf(p)<=asOf);
-  const turfSpend=turfRecent.reduce((s,p)=>{const item=items.find(i=>i.id===p.productId)||items.find(i=>(i.partName||"").toLowerCase()===(p.productName||"").toLowerCase());return s+Math.max(0,n(p.targetQty??p.issuedQty??p.quantity))*Math.max(0,n(item?.unitCost));},0);
+  const turfRecent=plans.filter(p=>{const d=dateOf(p),status=String(p.status??p.turfStatus??p.applicationStatus??"").toLowerCase();const issued=n(p.issuedQty??p.issuedQuantity??p.issueQty??p.issueQuantity??p.quantityIssued??p.qtyIssued??p.quantityOut??p.qtyOut);return d>=recentDate&&d<=asOf&&(status==="issued"||status==="applied"||issued>0);});
+  const turfSpend=turfRecent.reduce((s,p)=>{const item=items.find(i=>i.id===p.productId)||items.find(i=>(i.partName||"").toLowerCase()===(p.productName||"").toLowerCase());const status=String(p.status??p.turfStatus??p.applicationStatus??"").toLowerCase();const qty=n(p.issuedQty??p.issuedQuantity??p.issueQty??p.issueQuantity??p.quantityIssued??p.qtyIssued??p.quantityOut??p.qtyOut??(status==="issued"||status==="applied"?(p.quantity??p.qty??p.targetQty):0));return s+Math.max(0,qty)*Math.max(0,n(item?.unitCost));},0);
   const openWork=logs.filter(l=>(l.repairStatus||"Pending")!=="Resolved");
   const dueMaintenance=machines.filter(m=>n(m.currentHours)-n(m.lastServiceHours)>=250);
   const anomaly=robustAnomalies(movements,asOf);
