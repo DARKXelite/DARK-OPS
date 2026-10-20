@@ -19,3 +19,13 @@
 .pin-foot{margin-top:24px;font-size:10px;letter-spacing:.15em;color:rgba(184,179,168,.66);text-transform:uppercase}
 @media(max-width:420px){#pinGate{padding:18px}.pin-logo{width:148px;height:74px;margin-bottom:22px}.pin-title{font-size:24px}.pin-keypad{gap:10px;grid-template-columns:repeat(3,68px)}.pin-key{width:68px;height:58px;border-radius:19px}.pin-dots{gap:11px}}
 @media(prefers-reduced-motion:reduce){.pin-dot,.pin-key{transition:none}}
+
+/* Direct keyboard PIN entry and company palette */
+#pinGate{background:radial-gradient(ellipse at 50% 40%,rgba(229,199,148,.16),transparent 55%),#F9F7F2;color:#1D4533}
+.pin-logo{width:min(100%,330px);height:auto;aspect-ratio:755/405;object-fit:contain;margin:0 0 14px;filter:none}
+.pin-eyebrow{color:#1D4533}.pin-title{color:#1D4533}.pin-subtitle{color:#56675D;margin-bottom:28px}
+.pin-dots{display:grid;grid-template-columns:repeat(8,minmax(0,1fr));gap:8px;width:min(100%,352px);margin:0 0 14px}
+.pin-dot{display:grid;place-items:center;width:100%;aspect-ratio:1;border-radius:50%;border:1px solid rgba(29,69,51,.20);background:linear-gradient(145deg,rgba(255,255,255,.84),rgba(29,69,51,.055));box-shadow:inset 0 1px 0 rgba(255,255,255,.9),0 5px 14px rgba(29,69,51,.08);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);color:#1D4533;font-size:15px;font-weight:700;transition:background .12s,border-color .12s,transform .12s}
+.pin-dot.filled{background:linear-gradient(145deg,#E5C794,#D5B77D);border-color:#1D4533;color:#10291D;box-shadow:0 0 0 2px rgba(29,69,51,.08),0 5px 14px rgba(29,69,51,.13);transform:translateY(-1px)}
+.pin-error{color:#A52F2F}.pin-foot{color:rgba(29,69,51,.58)}
+@media(max-width:420px){.pin-logo{width:min(100%,300px);margin-bottom:10px}.pin-dots{gap:6px;width:100%}.pin-dot{font-size:13px}.pin-subtitle{margin-bottom:23px}}
