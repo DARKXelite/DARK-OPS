@@ -12,7 +12,7 @@ const VIEWS = {
 };
 const NAV_GROUPS = {
   fleetops: { label: "Fleet Ops", icon: "precision_manufacturing", view: "fleet", pages: [["fleet","Fleet"],["shifts","Run logs"],["records","Maintenance & records"],["radar","Course map"]] },
-  turfops: { label: "Turf Ops", icon: "eco", view: "turfcare", pages: [["turfcare","Planner & inputs"]] },
+  turfops: { label: "Turf Ops", icon: "eco", view: "turfcare", pages: [] },
   masters: { label: "Store & Masters", icon: "inventory_2", view: "fuel", pages: [["fuel","Fuel ledger"],["registry","Inventory"],["users","Users"]] }
 };
 export function createNavigation({
@@ -67,11 +67,12 @@ export function createNavigation({
   function switchView(v) {
     if (!VIEWS[v]) v = "overview";
     setCurrentView(v);
+    document.body.classList.toggle("turf-board-mode", v === "turfcare");
     history.replaceState(null, "", "#" + v);
     $$(".view").forEach(x => x.classList.toggle("active", x.id === "v-" + v));
     $("#pageTitle").textContent = VIEWS[v][0];
     $("#pageSub").textContent = VIEWS[v][1];
-    $("#viewHead").style.display = v === "overview" ? "none" : "";
+    $("#viewHead").style.display = (v === "overview" || v === "turfcare") ? "none" : "";
     window.scrollTo(0, 0);
     const mapMode = v === "radar" || v === "zones";
     document.body.classList.toggle("map-mode", mapMode);
