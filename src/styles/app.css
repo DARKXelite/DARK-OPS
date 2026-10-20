@@ -1131,3 +1131,123 @@ body::after{display:none!important;content:none!important}
 @media (max-width: 620px) {
   .firebase-status { display: none; }
 }
+
+
+/* ===== Turf Ops board-first release / compact planner modal ===== */
+body.turf-board-mode #viewHead,
+body.turf-board-mode #groupTabs {
+  display: none !important;
+}
+body.turf-board-mode .content {
+  padding-top: 76px !important;
+}
+body.turf-board-mode #v-turfcare {
+  margin-top: 0 !important;
+  padding-top: 0 !important;
+}
+body.turf-board-mode #v-turfcare > .turf-page-head,
+body.turf-board-mode #v-turfcare > .turf-metrics {
+  display: none !important;
+  margin: 0 !important;
+  padding: 0 !important;
+}
+body.turf-board-mode #v-turfcare > .turf-view-tabs {
+  margin-top: 0 !important;
+  margin-bottom: 10px !important;
+}
+body.turf-board-mode #v-turfcare .turf-workboard-grid,
+body.turf-board-mode #v-turfcare .turf-weekly-card {
+  margin-top: 0 !important;
+}
+.turf-planner-head-actions {
+  display: flex;
+  align-items: flex-end;
+  justify-content: flex-end;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.turf-planner-head-actions .turf-date-label {
+  min-width: 168px;
+}
+.turf-planner-head-actions .btn {
+  min-height: 30px;
+  height: 30px;
+  padding: 0 10px;
+  font-size: 11px;
+}
+#overlay.overlay:has(#tpContainer) {
+  padding: 6px !important;
+}
+#overlay #modal:has(#tpContainer) {
+  width: min(1380px, calc(100vw - 12px)) !important;
+  max-width: calc(100vw - 12px) !important;
+  max-height: calc(100dvh - 12px) !important;
+  border-radius: 12px !important;
+}
+#overlay #modal:has(#tpContainer) .m-head {
+  min-height: 0 !important;
+  padding: 6px 10px !important;
+  border-bottom: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  align-items: center !important;
+}
+#overlay #modal:has(#tpContainer) .m-head > div {
+  display: none !important;
+}
+#overlay #modal:has(#tpContainer) .m-head .icon-btn {
+  width: 30px !important;
+  height: 30px !important;
+  min-height: 30px !important;
+}
+#overlay #modal:has(#tpContainer) #mBody.m-body {
+  min-height: 0;
+  padding: 8px 10px !important;
+}
+#overlay #modal:has(#tpContainer) #mFoot.m-foot {
+  padding: 8px 12px !important;
+  gap: 8px !important;
+}
+#tpContainer > .row2 {
+  gap: 10px !important;
+  margin-bottom: 8px !important;
+}
+#tpContainer .field {
+  margin-bottom: 8px !important;
+}
+#tpContainer .card {
+  padding: 9px !important;
+  margin-bottom: 8px !important;
+  border-radius: 10px !important;
+}
+#overlay #modal:has(#tpContainer) #mFoot .btn {
+  height: 30px !important;
+  min-height: 30px !important;
+  padding: 0 10px !important;
+  font-size: 12px !important;
+}
+#tpContainer .btn.btn-sm {
+  height: 26px !important;
+  min-height: 26px !important;
+  padding: 0 8px !important;
+  font-size: 11px !important;
+}
+@media (max-width: 900px) {
+  body.turf-board-mode .content { padding-top: 68px !important; }
+  #overlay #modal:has(#tpContainer) { max-height: calc(100dvh - 8px) !important; }
+}
+@media (max-width: 620px) {
+  body.turf-board-mode .content { padding-top: 62px !important; }
+  .turf-planner-head-actions { width: 100%; justify-content: flex-start; }
+  .turf-planner-head-actions .turf-date-label { min-width: 0; flex: 1 1 150px; }
+  .turf-planner-head-actions .btn { flex: 0 0 auto; }
+  #overlay.overlay:has(#tpContainer) { padding: 3px !important; }
+  #overlay #modal:has(#tpContainer) {
+    width: calc(100vw - 6px) !important;
+    max-width: calc(100vw - 6px) !important;
+    max-height: calc(100dvh - 6px) !important;
+    border-radius: 10px !important;
+  }
+  #overlay #modal:has(#tpContainer) #mBody.m-body { padding: 6px !important; }
+  #overlay #modal:has(#tpContainer) #mFoot.m-foot { padding: 7px 8px !important; }
+}
