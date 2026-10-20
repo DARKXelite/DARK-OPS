@@ -1966,3 +1966,63 @@ body:has(#v-turfcare.active) #v-turfcare > .turf-view-tabs {
   white-space:nowrap;
   font-size:11px;
 }
+
+
+/* Unified operational record hub: uses the existing Clover theme variables. */
+.record-hub { padding:16px; }
+.record-hub-header { display:flex;align-items:flex-start;justify-content:space-between;gap:14px;flex-wrap:wrap;padding-bottom:12px; }
+.record-hub-actions { display:flex;gap:7px;flex-wrap:wrap; }
+.records-source-tabs { display:flex;gap:6px;flex-wrap:wrap;margin:10px 0 14px; }
+.records-source-tabs .chip { white-space:nowrap; }
+.record-filter-grid { display:grid;grid-template-columns:minmax(220px,2fr) repeat(2,minmax(130px,.8fr)) minmax(160px,1fr) auto;gap:10px;align-items:end;margin:10px 0 14px; }
+.record-filter-grid label { display:grid;gap:5px;min-width:0;color:var(--muted);font-size:11px;font-weight:650; }
+.record-filter-grid input,.record-filter-grid select { width:100%;min-width:0; }
+.record-search { position:relative; }
+.record-search .material-symbols-rounded { position:absolute;left:10px;top:29px;font-size:18px;color:var(--muted);pointer-events:none; }
+.record-search input { padding-left:34px!important; }
+.record-summary-grid { display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin:14px 0; }
+.record-summary-tile { min-width:0;border:1px solid var(--border);border-radius:12px;padding:12px;background:var(--card); }
+.record-summary-tile span { display:block;font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.055em;font-weight:700; }
+.record-summary-tile b { display:block;font-size:20px;color:var(--text);line-height:1.4;margin-top:3px;overflow-wrap:anywhere; }
+.record-summary-tile small { display:block;font-size:10px;color:var(--muted);margin-top:3px; }
+.record-feed-caption,.record-load-more { display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin:10px 0;color:var(--muted);font-size:11px; }
+.record-hub #recordsCard { padding:0;margin:0;overflow:hidden; }
+.record-hub #recordsCard .table-wrap { max-width:100%; }
+.record-feed-table { min-width:880px; }
+.record-feed-table td { vertical-align:middle; }
+.record-source-label { display:inline-flex;align-items:center;border:1px solid var(--border);border-radius:999px;padding:3px 7px;font-size:10px;color:var(--muted);white-space:nowrap; }
+.record-title-cell { min-width:190px; }
+.record-title-cell b { display:block;max-width:320px;overflow-wrap:anywhere; }
+.record-title-cell small { display:block;color:var(--muted);max-width:360px;white-space:normal;overflow-wrap:anywhere;margin-top:3px; }
+.record-detail-grid { display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px; }
+.record-detail-field { min-width:0;border:1px solid var(--border);border-radius:10px;padding:10px;background:var(--card); }
+.record-detail-field small { display:block;color:var(--muted);font-size:10px;margin-bottom:5px; }
+.record-detail-field b { display:block;color:var(--text);font-size:12px;overflow-wrap:anywhere;white-space:pre-wrap;font-weight:600; }
+.record-detail-actions { display:flex;gap:8px;flex-wrap:wrap;margin:12px 0; }
+.record-detail-json { margin-top:12px;border:1px solid var(--border);border-radius:10px;padding:10px; }
+.record-detail-json summary { cursor:pointer;color:var(--text);font-size:12px;font-weight:650; }
+.record-detail-json pre { white-space:pre-wrap;overflow-wrap:anywhere;max-height:340px;overflow:auto;font-size:11px;color:var(--muted); }
+.record-analytics-panel { display:grid;gap:8px;padding:12px; }
+.record-quality-row { display:flex;justify-content:space-between;align-items:flex-start;gap:12px;border-bottom:1px solid var(--border);padding:9px 0; }
+.record-quality-row:last-child { border-bottom:0; }
+.record-quality-row b { color:var(--text);font-size:12px; }
+.record-quality-row small { color:var(--muted);display:block;font-size:10px;margin-top:3px; }
+.record-quality-row strong { color:var(--text);font-size:15px;white-space:nowrap; }
+.record-hub-footnote { margin:12px 0 0; }
+@media(max-width:1050px) {
+  .record-filter-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }
+  .record-filter-grid .record-search { grid-column:1/-1; }
+  .record-filter-grid > button { justify-self:start; }
+}
+@media(max-width:700px) {
+  .record-hub { padding:10px; }
+  .record-filter-grid { grid-template-columns:minmax(0,1fr);gap:8px; }
+  .record-filter-grid .record-search { grid-column:auto; }
+  .record-summary-grid { grid-template-columns:repeat(2,minmax(0,1fr));gap:7px; }
+  .record-summary-tile { padding:9px; }
+  .record-summary-tile b { font-size:17px; }
+  .record-detail-grid { grid-template-columns:minmax(0,1fr); }
+  .record-hub-actions { width:100%; }
+  .record-hub-actions .btn { flex:1 1 auto; }
+  .record-feed-caption { align-items:flex-start;flex-direction:column; }
+}

@@ -6,7 +6,7 @@ const VIEW_COLLECTIONS = {
   records: ["maintenance","assignments","fuel","machines","inventory"],
   radar: ["live","zones"],
   zones: ["zones"],
-  registry: ["inventory","inwards"],
+  registry: ["inventory","inwards","movements"],
   users: ["users"],
   incidents: ["logs"],
   turfcare: ["inventory","plans"]

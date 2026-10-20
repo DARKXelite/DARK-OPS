@@ -10,8 +10,9 @@ const read = path => readFile(new URL(path, import.meta.url), "utf8");
 
 test("page shell loads extracted CSS and JavaScript modules", async () => {
   const html = await read("../index.html");
-  assert.match(html, /href="\/src\/styles\/app\.css"/);
-  assert.match(html, /<script type="module" src="\/src\/main\.js"><\/script>/);
+  assert.match(html, /href="\/src\/ops-app\.css"/);
+  assert.match(html, /href="\/src\/rbac\.css"/);
+  assert.match(html, /<script type="module" src="\/src\/ops-app\.js"><\/script>/);
   assert.doesNotMatch(html, /<style\b/i);
   assert.doesNotMatch(html, /<script\s+type="module"\s*>/i);
 });
@@ -21,7 +22,7 @@ test("Firebase client preserves SDK version and Firestore collections", async ()
   for (const sdk of ["firebase-app.js", "firebase-firestore.js", "firebase-auth.js"]) {
     assert.ok(client.includes("firebasejs/10.7.1/" + sdk), "missing pinned SDK " + sdk);
   }
-  for (const collection of ["users", "machines", "fuel_logs", "shifts", "CourseZones", "live_telemetry", "inventory", "logs", "maintenance_logs", "assignment_logs", "turf_plans", "store_inwards"]) {
+  for (const collection of ["users", "machines", "fuel_logs", "shifts", "CourseZones", "live_telemetry", "inventory", "logs", "maintenance_logs", "assignment_logs", "turf_plans", "store_inwards", "store_movements"]) {
     assert.ok(client.includes(collection), "missing existing collection " + collection);
   }
 });
@@ -80,4 +81,35 @@ test("cost analytics uses recorded or inventory rates and leaves unknown fuel un
   assert.equal(svc.fuelLogCost({ litres: 10, fuelType: "Diesel" }), 920);
   assert.equal(svc.fuelLogCost({ litres: 5, fuelType: "Petrol" }), 0);
   assert.equal(svc.fuelCostSummary([{litres:10,fuelType:"Diesel"},{litres:5,fuelType:"Petrol"}]).unpricedLitres, 5);
+});
+
+test("active dashboard entry exposes transactional inventory posting and stock movement controls", async () => {
+  const html = await read("../index.html");
+  const app = await read("../src/ops-app.js");
+  const service = await read("../src/modules/store/inventory-service.js");
+  assert.match(html, /data-act="issue-stock"/);
+  assert.match(html, /data-act="adjust-stock"/);
+  assert.match(html, /id="stockMovementTbl"/);
+  assert.match(app, /createInventoryService/);
+  assert.match(app, /inventoryService\.postGoodsInward/);
+  assert.match(app, /inventoryService\.createItemWithOpeningBalance/);
+  assert.match(app, /renderStockMovementLedger\(\)/);
+  assert.match(service, /Insufficient stock/);
+  assert.match(service, /already been posted/);
+});
+
+test("active shell includes dated physical counts and separate decision intelligence tab", async () => {
+  const html = await read("../index.html");
+  const app = await read("../src/ops-app.js");
+  const client = await read("../src/firebase/client.js");
+  const engine = await read("../src/modules/analytics/decision-engine.js");
+  assert.match(html, /data-act="physical-count"/);
+  assert.match(html, /id="v-analytics"/);
+  assert.match(html, /id="stockCountsTbl"/);
+  assert.match(app, /analyzeInventory/);
+  assert.match(app, /VARIANCE_REVIEW/);
+  assert.match(app, /renderAdvancedAnalytics/);
+  assert.match(client, /stock_counts/);
+  assert.match(engine, /Median absolute deviation/);
+  assert.match(engine, /reorderPoint/);
 });
