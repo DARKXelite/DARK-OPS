@@ -83,7 +83,7 @@ export function analyzeInventory({
   });
   const abcSorted=[...rows].sort((a,b)=>b.demandValue-a.demandValue);
   const totalDemandValue=abcSorted.reduce((s,x)=>s+x.demandValue,0);let running=0;
-  abcSorted.forEach(r=>{running+=r.demandValue;r.abc=totalDemandValue===0?"N/A":running/totalDemandValue<=0.8?"A":running/totalDemandValue<=0.95?"B":"C";});
+  abcSorted.forEach(r=>{const before=running/Math.max(totalDemandValue,1);r.abc=totalDemandValue===0?"N/A":before<0.8?"A":before<0.95?"B":"C";running+=r.demandValue;});
   const countRows=counts.filter(c=>!c.voided).map(c=>({...c,varianceValue:n(c.varianceValue),varianceQuantity:n(c.varianceQuantity)}));
   const variances=countRows.filter(c=>Math.abs(c.varianceQuantity)>1e-6).sort((a,b)=>Math.abs(b.varianceValue)-Math.abs(a.varianceValue));
   const totalVarianceValue=variances.reduce((s,c)=>s+Math.abs(c.varianceValue),0);
