@@ -2,6 +2,7 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebas
 import { getFirestore, collection, addDoc, deleteDoc, doc, updateDoc, setDoc, increment, onSnapshot, getDocs, writeBatch, runTransaction, serverTimestamp, query, where, orderBy } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, signOut } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
 import { createInventoryService } from "./modules/store/inventory-service.js";
+import { analyzeInventory } from "./modules/analytics/decision-engine.js";
 
 
 const FUEL_RATE = 92.50; // Legacy reference rate; operational costing is managed in the local cost model.
@@ -24,7 +25,7 @@ const CONFIG = {
   WEATHER_PROXY_URL: '',
   STALE_SEC: 180,              // radar pin turns grey after this many seconds without an update
   WIND_LIMIT: 25,              // km/h, spraying advisory
-  COL: { users:'users', machines:'machines', fuel:'fuel_logs', shifts:'shifts', zones:'CourseZones', live:'live_telemetry', inventory:'inventory', logs:'logs', maintenance:'maintenance_logs', assignments:'assignment_logs', plans:'turf_plans', inwards:'store_inwards', movements:'store_movements', expenses:'local_expenses' }
+  COL: { users:'users', machines:'machines', fuel:'fuel_logs', shifts:'shifts', zones:'CourseZones', live:'live_telemetry', inventory:'inventory', logs:'logs', maintenance:'maintenance_logs', assignments:'assignment_logs', plans:'turf_plans', inwards:'store_inwards', movements:'store_movements', stockCounts:'stock_counts', expenses:'local_expenses' }
 };
 
 const app = initializeApp(firebaseConfig);
@@ -63,7 +64,7 @@ function daysBetween(a, b) { const out = []; let d = a, n = 0; while (d <= b && 
 function setHTML(el, html) { if (el && el._h !== html) { el.innerHTML = html; el._h = html; } }
 
 /* ================= STATE ================= */
-const S = { users: [], machines: [], fuel: [], shifts: [], zones: [], live: [], inventory: [], logs: [], maintenance: [], assignments: [], plans: [], inwards: [], movements: [], expenses: [], _v: 0 };
+const S = { users: [], machines: [], fuel: [], shifts: [], zones: [], live: [], inventory: [], logs: [], maintenance: [], assignments: [], plans: [], inwards: [], movements: [], stockCounts: [], expenses: [], _v: 0 };
 const inventoryService = createInventoryService({ db, CONFIG, doc, collection, runTransaction, serverTimestamp, num });
 const COST_DEFAULTS = { dieselRate: 92.50, petrolRate: 0, labourPerHour: 0, downtimePerHour: 0, savingsPct: 10, improvementCost: 0 };
 function loadCostModel() {
