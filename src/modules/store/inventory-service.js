@@ -202,15 +202,25 @@ export function createInventoryService({ db, CONFIG, doc, collection, runTransac
       if (!itemSnap.exists()) throw new Error("Inventory item no longer exists");
       if (!planSnap.exists()) throw new Error("Turf plan no longer exists");
       const plan = planSnap.data(), item = itemSnap.data();
-      if (String(plan.status ?? "Planned").trim().toLowerCase() !== "planned") throw new Error("Only a Planned turf record can be issued");
+      const status = String(plan.status ?? "Planned").trim().toLowerCase();
+      if (!["planned", "partially issued", "issued"].includes(status)) throw new Error("Only a Planned or partially issued turf record can receive stock");
+      if (status !== "planned" && !(plan.issueMovementId || (Array.isArray(plan.issueMovementIds) && plan.issueMovementIds.length))) {
+        throw new Error("This legacy issue has no linked stock movement. Reconcile it before posting more stock");
+      }
       if (String(plan.productId ?? plan.itemId ?? "") !== String(itemId)) throw new Error("Selected inventory item does not match the saved turf plan");
       const plannedQty = number(plan.targetQty ?? plan.plannedQty ?? plan.requestedQty ?? plan.quantity ?? plan.qty);
       if (!Number.isFinite(plannedQty) || plannedQty <= 0) throw new Error("The saved turf plan has no valid planned quantity");
-      if (q > plannedQty + 1e-9) throw new Error("Issue quantity cannot exceed the planned quantity");
+      const alreadyIssued = Math.max(0, number(plan.issuedQty ?? plan.issuedQuantity ?? 0));
+      const remainingQty = Math.max(0, plannedQty - alreadyIssued);
+      if (remainingQty <= 1e-9) throw new Error("The full planned quantity has already been issued");
+      if (q > remainingQty + 1e-9) throw new Error("Issue quantity cannot exceed the remaining planned quantity (" + remainingQty + ")");
       const before = number(item.stockQuantity ?? 0), cost = number(item.unitCost ?? 0);
       if (!Number.isFinite(before) || before < 0) throw new Error("Current stock balance is invalid; reconcile it before issuing stock");
       if (q > before + 1e-9) throw new Error("Insufficient stock. Available: " + before + " " + (item.unit || "units"));
       const after = Math.max(0, before - q), now = serverTimestamp();
+      const totalIssued = alreadyIssued + q;
+      const newPlanStatus = totalIssued >= plannedQty - 1e-9 ? "Issued" : "Partially Issued";
+      const oldMovementIds = Array.isArray(plan.issueMovementIds) ? plan.issueMovementIds : (plan.issueMovementId ? [plan.issueMovementId] : []);
       const planReference = String(reference || ("TURFPLAN-" + planId)).trim();
       tx.update(itemRef, { stockQuantity: after, updatedAt: now });
       tx.set(move, {
@@ -223,8 +233,11 @@ export function createInventoryService({ db, CONFIG, doc, collection, runTransac
         targetArea: String(plan.targetArea || plan.area || "").trim(), createdAt: now
       });
       tx.update(planRef, {
-        status: "Issued", issuedQty: q, issuedAt: now, issuedBy: String(performedBy || "").trim(),
-        issuedTo: String(issuedTo || plan.targetArea || "").trim(), issueMovementId: move.id,
+        status: newPlanStatus, issuedQty: totalIssued, lastIssuedQty: q, issuedAt: now,
+        lastIssuedAt: now, issuedBy: String(performedBy || "").trim(),
+        issuedTo: String(issuedTo || plan.targetArea || "").trim(),
+        issueMovementId: plan.issueMovementId || move.id,
+        issueMovementIds: [...oldMovementIds, move.id], latestIssueMovementId: move.id,
         issueReference: planReference, updatedAt: now
       });
     });
@@ -252,7 +265,7 @@ export function createInventoryService({ db, CONFIG, doc, collection, runTransac
       const planSnap = await tx.get(planRef);
       if (!planSnap.exists()) throw new Error("Turf plan no longer exists");
       const plan = planSnap.data();
-      if (String(plan.status ?? "").trim().toLowerCase() !== "issued") throw new Error("Only an Issued turf plan can be reconciled");
+      if (!["issued", "partially issued"].includes(String(plan.status ?? "").trim().toLowerCase())) throw new Error("Only an Issued or partially issued turf plan can be reconciled");
       if (!plan.issueMovementId) throw new Error("This legacy issue has no linked stock movement. Reconcile it before marking the plan applied");
       const issued = number(plan.issuedQty);
       if (!Number.isFinite(issued) || issued <= 0) throw new Error("The recorded issue quantity is missing or invalid");
