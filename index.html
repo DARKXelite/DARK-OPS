@@ -11,6 +11,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.js"></script>
 
 <link rel="stylesheet" href="/src/ops-app.css">
+<link rel="stylesheet" href="/src/rbac.css">
 
 
 
@@ -38,6 +39,22 @@
 
 </head>
 <body>
+
+<!-- Full-screen PIN access gate -->
+<section id="pinGate" aria-label="Clover Greens Ops PIN login">
+  <div class="pin-shell">
+    <img class="pin-logo" src="/clover-logo.svg" alt="Clover Greens logo">
+    <div class="pin-eyebrow">Clover Greens Resort &amp; Golf</div>
+    <h1 class="pin-title">Welcome back</h1>
+    <p class="pin-subtitle">Enter your 8-digit access PIN</p>
+    <div class="pin-dots" id="pinDots" role="img" aria-label="0 of 8 digits entered"><span class="pin-dot" data-dot="0"></span><span class="pin-dot" data-dot="1"></span><span class="pin-dot" data-dot="2"></span><span class="pin-dot" data-dot="3"></span><span class="pin-dot" data-dot="4"></span><span class="pin-dot" data-dot="5"></span><span class="pin-dot" data-dot="6"></span><span class="pin-dot" data-dot="7"></span></div>
+    <div id="pinError" class="pin-error" aria-live="polite"></div>
+    <div class="pin-keypad" id="pinKeypad" aria-label="Numeric PIN keypad">
+      <button type="button" class="pin-key" data-pin-key="1">1</button><button type="button" class="pin-key" data-pin-key="2">2</button><button type="button" class="pin-key" data-pin-key="3">3</button><button type="button" class="pin-key" data-pin-key="4">4</button><button type="button" class="pin-key" data-pin-key="5">5</button><button type="button" class="pin-key" data-pin-key="6">6</button><button type="button" class="pin-key" data-pin-key="7">7</button><button type="button" class="pin-key" data-pin-key="8">8</button><button type="button" class="pin-key" data-pin-key="9">9</button><button type="button" class="pin-key utility" data-pin-key="clear">Clear</button><button type="button" class="pin-key" data-pin-key="0">0</button><button type="button" class="pin-key utility" data-pin-key="delete">⌫</button>
+    </div>
+    <div class="pin-foot">Secure operations access</div>
+  </div>
+</section>
 
 <!-- LOGIN (only used when CONFIG.REQUIRE_LOGIN = true) -->
 <div id="login" hidden>
