@@ -97,3 +97,19 @@ test("active dashboard entry exposes transactional inventory posting and stock m
   assert.match(service, /Insufficient stock/);
   assert.match(service, /already been posted/);
 });
+
+test("active shell includes dated physical counts and separate decision intelligence tab", async () => {
+  const html = await read("../index.html");
+  const app = await read("../src/ops-app.js");
+  const client = await read("../src/firebase/client.js");
+  const engine = await read("../src/modules/analytics/decision-engine.js");
+  assert.match(html, /data-act="physical-count"/);
+  assert.match(html, /id="v-analytics"/);
+  assert.match(html, /id="stockCountsTbl"/);
+  assert.match(app, /analyzeInventory/);
+  assert.match(app, /VARIANCE_REVIEW/);
+  assert.match(app, /renderAdvancedAnalytics/);
+  assert.match(client, /stock_counts/);
+  assert.match(engine, /Median absolute deviation/);
+  assert.match(engine, /reorderPoint/);
+});
