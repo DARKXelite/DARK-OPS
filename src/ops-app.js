@@ -1701,11 +1701,11 @@ function openPhysicalCount() {
         laterMovementCount:later.length,notes:$('#countNotes').value.trim(),countedBy,
         createdAt:serverTimestamp(),voided:false
       });
-      toast(Math.abs(variance)<0.0001?'Physical count saved: no variance':'Physical count saved: variance flagged for review',Math.abs(variance)<0.0001?'ok':'err');
+      toast(Math.abs(variance)<0.0001?'Physical count saved: no variance':'Physical count saved; variance flagged for review');
       scheduleRender();
     }
   });
-  const preview=()=>{const item=S.inventory.find(i=>i.id===$('#countItem')?.value);if(!item)return;const d=$('#countDate')?.value||today(),p=Number($('#countQty')?.value),future=(S.movements||[]).filter(m=>m.itemId===item.id&&(normDate(null,m.createdAt)||'')>d).reduce((s,m)=>s+num(m.quantityDelta),0),expected=+(num(item.stockQuantity)-future).toFixed(4),variance=Number.isFinite(p)&&p>=0?p-expected:null;setHTML($('#countPreview'),'<b>Estimated book closing balance:</b> '+fmt(expected,3)+' '+esc(item.unit||'units')+(variance===null?'':' · <b>Variance:</b> '+(variance>0?'+':'')+fmt(variance,3)+' '+esc(item.unit||'units')+' ('+money(variance*num(item.unitCost),2)+')')+'<div class="muted sm">Historical dates are reconstructed from recorded movements after that date. Verify ledger completeness before relying on the estimate.</div>');};
+  const preview=()=>{const item=S.inventory.find(i=>i.id===$('#countItem')?.value);if(!item)return;const d=$('#countDate')?.value||today(),p=Number($('#countQty')?.value),future=(S.movements||[]).filter(m=>m.itemId===item.id&&(normDate(null,m.createdAt)||m.date||'')>d).reduce((s,m)=>s+num(m.quantityDelta),0),expected=+(num(item.stockQuantity)-future).toFixed(4),variance=Number.isFinite(p)&&p>=0?p-expected:null;setHTML($('#countPreview'),'<b>Estimated book closing balance:</b> '+fmt(expected,3)+' '+esc(item.unit||'units')+(variance===null?'':' · <b>Variance:</b> '+(variance>0?'+':'')+fmt(variance,3)+' '+esc(item.unit||'units')+' ('+money(variance*num(item.unitCost),2)+')')+'<div class="muted sm">Historical dates are reconstructed from recorded movements after that date. Verify ledger completeness before relying on the estimate.</div>');};
   $('#countItem')?.addEventListener('change',preview);$('#countDate')?.addEventListener('change',preview);$('#countQty')?.addEventListener('input',preview);preview();
 }
 function renderStockCounts() {
