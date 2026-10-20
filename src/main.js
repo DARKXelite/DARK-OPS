@@ -110,7 +110,7 @@ function toast(msg, type = 'ok') {
 }
 function setConn(state) { document.documentElement.dataset.firebaseState = state || 'connecting'; const dot=$('#connDot'); if(dot) dot.className='dot '+state; const label=$('#connText'); if(label) label.textContent=state==='ok'?'Connected':state==='err'?'Connection error':'Connecting'; const status=$('#firebaseStatus'); if(status) { status.className='firebase-status '+(state||'connecting'); status.textContent=state==='ok'?'Firestore connected':state==='err'?'Firestore read error':'Connecting to Firestore…'; } }
 function openModal({ title, sub = '', body = '', footer = '', size = '' }) {
-  $('#modal').className = 'modal ' + size; $('#mTitle').textContent = title; $('#mSub').textContent = sub;
+  $('#modal').className = 'modal ' + size; $('#modal').setAttribute('aria-label', title || 'Dialog'); $('#mTitle').textContent = title; $('#mSub').textContent = sub;
   $('#mBody').innerHTML = body; $('#mBody')._h = null; $('#mFoot').innerHTML = footer; $('#mFoot').style.display = footer ? 'flex' : 'none';
   $('#overlay').classList.add('open');
 }
