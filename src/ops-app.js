@@ -1705,7 +1705,7 @@ function openPhysicalCount() {
           itemId,itemName:fresh.partName||fresh.itemName||itemName(item),category:fresh.category||'Other',unit:fresh.unit||'Nos',
           countDate,expectedQuantity:expected,countedQuantity:physical,varianceQuantity:variance,
           unitCost:freshCost,varianceValue:+(variance*freshCost).toFixed(2),status,confidence,
-          ledgerCoverage:incomplete?'INCOMPLETE_OR_UNVERIFIED':'AVAILABLE_MOVEMENTS_ONLY',
+          ledgerCoverage:incomplete?'INCOMPLETE_OR_UNVERIFIED':'UNVERIFIED_MOVEMENT_COVERAGE',
           laterMovementCount:later.length,notes:$('#countNotes').value.trim(),countedBy,
           createdAt:serverTimestamp(),voided:false
         });
