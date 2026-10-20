@@ -1,6 +1,7 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
 import { getFirestore, collection, addDoc, deleteDoc, doc, updateDoc, setDoc, increment, onSnapshot, getDocs, writeBatch, runTransaction, serverTimestamp, query, where, orderBy } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, signOut } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
+import { createInventoryService } from "./modules/store/inventory-service.js";
 
 
 const FUEL_RATE = 92.50; // Legacy reference rate; operational costing is managed in the local cost model.
@@ -23,7 +24,7 @@ const CONFIG = {
   WEATHER_PROXY_URL: '',
   STALE_SEC: 180,              // radar pin turns grey after this many seconds without an update
   WIND_LIMIT: 25,              // km/h, spraying advisory
-  COL: { users:'users', machines:'machines', fuel:'fuel_logs', shifts:'shifts', zones:'CourseZones', live:'live_telemetry', inventory:'inventory', logs:'logs', maintenance:'maintenance_logs', assignments:'assignment_logs', plans:'turf_plans', inwards:'store_inwards', expenses:'local_expenses' }
+  COL: { users:'users', machines:'machines', fuel:'fuel_logs', shifts:'shifts', zones:'CourseZones', live:'live_telemetry', inventory:'inventory', logs:'logs', maintenance:'maintenance_logs', assignments:'assignment_logs', plans:'turf_plans', inwards:'store_inwards', movements:'store_movements', expenses:'local_expenses' }
 };
 
 const app = initializeApp(firebaseConfig);
@@ -62,7 +63,8 @@ function daysBetween(a, b) { const out = []; let d = a, n = 0; while (d <= b && 
 function setHTML(el, html) { if (el && el._h !== html) { el.innerHTML = html; el._h = html; } }
 
 /* ================= STATE ================= */
-const S = { users: [], machines: [], fuel: [], shifts: [], zones: [], live: [], inventory: [], logs: [], maintenance: [], assignments: [], plans: [], inwards: [], expenses: [], _v: 0 };
+const S = { users: [], machines: [], fuel: [], shifts: [], zones: [], live: [], inventory: [], logs: [], maintenance: [], assignments: [], plans: [], inwards: [], movements: [], expenses: [], _v: 0 };
+const inventoryService = createInventoryService({ db, CONFIG, doc, collection, runTransaction, serverTimestamp, num });
 const COST_DEFAULTS = { dieselRate: 92.50, petrolRate: 0, labourPerHour: 0, downtimePerHour: 0, savingsPct: 10, improvementCost: 0 };
 function loadCostModel() {
   try { const saved = JSON.parse(localStorage.getItem('cloverOpsCostModel') || '{}'); return { ...COST_DEFAULTS, ...Object.fromEntries(Object.keys(COST_DEFAULTS).map(k => [k, Number.isFinite(+saved[k]) && +saved[k] >= 0 ? +saved[k] : COST_DEFAULTS[k]])) }; }
@@ -952,10 +954,10 @@ function editInventoryCost(id) {
   openForm({title:'Update inventory & unit cost',submit:'Save item',html:
     fld('Product / part name',`<input id="editPartName" value="${esc(i.partName||'')}">`)+
     fld('Category',`<select id="editPartCat">${['Fuel','Spare Parts','Fertilizers','Pesticides','Turf Enhancements','Tools','Other'].map(c=>`<option ${i.category===c?'selected':''}>${c}</option>`).join('')}</select>`)+
-    `<div class="row2">${fld('Stock quantity',`<input id="editPartStock" type="number" min="0" step="any" value="${num(i.stockQuantity)}">`)}${fld('Automatic reorder policy',`<div class="auto-reorder-form-note"><b>${fmt(effectiveReorderLevel(i),2)} ${esc(i.unit||'units')}</b><small>${autoReorderDetails(i).method} · ${autoReorderDetails(i).leadDays}-day lead time</small></div>` )}</div>`+
+    `<div class="row2">${fld('Current stock (read only)',`<input value="${fmt(i.stockQuantity,3)} ${esc(i.unit||'units')}" disabled>`)}${fld('Automatic reorder policy',`<div class="auto-reorder-form-note"><b>${fmt(effectiveReorderLevel(i),2)} ${esc(i.unit||'units')}</b><small>${autoReorderDetails(i).method} · ${autoReorderDetails(i).leadDays}-day lead time</small></div>` )}</div>`+
     fld('Unit',`<select id="editPartUnit">${['Nos','Kg','Litre','Gram','ML','Bag','Pack'].map(u=>`<option ${i.unit===u?'selected':''}>${u}</option>`).join('')}</select>`)+
     fld('Unit cost · ₹ per stock unit',`<input id="editPartCost" type="number" min="0" step="0.01" value="${num(i.unitCost)}">`,'Set 0 if price is not yet known. Stock value uses quantity × unit cost.'),
-    onSubmit:async()=>{const name=$('#editPartName').value.trim();if(!name){toast('Part name is required','err');return false;}await updateDoc(doc(db,CONFIG.COL.inventory,id),{partName:name,category:$('#editPartCat').value,stockQuantity:Math.max(0,num($('#editPartStock').value)),unit:$('#editPartUnit').value,unitCost:Math.max(0,num($('#editPartCost').value))});toast('Inventory and cost updated');}
+    onSubmit:async()=>{const name=$('#editPartName').value.trim();if(!name){toast('Part name is required','err');return false;}await updateDoc(doc(db,CONFIG.COL.inventory,id),{partName:name,category:$('#editPartCat').value,unit:$('#editPartUnit').value,unitCost:Math.max(0,num($('#editPartCost').value)),updatedAt:serverTimestamp()});toast('Inventory and cost updated');}
   });
 }
 
@@ -1534,6 +1536,7 @@ function renderRegistry() {
 
   const receipts=[...S.inwards].sort((a,b)=>tsMs(b.createdAt)-tsMs(a.createdAt));
   setHTML($('#inwardTbl'), `<table><thead><tr><th>Date / Reference</th><th>Category / Item</th><th>Supplier</th><th class="num">Qty</th><th class="num">Rate</th><th class="num">GST</th><th class="num">Total</th></tr></thead><tbody>${!LOADED.inwards?'<tr><td colspan="7">Loading receipts…</td></tr>':receipts.length?receipts.slice(0,100).map(r=>`<tr><td>${esc(r.receiptDate||'—')}<div class="muted sm">${esc(r.invoiceNumber||r.id)}</div></td><td><span class="muted sm">${esc(r.category||'')}</span><div><b>${esc(r.itemName||'')}</b></div></td><td>${esc(r.supplier||'—')}</td><td class="num">${fmt(r.quantity,3)} ${esc(r.unit||'')}</td><td class="num">${money(r.rate,2)}</td><td class="num">${fmt(r.gstPercent,2)}%</td><td class="num"><b>${money(r.total,2)}</b></td></tr>`).join(''):'<tr><td colspan="7" class="empty">No goods receipts recorded.</td></tr>'}</tbody></table>`);
+  renderStockMovementLedger();
   renderLocalExpenseLedger();
 }
 // Collapse content when a category closes so large inventory masters do not leave hundreds of rows in the DOM.
@@ -1564,6 +1567,7 @@ const RESET_GROUPS = [
   {key:'plans', label:'Turf plans & issues', col:'plans', note:'Planned tasks and recorded issue/application lines'},
   {key:'inventory', label:'Inventory master & stock', col:'inventory', note:'Item masters and current stock balances'},
   {key:'inwards', label:'Goods receipts', col:'inwards', note:'GRN / inward receipt records'},
+  {key:'movements', label:'Stock movement ledger', col:'movements', note:'Opening balances, inward receipts, issues and adjustments'},
   {key:'fuel', label:'Fuel issues', col:'fuel', note:'Fuel issue logs'},
   {key:'shifts', label:'Shifts & attendance', col:'shifts', note:'Shift records'},
   {key:'maintenance', label:'Maintenance records', col:'maintenance', note:'Service and repair history'},
@@ -1628,6 +1632,32 @@ function deleteStoreInwardFromEditor(id) {
   }});
 }
 
+function inventoryItemOptions() {
+  return '<option value="">Select item</option>' + S.inventory.slice().sort((a,b)=>itemName(a).localeCompare(itemName(b))).map(i=>'<option value="'+esc(i.id)+'">'+esc(itemName(i))+' · '+esc(i.category||'Other')+' · '+fmt(i.stockQuantity,3)+' '+esc(i.unit||'Nos')+' available</option>').join('');
+}
+function openStockIssue() {
+  openForm({title:'Issue stock',submit:'Post issue',html:
+    fld('Inventory item','<select id="issueItem">'+inventoryItemOptions()+'</select>')+
+    '<div class="row2">'+fld('Quantity','<input id="issueQty" type="number" min="0.001" step="any" required>')+fld('Issued to / department','<input id="issueTo" placeholder="Workshop, Turf Ops, Store...">')+'</div>'+
+    '<div class="row2">'+fld('Issue reason','<select id="issueReason"><option>Operational consumption</option><option>Workshop maintenance</option><option>Turf application</option><option>Fuel issue</option><option>Internal transfer</option><option>Other</option></select>')+fld('Reference / work order','<input id="issueRef" placeholder="Work order, requisition, machine...">')+'</div>'+
+    fld('Issued by','<input id="issueBy" placeholder="Storekeeper name">')+'<div class="hint">Posting atomically reduces on-hand stock and records the movement. Negative stock is blocked.</div>',
+    onSubmit:async()=>{const itemId=$('#issueItem').value,quantity=Number($('#issueQty').value);if(!itemId||!Number.isFinite(quantity)||quantity<=0){toast('Select an item and enter a positive quantity','err');return false;}await inventoryService.issueStock({itemId,quantity,reason:$('#issueReason').value,reference:$('#issueRef').value,issuedTo:$('#issueTo').value,performedBy:$('#issueBy').value});toast('Stock issue posted');}
+  });
+}
+function openStockAdjustment() {
+  openForm({title:'Stock adjustment / physical count',submit:'Post adjustment',html:
+    fld('Inventory item','<select id="adjustItem">'+inventoryItemOptions()+'</select>')+
+    '<div class="row2">'+fld('Adjustment quantity (+/-)','<input id="adjustQty" type="number" step="any" required placeholder="e.g. -2 or 5">')+fld('Reason','<select id="adjustReason"><option>Physical stock count</option><option>Damage / wastage</option><option>Expiry / disposal</option><option>Found stock</option><option>Opening balance correction</option><option>Other</option></select>')+'</div>'+
+    '<div class="row2">'+fld('Reference / count sheet','<input id="adjustRef" placeholder="Count sheet or approval reference">')+fld('Counted / approved by','<input id="adjustBy" placeholder="Name">')+'</div>'+
+    '<div class="hint">Adjustments are audited stock movements. A negative balance is never permitted.</div>',
+    onSubmit:async()=>{const itemId=$('#adjustItem').value,quantityDelta=Number($('#adjustQty').value);if(!itemId||!Number.isFinite(quantityDelta)||quantityDelta===0){toast('Select an item and enter a non-zero adjustment','err');return false;}await inventoryService.adjustStock({itemId,quantityDelta,reason:$('#adjustReason').value,reference:$('#adjustRef').value,performedBy:$('#adjustBy').value});toast('Stock adjustment posted');}
+  });
+}
+function renderStockMovementLedger() {
+  const target=$('#stockMovementTbl'); if(!target)return;
+  const rows=[...(S.movements||[])].sort((a,b)=>tsMs(b.createdAt)-tsMs(a.createdAt));
+  setHTML(target,'<table><thead><tr><th>Date</th><th>Item</th><th>Movement</th><th class="num">Change</th><th class="num">Before</th><th class="num">After</th><th>Reason / reference</th><th>By / to</th></tr></thead><tbody>'+(!LOADED.movements?'<tr><td colspan="8">Loading movements…</td></tr>':rows.length?rows.slice(0,200).map(m=>'<tr><td>'+esc(normDate(null,m.createdAt)||'—')+'</td><td><b>'+esc(m.itemName||'Unknown item')+'</b><div class="muted sm">'+esc(m.category||'')+'</div></td><td><span class="badge '+(m.movementType==='ISSUE'?'warn':m.movementType==='ADJUSTMENT'?'gold':'ok')+'">'+esc(m.movementType||'—')+'</span></td><td class="num">'+(num(m.quantityDelta)>0?'+':'')+fmt(m.quantityDelta,3)+' '+esc(m.unit||'')+'</td><td class="num">'+fmt(m.quantityBefore,3)+'</td><td class="num"><b>'+fmt(m.quantityAfter,3)+'</b></td><td>'+esc(m.reason||'—')+'<div class="muted sm">'+esc(m.reference||m.invoiceNumber||'')+'</div></td><td>'+esc(m.performedBy||m.issuedTo||'—')+'</td></tr>').join(''):'<tr><td colspan="8" class="empty">No stock movements recorded yet.</td></tr>')+'</tbody></table>');
+}
 function openInward() {
   const cats=STORE_CATS.map(c=>`<option value="${esc(c)}">${esc(c)}</option>`).join('');
   openForm({title:'Goods inward / Stock receipt',submit:'Post inward',html:
@@ -1645,15 +1675,7 @@ function openInward() {
       const ref=$('#inInvoice').value.trim(),supplier=$('#inSupplier').value.trim(),receiptDate=$('#inDate').value;
       if(!receiptDate||!supplier||!ref){toast('Date, supplier and invoice / GRN are required','err');return false;}
       const taxable=+(qty*rate).toFixed(2),tax=+(taxable*gst/100).toFixed(2),total=+(taxable+tax).toFixed(2);
-      const receiptRef=doc(collection(db,CONFIG.COL.inwards));
-      await runTransaction(db,async tx=>{
-        const itemRef=doc(db,CONFIG.COL.inventory,itemId),snap=await tx.get(itemRef);
-        if(!snap.exists())throw new Error('Item no longer exists');
-        const current=snap.data();if(current.category!==item.category)throw new Error('Item category changed. Refresh and retry');
-        const oldQty=Math.max(0,num(current.stockQuantity)),newQty=oldQty+qty;
-        tx.update(itemRef,{stockQuantity:newQty,unitCost:rate,updatedAt:serverTimestamp()});
-        tx.set(receiptRef,{itemId,itemName:itemName(item),category:item.category,unit:item.unit||'Nos',quantity:qty,rate,gstPercent:gst,taxableAmount:taxable,gstAmount:tax,total,supplier,invoiceNumber:ref,receiptDate,notes:$('#inNotes').value.trim(),createdAt:serverTimestamp(),transactionType:'INWARD'});
-      });toast('Goods inward posted and stock updated');
+      await inventoryService.postGoodsInward({itemId,expectedCategory:item.category,itemName:itemName(item),unit:item.unit||'Nos',quantity:qty,rate,gstPercent:gst,taxableAmount:taxable,gstAmount:tax,total,supplier,invoiceNumber:ref,receiptDate,notes:$('#inNotes').value.trim()});toast('Goods inward posted and stock movement recorded');
     }
   });
   updateInwardItems();
@@ -1939,6 +1961,8 @@ const H = {
   'export-shifts': () => { const st = R.shifts; downloadCSV(`shifts_${st.from}_to_${st.to}.csv`, [['Date', 'Operator', 'Machine', 'Distance km', 'Engine hours'], ...shiftRows().map(s => [s._d, s.operatorName || '', mName(s.machineId), num(s.distanceKm), num(s.engineHoursLogged)])]); },
   'export-run': () => { const { st, rows } = runData(); downloadCSV(`running_hours_${st.from}_to_${st.to}.csv`, [['Machine', 'Category', 'Operators', 'Shifts', 'Run hours', 'Distance km', 'Fuel L', 'L/hr'], ...rows.map(r => [r.name, r.cat, [...r.ops].join('; '), r.n, +r.H.toFixed(2), +r.km.toFixed(2), +r.L.toFixed(2), r.H && r.L ? +(r.L / r.H).toFixed(2) : ''])]); },
   'add-inward': () => openInward(),
+  'issue-stock': () => openStockIssue(),
+  'adjust-stock': () => openStockAdjustment(),
   'export-stock': () => downloadCSV('inventory_stock.csv',[['Category','Item','Unit','Stock','Auto reorder at','Rate basis','Unit rate'],...S.inventory.map(i=>[i.category,itemName(i),i.unit||'Nos',i.stockQuantity,effectiveReorderLevel(i),autoReorderDetails(i).method,i.unitCost])]),
   'export-inwards': () => downloadCSV('goods_inwards.csv',[['Date','Invoice','Supplier','Category','Item','Unit','Qty','Rate','GST %','Taxable','GST amount','Total'],...S.inwards.map(r=>[r.receiptDate,r.invoiceNumber,r.supplier,r.category,r.itemName,r.unit,r.quantity,r.rate,r.gstPercent,r.taxableAmount,r.gstAmount,r.total])]),
   'edit-user': d => { const u=S.users.find(x=>x.id===d.id); if(!u) return toast('User record not found','err'); openForm({title:'Edit workforce member',submit:'Save changes',html:fld('Full name','<input id="euName" required>')+fld('Mobile number','<input id="euMob" inputmode="tel" required>','Saved in normalized +91 format where applicable.')+fld('Role','<select id="euRole"><option value="operator">Operator</option><option value="incharge">Incharge</option><option value="storekeeper">Storekeeper (Fuel Ledger)</option><option value="storekeeper_fertilizer">Storekeeper (Fertilizers & Pesticides)</option></select>'),onSubmit:async()=>{const name=$('#euName').value.trim(), mob=normMobile($('#euMob').value), role=$('#euRole').value;if(!name){toast('Name is required','err');return false;}if(!/^\+\d{10,14}$/.test(mob)){toast('Enter a valid mobile number','err');return false;}if(S.users.some(x=>x.id!==u.id&&x.mobileNumber===mob)){toast('This mobile number is already registered','err');return false;}await updateDoc(doc(db,CONFIG.COL.users,u.id),{fullName:name,username:name,mobileNumber:mob,role});toast('User profile updated');}});setTimeout(()=>{if($('#euName'))$('#euName').value=u.fullName||u.username||'';if($('#euMob'))$('#euMob').value=u.mobileNumber||'';if($('#euRole'))$('#euRole').value=u.role||'operator';},0); },
@@ -1975,7 +1999,7 @@ const H = {
   'delete-local-expense': d => openForm({title:'Delete local expense',submit:'Delete',danger:true,html:'This expense record will be permanently deleted.',onSubmit:async()=>{await deleteDoc(doc(db,CONFIG.COL.expenses,d.id));toast('Expense deleted');}}),
   'add-part': () => openForm({ title: 'Create item master', submit: 'Create item',
     html: fld('Part / Product name', '<input id="pName" placeholder="e.g. Diesel or Petrol">', 'For Fuel Ops insights, use the exact item names Diesel or Petrol and choose category Fuel.') + fld('Category', '<select id="pCat" data-chg="part-category"><option value="Spare Parts">Spare Parts</option><option value="Fuel">Fuel</option><option value="Fertilizers">Fertilizers</option><option value="Pesticides">Pesticides</option><option value="Turf Enhancements">Turf Enhancements</option><option value="Tools">Tools</option><option value="Other">Other</option></select>') + `<div id="pModelWrap">${fld('Applicable Machine / Model', `<select id="pModel">${machineOptions("", "Generic (Use for All Machines)")}</select>`, 'Only relevant for machine spare parts.')}</div>` + `<div class="row2">${fld('Opening stock', '<input id="pStock" type="number" min="0" step="any" value="0">')}${fld('Automatic reorder threshold', '<div class="auto-reorder-form-note"><b>Calculated automatically</b><small>Uses recent issue history, lead-time policy and a safety buffer.</small></div>')}</div>` + fld('Unit of measure', '<select id="pUnit"><option>Nos</option><option>Kg</option><option>Litre</option><option>Gram</option><option>ML</option><option>Bag</option><option>Pack</option></select>') + fld('Unit cost · ₹ per stock unit', '<input id="pUnitCost" type="number" min="0" step="0.01" value="0">', '0 = unknown. Enter supplier cost to unlock stock valuation and turf plan costing.'),
-    onSubmit: async () => { const n = $('#pName').value.trim(); if (!n) { toast('Part name is required', 'err'); return false; } const cat = $('#pCat').value, mVal = cat === 'Spare Parts' ? $('#pModel').value : ''; const item = { partName: n, category: cat, stockQuantity: Math.max(0,num($('#pStock').value)), unit: $('#pUnit').value, reorderLevel: 0, unitCost: Math.max(0, num($('#pUnitCost').value)) }; if (cat === 'Spare Parts') item.compatibleModel = mVal ? mName(mVal) : 'Generic'; await addDoc(collection(db, CONFIG.COL.inventory), item); toast('Item master created'); } }),
+    onSubmit: async () => { const n = $('#pName').value.trim(); if (!n) { toast('Part name is required', 'err'); return false; } const cat = $('#pCat').value, mVal = cat === 'Spare Parts' ? $('#pModel').value : ''; const item = { partName: n, category: cat, stockQuantity: Math.max(0,num($('#pStock').value)), unit: $('#pUnit').value, reorderLevel: 0, unitCost: Math.max(0, num($('#pUnitCost').value)) }; if (cat === 'Spare Parts') item.compatibleModel = mVal ? mName(mVal) : 'Generic'; await inventoryService.createItemWithOpeningBalance(item); toast('Item master created with opening balance movement'); } }),
   stock: async d => { try { await updateDoc(doc(db, CONFIG.COL.inventory, d.id), { stockQuantity: increment(+d.d) }); } catch (e) { toast('Could not update stock', 'err'); } },
   'add-inc': () => openForm({ title: 'Report incident', submit: 'Submit report',
     html: fld('Machine', `<select id="iMach">${machineOptions('', 'General / no machine')}</select>`) + fld('Type', '<select id="iType"><option>Breakdown</option><option>Maintenance</option><option>Safety</option><option>Other</option></select>') + fld('What happened?', '<textarea id="iDesc" placeholder="Describe the issue"></textarea>') + fld('Estimated downtime · hours (optional)', '<input id="iDownHours" type="number" min="0" step="0.5" value="0">', 'Planning estimate only. Record actual downtime separately if you need realised loss reporting.'),
