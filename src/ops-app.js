@@ -2074,7 +2074,10 @@ function initPinGate() {
   gate.dataset.initialized = 'true';
   let entered = '', lockedUntil = 0, failures = 0;
   const refresh = () => {
-    dots.forEach((dot, i) => dot.classList.toggle('filled', i < entered.length));
+    dots.forEach((dot, i) => {
+      dot.classList.toggle('filled', i < entered.length);
+      dot.textContent = entered[i] || '';
+    });
     $('#pinDots').setAttribute('aria-label', entered.length + ' of 8 digits entered');
   };
   const clear = (message='') => { entered = ''; refresh(); error.textContent = message; };
@@ -2101,10 +2104,6 @@ function initPinGate() {
     entered += key; refresh();
     if (entered.length === 8) window.setTimeout(unlock, 100);
   };
-  $('#pinKeypad').addEventListener('click', e => {
-    const button = e.target.closest('[data-pin-key]');
-    if (button) press(button.dataset.pinKey);
-  });
   document.addEventListener('keydown', e => {
     if (gate.hidden) return;
     if (/^\\d$/.test(e.key)) { e.preventDefault(); press(e.key); }
