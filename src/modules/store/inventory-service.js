@@ -108,6 +108,32 @@ export function createInventoryService({ db, CONFIG, doc, collection, runTransac
     return { receiptRef: receipt, movementRef: move };
   }
 
+  async function postLocalPurchaseStock({ itemId, quantity, rate, reference = "", performedBy = "Local expense entry" }) {
+    const q = number(quantity), r = number(rate);
+    if (!itemId) throw new Error("Select an inventory item");
+    if (!Number.isFinite(q) || q <= 0) throw new Error("Purchase stock quantity must be greater than zero");
+    if (!Number.isFinite(r) || r < 0) throw new Error("Purchase unit rate must be zero or greater");
+    const itemRef = itemRefFor(itemId), move = movementRef();
+    await runTransaction(db, async tx => {
+      const snap = await tx.get(itemRef);
+      if (!snap.exists()) throw new Error("Item no longer exists");
+      const item = snap.data(), before = number(item.stockQuantity ?? 0), oldCost = number(item.unitCost ?? 0);
+      if (!Number.isFinite(before) || before < 0) throw new Error("Current stock balance is invalid; reconcile it before adding purchase stock");
+      const after = before + q;
+      const cost = before === 0 ? r : oldCost > 0 ? +((before * oldCost + q * r) / after).toFixed(4) : 0;
+      const now = serverTimestamp();
+      tx.update(itemRef, { stockQuantity: after, unitCost: cost, costStatus: before > 0 && oldCost <= 0 ? "REVIEW_REQUIRED" : "KNOWN", updatedAt: now });
+      tx.set(move, {
+        itemId, itemName: item.partName || item.itemName || "Unnamed item", category: item.category || "Other",
+        unit: item.unit || "Nos", movementType: "LOCAL_PURCHASE", quantityDelta: q,
+        quantityBefore: before, quantityAfter: after, unitCost: r, value: +(q * r).toFixed(2),
+        reason: "Local expense stock addition", reference: String(reference || "").trim(),
+        performedBy: String(performedBy || "").trim(), createdAt: now
+      });
+    });
+    return { movementRef: move };
+  }
+
   async function issueStock({ itemId, quantity, reason, reference = "", issuedTo = "", performedBy = "" }) {
     const q = number(quantity);
     const why = requiredText(reason, "Issue reason");
@@ -158,5 +184,5 @@ export function createInventoryService({ db, CONFIG, doc, collection, runTransac
     return { movementRef: move };
   }
 
-  return { createItemWithOpeningBalance, postGoodsInward, issueStock, adjustStock };
+  return { createItemWithOpeningBalance, postGoodsInward, postLocalPurchaseStock, issueStock, adjustStock };
 }
