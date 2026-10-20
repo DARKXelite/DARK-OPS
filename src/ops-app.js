@@ -537,7 +537,10 @@ function renderOperationalIntelligence(t=today()) {
   const reorderHtml=!S.inventory.length?'<div class="ops-intel-message">Add products to the Inventory Master. Automatic levels will be computed once the item is linked to actual usage records.</div>':
     `${urgent.length?urgent.map(({item,reorder})=>`<div class="ops-intel-row"><div class="ops-intel-main"><b>${esc(itemName(item))}</b><small>${esc(item.category||'Other')} · ${reorder.reliable?`${reorder.activeDays} use-days / ${reorder.windowDays}-day window · ${reorder.leadDays}-day lead time`:`Provisional threshold · ${reorder.leadDays}-day policy lead time`}</small></div><div class="ops-intel-value">${fmt(item.stockQuantity,2)} / ${fmt(reorder.level,2)} ${esc(item.unit||'units')}<small>${num(item.stockQuantity)<=reorder.level?'Reorder attention':'Coverage watch'}</small></div></div>`).join(''):'<div class="ops-intel-message">No items are currently below their calculated reorder threshold or projected to run out within policy lead time.</div>'}`+
     `<div class="ops-intel-message ${historyCount?'':'alert'}">${historyCount} of ${S.inventory.length} item(s) have enough dated usage history (at least 3 issue days across a 14+ day observation window). Other items use a provisional floor until history improves. Auto-reorder levels recalculate as records update.</div>`;
-  setHTML($('#opsAutoReorderIntel'),reorderHtml);
+  const countExceptions=(S.stockCounts||[]).filter(x=>!x.voided&&Math.abs(num(x.varianceQuantity))>1e-6);
+  const countExposure=countExceptions.reduce((s,x)=>s+Math.abs(num(x.varianceValue)),0);
+  const countAlert=countExceptions.length?`<div class="ops-intel-message alert"><b>Physical stock variance:</b> ${countExceptions.length} count exception(s) · ${money(countExposure,2)} absolute value exposure. These are unapproved variances, not confirmed losses. <button class="text-action" data-act="group-tab" data-v="analytics">Review Advanced Analytics</button></div>`:'<div class="ops-intel-message">No recorded physical stock variances are awaiting review.</div>';
+  setHTML($('#opsAutoReorderIntel'),reorderHtml+countAlert);
   renderTurfUsageIntelligence(t);
 }
 
@@ -1570,6 +1573,7 @@ const RESET_GROUPS = [
   {key:'inventory', label:'Inventory master & stock', col:'inventory', note:'Item masters and current stock balances'},
   {key:'inwards', label:'Goods receipts', col:'inwards', note:'GRN / inward receipt records'},
   {key:'movements', label:'Stock movement ledger', col:'movements', note:'Opening balances, inward receipts, issues and adjustments'},
+  {key:'stockCounts', label:'Physical stock counts', col:'stockCounts', note:'Dated closing counts and variance audit records'},
   {key:'fuel', label:'Fuel issues', col:'fuel', note:'Fuel issue logs'},
   {key:'shifts', label:'Shifts & attendance', col:'shifts', note:'Shift records'},
   {key:'maintenance', label:'Maintenance records', col:'maintenance', note:'Service and repair history'},
@@ -1863,7 +1867,7 @@ function renderAll() { try { (RENDER[cur] || (() => {}))(); updateBadges(); if (
 /* ================= FIRESTORE LISTENERS ================= */
 let unsubs = [];
 const VIEW_COLLECTIONS = {
-  overview: ['fuel','machines','shifts','inventory','plans','maintenance','logs'],
+  overview: ['fuel','machines','shifts','inventory','plans','maintenance','logs','stockCounts'],
   fleet: ['machines','live','fuel','shifts'],
   fuel: ['fuel','machines','expenses'],
   shifts: ['shifts','machines'],
