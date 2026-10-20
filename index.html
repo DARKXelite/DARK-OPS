@@ -223,10 +223,10 @@
 
     <!-- INVENTORY MASTER / GOODS RECEIPTS -->
     <section class="view" id="v-registry">
-      <div class="toolbar" style="gap:10px;flex-wrap:wrap"><div class="grow"></div><button class="btn" data-act="open-store-records"><span class="material-symbols-rounded">manage_search</span>Records editor</button><button class="btn btn-danger" data-act="open-data-reset"><span class="material-symbols-rounded">delete_sweep</span>Reset data</button><button class="btn btn-primary" data-act="add-inward"><span class="material-symbols-rounded">move_to_inbox</span> New inward</button><button class="btn" data-act="add-part"><span class="material-symbols-rounded">add_box</span> New item master</button></div>
+      <div class="toolbar" style="gap:10px;flex-wrap:wrap"><div class="grow"></div><button class="btn" data-act="open-store-records"><span class="material-symbols-rounded">manage_search</span>Records editor</button><button class="btn btn-danger" data-act="open-data-reset"><span class="material-symbols-rounded">delete_sweep</span>Reset data</button><button class="btn btn-primary" data-act="add-inward"><span class="material-symbols-rounded">move_to_inbox</span> New inward</button><button class="btn" data-act="issue-stock"><span class="material-symbols-rounded">outbox</span> Issue stock</button><button class="btn" data-act="adjust-stock"><span class="material-symbols-rounded">tune</span> Stock adjustment</button><button class="btn" data-act="add-part"><span class="material-symbols-rounded">add_box</span> New item master</button></div>
       <div class="kpi-grid" id="storeKpis"></div>
       <div class="card mt"><div class="card-h"><h3>Item master & current stock</h3><button class="btn btn-sm" data-act="export-stock">Export stock</button></div><div class="table-wrap" id="invTbl"></div></div>
-      <div class="card mt"><div class="card-h"><h3>Goods receipt register</h3><button class="btn btn-sm" data-act="export-inwards">Export inwards</button></div><div class="table-wrap" id="inwardTbl"></div></div>
+      <div class="card mt"><div class="card-h"><h3>Goods receipt register</h3><button class="btn btn-sm" data-act="export-inwards">Export inwards</button></div><div class="table-wrap" id="inwardTbl"></div></div>\n      <div class="card mt"><div class="card-h"><h3>Stock movement ledger</h3><span class="muted sm">Receipts, issues, opening balances and adjustments</span></div><div class="table-wrap" id="stockMovementTbl"></div></div>
     </section>
     <!-- LOCAL EXPENSES -->
     <section class="view" id="v-expenses">
