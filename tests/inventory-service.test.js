@@ -21,7 +21,7 @@ function setup({ item = { category: "Fuel", stockQuantity: 10, unitCost: 80 }, i
         return { exists: () => false, data: () => ({}) };
       },
       set: (r, data) => calls.push(["set", r, data]),
-      update: (r, data) => calls.push(["update", r, data])
+      update: (r, data) => { calls.push(["update", r, data]); if (r.collection === "inventory" && itemExists) Object.assign(item, data); if (r.collection === "turf_plans" && planExists) Object.assign(plan, data); }
     }),
     serverTimestamp: () => ({ serverTimestamp: true }),
     num: value => { const n = Number(value); return Number.isFinite(n) ? n : 0; }
@@ -152,4 +152,31 @@ test("legacy turf issue without a movement link cannot be marked applied", async
   const { service, calls } = setup({ plan: { productId: "turf-1", status: "Issued", issuedQty: 6, targetArea: "Greens" } });
   await assert.rejects(service.completeTurfPlan({ planId: "plan-1", appliedQty: 6, appliedBy: "Operator" }), /no linked stock movement/);
   assert.equal(calls.some(c => c[0] === "update" && c[1].collection === "turf_plans"), false);
+});
+
+test("partial turf issues accumulate linked movement IDs and allow the remaining planned quantity", async () => {
+  const { service, calls } = setup({ item: { category: "Fertilizers", partName: "Fertilizer", unit: "Kg", stockQuantity: 10, unitCost: 80 } });
+  await service.issueStockForTurfPlan({ planId: "plan-1", itemId: "turf-1", quantity: 4, performedBy: "Storekeeper" });
+  assert.equal(calls.filter(c => c[0] === "update" && c[1].collection === "turf_plans").at(-1)[2].status, "Partially Issued");
+  await service.issueStockForTurfPlan({ planId: "plan-1", itemId: "turf-1", quantity: 6, performedBy: "Storekeeper" });
+  const planUpdates = calls.filter(c => c[0] === "update" && c[1].collection === "turf_plans");
+  const movementRows = calls.filter(c => c[0] === "set" && c[1].collection === "store_movements");
+  assert.equal(planUpdates.at(-1)[2].status, "Issued");
+  assert.equal(planUpdates.at(-1)[2].issuedQty, 10);
+  assert.equal(planUpdates.at(-1)[2].issueMovementIds.length, 2);
+  assert.equal(movementRows.length, 2);
+  assert.equal(movementRows[0][2].linkedPlanId, "plan-1");
+  assert.equal(movementRows[1][2].linkedPlanId, "plan-1");
+  await assert.rejects(service.issueStockForTurfPlan({ planId: "plan-1", itemId: "turf-1", quantity: 1 }), /full planned quantity has already been issued/);
+});
+
+test("a partially issued turf task can be reconciled against the amount actually issued", async () => {
+  const { service, calls } = setup({ item: { category: "Fertilizers", partName: "Fertilizer", unit: "Kg", stockQuantity: 10, unitCost: 80 } });
+  await service.issueStockForTurfPlan({ planId: "plan-1", itemId: "turf-1", quantity: 3, performedBy: "Storekeeper" });
+  await service.completeTurfPlan({ planId: "plan-1", appliedQty: 2, returnedQty: 1, unaccountedQty: 0, appliedBy: "Operator" });
+  const plan = calls.filter(c => c[0] === "update" && c[1].collection === "turf_plans").at(-1);
+  const stock = calls.filter(c => c[0] === "update" && c[1].collection === "inventory").at(-1);
+  assert.equal(plan[2].status, "Applied");
+  assert.equal(plan[2].appliedQty + plan[2].returnedQty, 3);
+  assert.equal(stock[2].stockQuantity, 8);
 });
