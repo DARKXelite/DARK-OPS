@@ -1947,3 +1947,22 @@ body:has(#v-turfcare.active) #v-turfcare > .turf-view-tabs {
   #overlay #modal.turf-batch-modal .turf-weekday-picks label {padding:3px 4px!important;font-size:8.5px!important;}
   #overlay #modal.turf-batch-modal #mFoot .btn {padding:0 8px!important;}
 }
+
+
+/* Planned vs Issued panel header: keep the details action discoverable and aligned. */
+.ops-plan-issue-actions {
+  display:flex;
+  align-items:center;
+  justify-content:flex-end;
+  gap:10px;
+  flex-wrap:wrap;
+}
+.ops-plan-issue-actions > span {
+  color:var(--muted);
+  font-size:10px;
+  white-space:nowrap;
+}
+.ops-plan-issue-actions .text-action {
+  white-space:nowrap;
+  font-size:11px;
+}
