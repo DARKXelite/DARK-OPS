@@ -3,6 +3,7 @@ import { getFirestore, collection, addDoc, deleteDoc, doc, updateDoc, setDoc, in
 import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, signOut } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
 import { createInventoryService } from "./modules/store/inventory-service.js";
 import { analyzeInventory } from "./modules/analytics/decision-engine.js";
+import { buildOperationalRecordFeed, filterOperationalRecordFeed, summarizeTurfLifecycle } from "./modules/records/record-explorer.js";
 
 
 const FUEL_RATE = 92.50; // Legacy reference rate; operational costing is managed in the local cost model.
@@ -1793,28 +1794,99 @@ function renderIncidents() {
 
 
 /* ================= RECORDS (maintenance + assignments) ================= */
-let recordsTab = 'maintenance';
-function renderRecords() {
-  const card = $('#recordsCard');
-  if (!card) return;
-  $$('#recordsChips .chip').forEach(c => c.classList.toggle('on', c.dataset.tab === recordsTab));
-  if (recordsTab === 'maintenance') {
-    const rows = [...(S.maintenance || [])].sort((a, b) => tsMs(b.timestamp) - tsMs(a.timestamp) || (b.date || '').localeCompare(a.date || ''));
-    if (!LOADED.maintenance) { setHTML(card, '<div class="skeleton" style="height:240px"></div>'); return; }
-    setHTML(card, `<div class="table-wrap"><table><thead><tr><th>Date</th><th>Type</th><th>Machine</th><th class="num">Hours at event</th><th>Parts</th><th>By</th><th>Notes</th><th></th></tr></thead><tbody>${rows.length ? rows.map(r => {
-      const parts = Array.isArray(r.partsUsed) ? r.partsUsed.map(p => `${p.partName || p.partId || 'part'}×${p.qty || 1}`).join(', ') : '';
-      return `<tr><td>${dLong(r.date || normDate(null, r.timestamp))}</td><td><span class="badge ${r.type === 'Service' ? 'ok' : r.type === 'Repair' ? 'warn' : 'gold'}">${esc(r.type || '—')}</span>${r.stockWarning ? ' <span class="badge bad">Stock</span>' : ''}</td><td><b>${esc(r.machineName || mName(r.machineId))}</b></td><td class="num">${r.hoursAtEvent != null ? fmt(num(r.hoursAtEvent)) : '—'}</td><td class="muted">${esc(parts || '—')}</td><td>${esc(r.performedBy || '—')}</td><td class="muted">${esc(r.notes || '')}</td><td></td></tr>`;
-    }).join('') : '<tr><td colspan="8" class="empty">No maintenance logs yet. Incharge can log Service / Backlapping / Repair from the app.</td></tr>'}</tbody></table></div>`);
-  } else if (recordsTab === 'assignments') {
-    const rows = [...(S.assignments || [])].sort((a, b) => (b.at || 0) - (a.at || 0));
-    if (!LOADED.assignments) { setHTML(card, '<div class="skeleton" style="height:240px"></div>'); return; }
-    setHTML(card, `<div class="table-wrap"><table><thead><tr><th>When</th><th>Action</th><th>Machine</th><th>Operator</th><th>By</th></tr></thead><tbody>${rows.length ? rows.map(r => `<tr><td>${r.at ? dLong(normDate(null, r.at)) + ' · ' + timeOf(r.at) : '—'}</td><td><span class="badge ${r.action === 'ASSIGN' ? 'ok' : 'mute'}">${esc(r.action || '—')}</span></td><td><b>${esc(r.machineName || mName(r.machineId))}</b></td><td>${esc(r.operatorName || '—')}<div class="record-meta">${esc(r.operatorMobile || '')}</div></td><td>${esc(r.by || '—')}</td></tr>`).join('') : '<tr><td colspan="5" class="empty">No assignment history yet.</td></tr>'}</tbody></table></div>`);
-  } else {
-    // fuel history reuse
-    renderLedger(true);
-    const ledger = $('#ledgerCard');
-    if (ledger) setHTML(card, ledger.innerHTML);
-  }
+const RECORD_SOURCE_KEYS = ["maintenance", "assignments", "fuel", "plans", "movements", "inwards", "stockCounts", "logs", "shifts", "expenses"];
+const RECORD_SOURCE_LABELS = {all:"All activity",maintenance:"Maintenance",assignments:"Assignments",fuel:"Fuel issue",plans:"Turf plan / application",movements:"Stock movement",inwards:"Goods receipt",stockCounts:"Closing stock count",logs:"Incident",shifts:"Run log",expenses:"Local expense"};
+function readRecordExplorerPrefs(){try{const x=JSON.parse(localStorage.getItem("cloverOpsRecordExplorerState")||"{}");return{tab:["all",...RECORD_SOURCE_KEYS].includes(x.tab)?x.tab:"all",query:String(x.query||""),from:String(x.from||""),to:String(x.to||"")};}catch(_){return{tab:"all",query:"",from:"",to:""};}}
+function readRecordSavedViews(){try{const x=JSON.parse(localStorage.getItem("cloverOpsRecordSavedViews")||"[]");return Array.isArray(x)?x.filter(v=>v&&v.id&&v.name&&["all",...RECORD_SOURCE_KEYS].includes(v.tab)).slice(0,30):[];}catch(_){return[];}}
+const recordExplorerPrefs=readRecordExplorerPrefs();
+let recordsTab=recordExplorerPrefs.tab,recordsSearchText=recordExplorerPrefs.query,recordsFrom=recordExplorerPrefs.from,recordsTo=recordExplorerPrefs.to;
+let recordsPageSize=100,recordsSelectedView="",recordsSavedViews=readRecordSavedViews();
+function persistRecordExplorerPrefs(){try{localStorage.setItem("cloverOpsRecordExplorerState",JSON.stringify({tab:recordsTab,query:recordsSearchText,from:recordsFrom,to:recordsTo}));}catch(_){}}
+function persistRecordSavedViews(){try{localStorage.setItem("cloverOpsRecordSavedViews",JSON.stringify(recordsSavedViews.slice(0,30)));}catch(_){}}
+function recordDateFor(source,r){
+ const specific=source==="plans"?turfRecordDate(r):source==="stockCounts"?(r.countDate||r.date):source==="inwards"?(r.receiptDate||r.date):source==="assignments"?(r.date||r.assignedDate||r.assignmentDate):source==="maintenance"?(r.date||r.serviceDate||r.maintenanceDate):source==="fuel"?(r.issueDate||r.issuedDate||r.date||r.transactionDate||r._d):source==="logs"?(r.reportedDate||r.date||r.createdDate):source==="shifts"?(r.shiftDate||r.date||r._d):source==="expenses"?(r.date||r.expenseDate):(r.date||r.transactionDate);
+ return normDate(specific,r.at??r.timestamp??r.createdAt??r.createdOn??r.issuedAt??r.appliedAt??r.updatedAt??r.recordedAt);
+}
+function recordTitle(source,r){
+ if(source==="maintenance")return `${r.type||"Maintenance"} · ${r.machineName||mName(r.machineId)||"Machine"}`;
+ if(source==="assignments")return `${r.action||"Assignment"} · ${r.machineName||mName(r.machineId)||"Machine"}`;
+ if(source==="fuel")return `${r.machineName||mName(r.machineId)||"Unassigned machine"} · ${fuelTypeFromRecord(r)}`;
+ if(source==="plans")return turfRecordProductName(r)||r.productName||"Turf product not specified";
+ if(source==="movements")return `${r.movementType||"Stock movement"} · ${r.itemName||"Unspecified item"}`;
+ if(source==="inwards")return `${r.itemName||"Stock receipt"} · ${r.supplier||"Supplier not recorded"}`;
+ if(source==="stockCounts")return `Physical count · ${r.itemName||r.itemId||"Unspecified item"}`;
+ if(source==="logs")return r.issueDescription||"Operational incident";
+ if(source==="shifts")return `Run log · ${r.machineName||mName(r.machineId)||"Unassigned machine"}`;
+ if(source==="expenses")return r.itemName||r.vendor||"Local expense";
+ return "Operational record";
+}
+function recordSubtitle(source,r){
+ if(source==="maintenance")return[Array.isArray(r.partsUsed)&&r.partsUsed.length?String(r.partsUsed.length)+" part line(s)":"",r.performedBy,r.notes].filter(Boolean).join(" · ");
+ if(source==="assignments")return[r.operatorName,r.operatorMobile,r.by].filter(Boolean).join(" · ");
+ if(source==="fuel")return[r.issuedBy,r.reference,r.notes||r.reason].filter(Boolean).join(" · ");
+ if(source==="plans")return[r.targetArea||r.area||r.location||"Course area not recorded",r.scope,r.notes||r.reason].filter(Boolean).join(" · ");
+ if(source==="movements")return[r.reason,r.reference||r.invoiceNumber,r.issuedTo||r.performedBy].filter(Boolean).join(" · ");
+ if(source==="inwards")return[r.invoiceNumber||r.reference,r.category,r.notes].filter(Boolean).join(" · ");
+ if(source==="stockCounts")return[r.confidence||"",r.ledgerCoverage||"",r.countedBy||""].filter(Boolean).join(" · ");
+ if(source==="logs")return[r.machineId,r.logType,r.repairStatus||"Pending"].filter(Boolean).join(" · ");
+ if(source==="shifts")return[r.operatorName,r.operatorMobile,r.hoursSource].filter(Boolean).join(" · ");
+ if(source==="expenses")return[r.vendor,expIsMine(r)?"Paid by staff":"Office paid",expIsReclaimed(r)?"Reclaimed":""].filter(Boolean).join(" · ");
+ return "";
+}
+function recordQuantityText(source,r){
+ if(source==="fuel")return fmt(num(r.litres??r.quantity??r.qty),2)+" L";
+ if(source==="plans"){const issued=num(r.issuedQty??r.issuedQuantity),applied=num(r.appliedQty??r.actualQty??r.quantityUsed),status=String(r.status||"").toLowerCase();if(status==="applied"&&applied>0)return "Applied "+fmt(applied,2)+" "+(r.unit||r.stockUnit||"")+(issued>0?" / issued "+fmt(issued,2):"");return fmt(turfRecordQuantity(r),2)+" "+(r.unit||r.stockUnit||"")+" planned";}
+ if(source==="movements")return(num(r.quantityDelta)>0?"+":"")+fmt(num(r.quantityDelta),3)+" "+(r.unit||"");
+ if(source==="inwards")return fmt(num(r.quantity),3)+" "+(r.unit||"");
+ if(source==="stockCounts")return(num(r.varianceQuantity)>0?"+":"")+fmt(num(r.varianceQuantity),3)+" "+(r.unit||"")+" variance";
+ if(source==="shifts")return fmt(num(r.engineHoursLogged??r.hoursWorked),1)+" engine hrs";
+ if(source==="expenses")return money(expAmount(r),2);
+ if(source==="maintenance")return r.totalCost!=null||r.cost!=null||r.amount!=null?money(num(r.totalCost??r.cost??r.amount),2):"—";
+ if(source==="logs")return num(r.estimatedDowntimeHours)>0?fmt(r.estimatedDowntimeHours,1)+" h estimated downtime":"—";
+ return "—";
+}
+function recordStatusText(source,r){
+ if(source==="plans")return turfRecordStatus(r);if(source==="movements")return r.movementType||"Posted";if(source==="stockCounts")return r.status||"Recorded";if(source==="logs")return r.repairStatus||"Pending";if(source==="expenses")return expIsReclaimed(r)?"Reclaimed":expIsMine(r)?"To collect":"Office paid";if(source==="maintenance")return r.type||"Recorded";if(source==="assignments")return r.action||"Recorded";return r.status||"";
+}
+function recordsForCurrentFilters(){return filterOperationalRecordFeed(buildOperationalRecordFeed(S,RECORD_SOURCE_KEYS,recordDateFor),{source:recordsTab,query:recordsSearchText,from:recordsFrom,to:recordsTo});}
+function renderRecordSavedViews(){const el=$("#recordsSavedViews");if(!el)return;const options='<option value="">Choose saved view…</option>'+recordsSavedViews.map(v=>`<option value="${esc(v.id)}">${esc(v.name)}</option>`).join("");if(el.innerHTML!==options)el.innerHTML=options;el.value=recordsSavedViews.some(v=>v.id===recordsSelectedView)?recordsSelectedView:"";}
+function recordNeedsAttentionCount(){const turf=summarizeTurfLifecycle(S.plans||[],today()),variances=(S.stockCounts||[]).filter(c=>!c.voided&&c.status==="VARIANCE_REVIEW").length,incidents=(S.logs||[]).filter(l=>(l.repairStatus||"Pending")!=="Resolved").length,unlinkedIssues=(S.plans||[]).filter(p=>["issued","applied"].includes(String(p.status||"").toLowerCase())&&!p.issueMovementId).length,expenses=(S.expenses||[]).filter(e=>expIsMine(e)&&!expIsReclaimed(e)).length;return{total:turf.overdue+variances+incidents+unlinkedIssues+expenses,turf:turf.overdue,variances,incidents,unlinkedIssues,expenses};}
+function recordSummaryTile(label,value,detail){return `<div class="record-summary-tile"><span>${esc(label)}</span><b>${esc(value)}</b><small>${esc(detail)}</small></div>`;}
+function renderRecords(){
+ const card=$("#recordsCard");if(!card)return;
+ $$("#recordsChips .chip").forEach(c=>{const selected=c.dataset.tab===recordsTab;c.classList.toggle("on",selected);c.setAttribute("aria-selected",String(selected));});
+ if($("#recordsSearch")&&$("#recordsSearch").value!==recordsSearchText)$("#recordsSearch").value=recordsSearchText;
+ if($("#recordsFrom")&&$("#recordsFrom").value!==recordsFrom)$("#recordsFrom").value=recordsFrom;
+ if($("#recordsTo")&&$("#recordsTo").value!==recordsTo)$("#recordsTo").value=recordsTo;
+ renderRecordSavedViews();
+ const rows=recordsForCurrentFilters(),visible=rows.slice(0,recordsPageSize),sourceCount=new Set(rows.map(r=>r.source)).size,attention=recordNeedsAttentionCount(),latest=rows.find(r=>r.date)?.date;
+ setHTML($("#recordsSummary"),[recordSummaryTile("Matching records",fmt(rows.length,0),recordsTab==="all"?String(sourceCount)+" record types in this result":RECORD_SOURCE_LABELS[recordsTab]),recordSummaryTile("Needs review",fmt(attention.total,0),String(attention.variances)+" stock variances · "+String(attention.incidents)+" open incidents"),recordSummaryTile("Turf overdue",fmt(attention.turf,0),String(attention.unlinkedIssues)+" turf issue(s) lack a linked movement"),recordSummaryTile("Newest record",latest||"—",latest?dLong(latest):"No dated records in the current filter")].join(""));
+ const allLoaded=(recordsTab==="all"?RECORD_SOURCE_KEYS:[recordsTab]).every(k=>LOADED[k]),meta=$("#recordsFeedMeta");
+ if(meta)meta.textContent=allLoaded?"Current view is built from live source collections.":"Some source collections are still loading; result counts may change.";
+ if($("#recordsCount"))$("#recordsCount").textContent="Showing "+Math.min(rows.length,visible.length)+" of "+rows.length+" matching record"+(rows.length===1?"":"s");
+ if($("#recordsLoadMore"))$("#recordsLoadMore").hidden=rows.length<=recordsPageSize;
+ const head='<div class="table-wrap"><table class="record-feed-table"><thead><tr><th>Date</th><th>Source</th><th>Record / reference</th><th>Quantity / value</th><th>Status</th><th></th></tr></thead><tbody>';
+ const body=visible.map(row=>{const r=row.record,source=row.source,title=recordTitle(source,r),subtitle=recordSubtitle(source,r),status=recordStatusText(source,r),statusCls=["Applied","Resolved","Reclaimed","INWARD","OPENING","TURF_RETURN"].includes(status)?"ok":["Planned","Pending","To collect","VARIANCE_REVIEW","Issued","ISSUE","ADJUSTMENT"].includes(status)?"warn":"mute";return `<tr><td>${esc(row.date?dLong(row.date):"Date not recorded")}</td><td><span class="record-source-label">${esc(RECORD_SOURCE_LABELS[source]||source)}</span></td><td class="record-title-cell"><b>${esc(title)}</b><small>${esc(subtitle||("Record ID · "+row.id))}</small></td><td class="num">${esc(recordQuantityText(source,r))}</td><td><span class="badge ${statusCls}">${esc(status||"Recorded")}</span></td><td class="right nowrap"><button class="btn btn-sm" data-act="record-view" data-source="${esc(source)}" data-id="${esc(row.id)}">View</button></td></tr>`;}).join("");
+ setHTML(card,head+(body||'<tr><td colspan="6" class="empty">No records match the selected view. Try clearing the search or date range.</td></tr>')+"</tbody></table></div>");
+}
+function saveRecordExplorerView(){const name=window.prompt("Name this record view (for example, Open stock variances):");if(!name||!name.trim())return;const clean=name.trim().slice(0,60),id="rv-"+Date.now();recordsSavedViews=[{id,name:clean,tab:recordsTab,query:recordsSearchText,from:recordsFrom,to:recordsTo,savedAt:new Date().toISOString()},...recordsSavedViews.filter(v=>v.name.toLowerCase()!==clean.toLowerCase())].slice(0,30);recordsSelectedView=id;persistRecordSavedViews();renderRecordSavedViews();toast("Record view saved on this browser");}
+function applySavedRecordView(id){const saved=recordsSavedViews.find(v=>v.id===id);if(!saved)return;recordsSelectedView=id;recordsTab=saved.tab;recordsSearchText=saved.query||"";recordsFrom=saved.from||"";recordsTo=saved.to||"";recordsPageSize=100;persistRecordExplorerPrefs();renderRecords();}
+function clearRecordExplorerFilters(){recordsTab="all";recordsSearchText="";recordsFrom="";recordsTo="";recordsSelectedView="";recordsPageSize=100;persistRecordExplorerPrefs();renderRecords();}
+function openRecordDetail(source,id){
+ const record=(S[source]||[]).find(r=>String(r.id)===String(id));if(!record){toast("The source record is no longer available in the live view. Refresh and retry.","err");return;}
+ const title=recordTitle(source,record),pairs=Object.entries(record).filter(([key])=>key!=="_d"&&key!=="_h").sort(([a],[b])=>a==="id"?-1:b==="id"?1:a.localeCompare(b));
+ const valueText=value=>{if(value===null||value===undefined||value==="")return"—";if(value?.toDate)return value.toDate().toLocaleString();if(Array.isArray(value)||typeof value==="object"){try{return JSON.stringify(value,(_key,v)=>v?.toDate?v.toDate().toISOString():v,2);}catch(_){return"[Complex value]";}}return String(value);};
+ let actions="";
+ if(source==="plans"&&isTurfCategory(turfPlanCategory(record))){const status=String(record.status||"Planned").toLowerCase(),linkedItem=S.inventory.find(i=>i.id===(record.productId||record.itemId));if(status==="planned"){actions+=`<button class="btn btn-primary" data-act="plan-issue" data-id="${esc(record.id)}">${linkedItem?"Record stock issue":"Issue unavailable: product link missing"}</button>`;actions+=`<button class="btn" data-act="plan-cancel" data-id="${esc(record.id)}">Cancel plan</button>`;}else if(status==="issued"&&record.issueMovementId){actions+=`<button class="btn btn-primary" data-act="plan-complete" data-id="${esc(record.id)}">Record application &amp; reconcile</button>`;}else if(status==="issued"){actions+='<span class="badge warn">Legacy issue: no linked movement. Reconcile before closing.</span>';}}
+ const related=(source==="plans"||source==="movements")&&(record.productId||record.itemId)?`<button class="btn btn-sm" data-act="record-related-movements" data-item-id="${esc(record.productId||record.itemId)}" data-item-name="${esc(record.productName||record.itemName||"")}">View this item's movements</button>`:"";
+ const grid=pairs.map(([key,value])=>`<div class="record-detail-field"><small>${esc(key.replace(/([A-Z])/g," $1").replace(/_/g," "))}</small><b>${esc(valueText(value))}</b></div>`).join("");
+ const raw=(()=>{try{return JSON.stringify(record,(_key,value)=>value?.toDate?value.toDate().toISOString():value,2);}catch(_){return"{}";}})();
+ openDrawer(title,`${RECORD_SOURCE_LABELS[source]||source} · ${recordDateFor(source,record)||"Date not recorded"} · ID ${record.id}`,`
+    <div class="record-detail-actions">${actions}${related}</div>
+    ${source==="plans"?'<div class="alert-box" style="margin-bottom:12px">A saved status documents the workflow state. “Applied” is not independent proof of physical treatment.</div>':""}
+    <div class="record-detail-grid">${grid}</div>
+    <details class="record-detail-json"><summary>Raw source record (read-only)</summary><pre>${esc(raw)}</pre></details>
+  `);
 }
 
 /* ================= NAV / RENDER LOOP ================= */
