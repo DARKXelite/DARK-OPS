@@ -1254,7 +1254,7 @@ function openNewItemPopup({ name, qty, rate, expId, items, idx, next, pos, total
       const nm = $('#exMasterName').value.trim(); if (!nm) { toast('Item name is required', 'err'); return false; }
       if (findInventoryByName(nm)) { toast('This item already exists in the master', 'err'); return false; }
       const cat = $('#exMasterCat').value;
-      await addDoc(collection(db, CONFIG.COL.inventory), { partName: nm, category: cat, stockQuantity: $('#exMasterStock').checked ? qty : 0, unit: $('#exMasterUnit').value, unitCost: rate, reorderLevel: 0 });
+      await inventoryService.createItemWithOpeningBalance({ partName: nm, category: cat, stockQuantity: $('#exMasterStock').checked ? qty : 0, unit: $('#exMasterUnit').value, unitCost: rate, reorderLevel: 0 });
       if (expId && items) { items[idx].category = cat; items[idx].inInventory = true; await updateDoc(doc(db, CONFIG.COL.expenses, expId), { items }); }
       toast('Added to Inventory Master as ' + cat);
       if (next) next();
@@ -1995,7 +1995,7 @@ const H = {
       if(clean.length===1){doc0.qty=clean[0].qty;doc0.rate=clean[0].rate;}
       const ref=await addDoc(collection(db,CONFIG.COL.expenses),doc0);
       toast('Bill saved · '+money(total,2));
-      for(const i of items){ if(i._ex&&i._stock){const upd={stockQuantity:increment(i.qty)};if(!num(i._ex.unitCost))upd.unitCost=i.rate;await updateDoc(doc(db,CONFIG.COL.inventory,i._ex.id),upd);} }
+      for(const i of items){ if(i._ex&&i._stock){try{await inventoryService.postLocalPurchaseStock({itemId:i._ex.id,quantity:i.qty,rate:i.rate,reference:ref.id,performedBy:'Local expense entry'});}catch(err){console.error(err);toast('Bill saved, but stock addition failed for '+i.itemName+'. Reconcile the stock movement before relying on the balance.','err');}} }
       const seen=new Set(), queue=[];
       clean.forEach((i,idx)=>{const k=normName(i.itemName);if(!i.inInventory&&!seen.has(k)){seen.add(k);queue.push(idx);}});
       if(queue.length){closeModal();runNewItemQueue(ref.id,clean,queue,queue.length);return false;}
