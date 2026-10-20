@@ -1740,7 +1740,7 @@ function analysisQualityRow(title,count,detail,source){
 function renderOperationalRecordAnalytics(asOf=today()){
  const turfHost=$("#analyticsTurfLifecycle"),qualityHost=$("#analyticsDataQuality");if(!turfHost||!qualityHost)return;
  const from=addDays(asOf,-89),allPlans=(S.plans||[]).filter(p=>{const d=recordDateFor("plans",p);return d&&d>=from&&d<=asOf;});
- const turfPlans=(S.plans||[]).filter(p=>isTurfCategory(turfPlanCategory(p)));const life=summarizeTurfLifecycle(turfPlans,asOf);
+ const turfPlans=(S.plans||[]).filter(p=>isTurfCategory(turfPlanCategory(p)));const life=summarizeTurfLifecycle(turfPlans,asOf,p=>recordDateFor("plans",p));
  const countStatus=status=>String(status||"").toLowerCase();
  const recent=(source,rows)=>(rows||[]).filter(r=>{const d=recordDateFor(source,r);return d&&d>=from&&d<=asOf;});
  const recentFuel=recent("fuel",S.fuel),recentPlans=allPlans.filter(p=>isTurfCategory(turfPlanCategory(p))),recentMaintenance=recent("maintenance",S.maintenance),recentMovements=recent("movements",S.movements);
@@ -1898,7 +1898,7 @@ function recordStatusText(source,r){
 }
 function recordsForCurrentFilters(){return filterOperationalRecordFeed(buildOperationalRecordFeed(S,RECORD_SOURCE_KEYS,recordDateFor),{source:recordsTab,query:recordsSearchText,from:recordsFrom,to:recordsTo});}
 function renderRecordSavedViews(){const el=$("#recordsSavedViews");if(!el)return;const options='<option value="">Choose saved view…</option>'+recordsSavedViews.map(v=>`<option value="${esc(v.id)}">${esc(v.name)}</option>`).join("");if(el.innerHTML!==options)el.innerHTML=options;el.value=recordsSavedViews.some(v=>v.id===recordsSelectedView)?recordsSelectedView:"";}
-function recordNeedsAttentionCount(){const turf=summarizeTurfLifecycle((S.plans||[]).filter(p=>isTurfCategory(turfPlanCategory(p))),today()),variances=(S.stockCounts||[]).filter(c=>!c.voided&&c.status==="VARIANCE_REVIEW").length,incidents=(S.logs||[]).filter(l=>(l.repairStatus||"Pending")!=="Resolved").length,unlinkedIssues=(S.plans||[]).filter(p=>["issued","applied"].includes(String(p.status||"").toLowerCase())&&!p.issueMovementId).length,expenses=(S.expenses||[]).filter(e=>expIsMine(e)&&!expIsReclaimed(e)).length;return{total:turf.overdue+variances+incidents+unlinkedIssues+expenses,turf:turf.overdue,variances,incidents,unlinkedIssues,expenses};}
+function recordNeedsAttentionCount(){const turf=summarizeTurfLifecycle((S.plans||[]).filter(p=>isTurfCategory(turfPlanCategory(p))),today(),p=>recordDateFor("plans",p)),variances=(S.stockCounts||[]).filter(c=>!c.voided&&c.status==="VARIANCE_REVIEW").length,incidents=(S.logs||[]).filter(l=>(l.repairStatus||"Pending")!=="Resolved").length,unlinkedIssues=(S.plans||[]).filter(p=>["issued","applied"].includes(String(p.status||"").toLowerCase())&&!p.issueMovementId).length,expenses=(S.expenses||[]).filter(e=>expIsMine(e)&&!expIsReclaimed(e)).length;return{total:turf.overdue+variances+incidents+unlinkedIssues+expenses,turf:turf.overdue,variances,incidents,unlinkedIssues,expenses};}
 function recordSummaryTile(label,value,detail){return `<div class="record-summary-tile"><span>${esc(label)}</span><b>${esc(value)}</b><small>${esc(detail)}</small></div>`;}
 function renderRecords(){
  const card=$("#recordsCard");if(!card)return;
