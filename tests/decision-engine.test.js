@@ -49,3 +49,17 @@ test("unknown unit costs stay unpriced instead of being fabricated", () => {
   assert.equal(result.items[0].value,0);
   assert.ok(result.insights.some(x=>x.title.includes("unknown cost")));
 });
+
+test("resolved physical count variances remain in history but leave active alerts", () => {
+  const result = analyzeInventory({
+    items:[item], movements,
+    counts:[
+      {id:"c1",itemId:"fert-1",itemName:"Nitrogen Mix",countDate:"2026-10-19",expectedQuantity:4,countedQuantity:2,varianceQuantity:-2,unitCost:100,varianceValue:-200,status:"RESOLVED"},
+      {id:"c2",itemId:"fert-1",itemName:"Nitrogen Mix",countDate:"2026-10-20",expectedQuantity:4,countedQuantity:3,varianceQuantity:-1,unitCost:100,varianceValue:-100,status:"VARIANCE_REVIEW"}
+    ],
+    asOf:"2026-10-20"
+  });
+  assert.equal(result.summary.physicalCountCount, 2);
+  assert.equal(result.summary.varianceCount, 1);
+  assert.equal(result.summary.varianceExposure, 100);
+});
