@@ -41,3 +41,8 @@
 .pin-error{min-height:20px;color:#f0b7a8;margin-top:12px}
 .pin-foot,.pin-eyebrow,.pin-title,.pin-subtitle{display:none!important}
 @media(max-width:420px){.pin-shell{width:100%}.pin-logo{width:min(100%,300px);margin-bottom:18px}.pin-dots{gap:6px}.pin-dot{font-size:13px}}
+
+/* Ensure the invisible PIN input receives real taps and mobile keyboard input */
+.pin-shell{position:relative}
+.pin-dots{position:relative}
+.pin-input-capture{position:absolute;inset:0;width:100%;height:100%;opacity:0.015;z-index:5;pointer-events:auto;border:0;outline:0;background:transparent;color:transparent;caret-color:transparent;font-size:16px;cursor:text}
