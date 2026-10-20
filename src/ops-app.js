@@ -1733,6 +1733,53 @@ function renderStockCounts() {
   const rows=[...(S.stockCounts||[])].filter(c=>!c.voided).sort((a,b)=>String(b.countDate||'').localeCompare(String(a.countDate||'')));
   setHTML(target,'<table><thead><tr><th>Count date</th><th>Item</th><th class="num">Book qty</th><th class="num">Physical qty</th><th class="num">Variance</th><th class="num">Value variance</th><th>Confidence</th><th>Status</th><th>Counted by</th><th></th></tr></thead><tbody>'+(!LOADED.stockCounts?'<tr><td colspan="9">Loading physical counts…</td></tr>':rows.length?rows.slice(0,200).map(x=>'<tr><td>'+esc(x.countDate||'—')+'</td><td><b>'+esc(x.itemName||x.itemId||'Unknown item')+'</b><div class="muted sm">'+esc(x.category||'')+'</div></td><td class="num">'+fmt(x.expectedQuantity,3)+' '+esc(x.unit||'')+'</td><td class="num">'+fmt(x.countedQuantity,3)+' '+esc(x.unit||'')+'</td><td class="num"><b>'+(num(x.varianceQuantity)>0?'+':'')+fmt(x.varianceQuantity,3)+'</b></td><td class="num">'+money(x.varianceValue,2)+'</td><td><span class="badge '+(x.confidence==='ESTIMATE'?'warn':'ok')+'">'+esc(x.confidence||'—')+'</span><div class="muted sm">'+esc(x.ledgerCoverage||'')+'</div></td><td><span class="badge '+(x.status==='MATCH'?'ok':x.status==='RESOLVED'?'ok':'warn')+'">'+esc(x.status||'—')+'</span></td><td>'+esc(x.countedBy||'—')+'</td><td>'+(x.status==='VARIANCE_REVIEW'?'<button class="btn btn-sm" data-act="resolve-stock-count" data-id="'+esc(x.id)+'">Resolve</button>':x.status==='RESOLVED'?'<span class="muted sm">'+esc(x.resolvedBy||'Reviewed')+'</span>':'—')+'</td></tr>').join(''):'<tr><td colspan="10" class="empty">No closing physical counts recorded. Use “Closing stock count” to begin variance tracking.</td></tr>')+'</tbody></table>');
 }
+function analysisQualityRow(title,count,detail,source){
+ const action=source?§<button class="btn btn-sm" data-act="analytics-open-records" data-source="@{esc(source)}">Open records</button>§:"";
+ return §<div class="record-quality-row"><div><b>@{esc(title)}</b><small>@{esc(detail)}</small></div><div style="display:flex;align-items:center;gap:8px"><strong>@{fmt(count,0)}</strong>@{action}</div></div>§;
+}
+function renderOperationalRecordAnalytics(asOf=today()){
+ const turfHost=$("#analyticsTurfLifecycle"),qualityHost=$("#analyticsDataQuality");if(!turfHost||!qualityHost)return;
+ const from=addDays(asOf,-89),allPlans=(S.plans||[]).filter(p=>{const d=recordDateFor("plans",p);return d&&d>=from&&d<=asOf;});
+ const life=summarizeTurfLifecycle(S.plans||[],asOf);
+ const countStatus=status=>String(status||"").toLowerCase();
+ const recent=(source,rows)=>(rows||[]).filter(r=>{const d=recordDateFor(source,r);return d&&d>=from&&d<=asOf;});
+ const recentFuel=recent("fuel",S.fuel),recentPlans=allPlans,recentMaintenance=recent("maintenance",S.maintenance),recentMovements=recent("movements",S.movements);
+ const fuelUnpriced=recentFuel.filter(f=>!(rateForFuelLog(f)>0)).length;
+ const fuelNoMachine=recentFuel.filter(f=>!(f.machineId||f.machineName)).length;
+ const planNoProduct=recentPlans.filter(p=>!(p.productId||p.itemId)).length;
+ const planNoArea=recentPlans.filter(p=>!(p.targetArea||p.area||p.location)).length;
+ const planNoQty=recentPlans.filter(p=>!(num(p.targetQty??p.plannedQty??p.quantity??p.qty)>0)||!(p.unit||p.stockUnit)).length;
+ const maintenanceIncomplete=recentMaintenance.filter(r=>!(r.machineId||r.machineName)&&!(r.performedBy||r.technician)).length;
+ const movementMissingReference=recentMovements.filter(m=>!(m.reference||m.invoiceNumber||m.linkedPlanId||m.turfPlanId)&&!["OPENING"].includes(String(m.movementType||"").toUpperCase())).length;
+ const unlinkedPlans=(S.plans||[]).filter(p=>["issued","applied"].includes(countStatus(p.status))&&!p.issueMovementId).length;
+ const appliedNoQty=(S.plans||[]).filter(p=>countStatus(p.status)==="applied"&&!(num(p.appliedQty)>0)).length;
+ const openIncidents=(S.logs||[]).filter(l=>(l.repairStatus||"Pending")!=="Resolved").length;
+ const openCounts=(S.stockCounts||[]).filter(c=>!c.voided&&c.status==="VARIANCE_REVIEW").length;
+ const data=[
+  {label:"Planned",value:life.planned,sub:"Scheduled records not yet issued"},
+  {label:"Overdue plans",value:life.overdue,sub:"Planned dates before "+asOf},
+  {label:"Issued",value:life.issued,sub:"Stock issue status recorded"},
+  {label:"Applied",value:life.applied,sub:"Application status recorded, not independently verified"},
+  {label:"Cancelled",value:life.cancelled,sub:"Preserved cancelled plan history"},
+  {label:"Issue link gaps",value:life.issuedWithoutMovementLink,sub:"Issued/applied plans without a linked store movement"},
+  {label:"Applied quantity gaps",value:life.appliedWithoutRecordedQuantity,sub:"Marked applied without a positive recorded quantity"}
+ ];
+ setHTML(turfHost,data.map(x=>§<div class="record-quality-row"><div><b>@{esc(x.label)}</b><small>@{esc(x.sub)}</small></div><strong>@{fmt(x.value,0)}</strong></div>§).join("")+§<p class="muted sm">Coverage window for data-quality checks: @{from} to @{asOf}. Status counts include records up to the analysis date; a saved status alone is not proof of physical application.</p>§);
+ const quality=[
+  ["Turf plans missing a product link",planNoProduct,"Recent plans that cannot safely post stock against an item","plans"],
+  ["Turf plans missing treated area",planNoArea,"Recent plans without an area/location","plans"],
+  ["Turf plan quantity / unit gaps",planNoQty,"Recent plans without a positive quantity or explicit unit","plans"],
+  ["Issued/applied plans without stock movement link",unlinkedPlans,"Legacy or incomplete issue records needing reconciliation","plans"],
+  ["Applied plans without applied quantity",appliedNoQty,"Status and quantity fields do not agree","plans"],
+  ["Fuel records without a priced rate",fuelUnpriced,"No transaction or matching fuel-master rate available","fuel"],
+  ["Fuel records without a machine link",fuelNoMachine,"Machine-level fuel efficiency cannot be assigned","fuel"],
+  ["Maintenance records missing machine and technician",maintenanceIncomplete,"Machine or responsible-person attribution incomplete","maintenance"],
+  ["Stock movements without a reference/link",movementMissingReference,"Recent movements without an external reference or linked turf plan","movements"],
+  ["Stock variances awaiting review",openCounts,"Physical count discrepancies not yet reviewed","stockCounts"],
+  ["Open operational incidents",openIncidents,"Incidents not marked resolved","logs"]
+ ];
+ setHTML(qualityHost,quality.map(x=>analysisQualityRow(x[0],x[1],x[2],x[3])).join("")+§<p class="muted sm">These are completeness and control signals, not confirmed losses or errors. The 90-day window is used for record-field checks; open incidents and unresolved physical counts are all-time outstanding totals.</p>§);
+}
 function renderAdvancedAnalytics() {
   const host=$('#analyticsKpis');if(!host)return null;
   const asOf=$('#analyticsAsOf')?.value||today();
@@ -1759,6 +1806,7 @@ function renderAdvancedAnalytics() {
     'Physical count variance = counted quantity − reconstructed book quantity. Positive means surplus; negative means shortage. Variance value is signed; insights show absolute exposure.',
     ...result.limitations];
   setHTML($('#analyticsMethodology'),'<ul style="padding-left:20px;margin:0;display:grid;gap:7px">'+methods.map(m=>'<li>'+esc(m)+'</li>').join('')+'</ul>');
+  renderOperationalRecordAnalytics(asOf);
   return result;
 }
 
@@ -2205,6 +2253,7 @@ const H = {
   'physical-count': () => openPhysicalCount(),
   'resolve-stock-count': d => resolvePhysicalCount(d.id),
   'run-analytics': () => renderAdvancedAnalytics(),
+  'analytics-open-records': d => { recordsTab=d.source||'all';recordsSearchText='';recordsFrom='';recordsTo='';recordsSelectedView='';recordsPageSize=100;persistRecordExplorerPrefs();switchView('records'); },
   'adjust-stock': () => openStockAdjustment(),
   'export-stock': () => downloadCSV('inventory_stock.csv',[['Category','Item','Unit','Stock','Auto reorder at','Rate basis','Unit rate'],...S.inventory.map(i=>[i.category,itemName(i),i.unit||'Nos',i.stockQuantity,effectiveReorderLevel(i),autoReorderDetails(i).method,i.unitCost])]),
   'export-inwards': () => downloadCSV('goods_inwards.csv',[['Date','Invoice','Supplier','Category','Item','Unit','Qty','Rate','GST %','Taxable','GST amount','Total'],...S.inwards.map(r=>[r.receiptDate,r.invoiceNumber,r.supplier,r.category,r.itemName,r.unit,r.quantity,r.rate,r.gstPercent,r.taxableAmount,r.gstAmount,r.total])]),
@@ -2482,10 +2531,10 @@ function renderTurfApplications() {
   }).sort((a,b) => turfRecordDate(b).localeCompare(turfRecordDate(a)) || tsMs(b.createdAt ?? b.timestamp)-tsMs(a.createdAt ?? a.timestamp));
   const count = $('#turfApplicationCount');
   if (count) count.textContent = `${rows.length} record${rows.length===1?'':'s'}`;
-  setHTML(target, `<table><thead><tr><th>Date</th><th>Category</th><th>Product</th><th class="num">Quantity</th><th>Treated area</th><th>Status</th><th>Notes</th></tr></thead><tbody>${!LOADED.plans ? '<tr><td colspan="7">Loading application records…</td></tr>' : rows.length ? rows.map(p => {
+  setHTML(target, `<table><thead><tr><th>Date</th><th>Category</th><th>Product</th><th class="num">Quantity</th><th>Treated area</th><th>Status</th><th>Notes</th><th></th></tr></thead><tbody>${!LOADED.plans ? '<tr><td colspan="8">Loading application records…</td></tr>' : rows.length ? rows.map(p => {
     const category = turfPlanCategory(p), status = turfRecordStatus(p);
-    return `<tr><td>${esc(turfRecordDate(p) || '—')}<div class="muted sm">${p.createdAt ? 'Entered '+esc(dShort(normDate(null,p.createdAt))) : ''}</div></td><td><span class="badge ${turfCategoryClass(category)}">${esc(category)}</span></td><td><b>${esc(turfRecordProductName(p) || 'Unspecified product')}</b></td><td class="num">${fmt(turfRecordQuantity(p),2)} ${esc(p.unit || p.stockUnit || '')}</td><td>${esc(p.targetArea || p.area || p.location || 'Course')}</td><td><span class="badge ${status==='Applied'?'ok':status==='Issued'?'gold':'warn'}">${status}</span></td><td class="muted">${esc(p.notes || p.reason || '—')}</td></tr>`;
-  }).join('') : '<tr><td colspan="7" class="empty">No application records match these filters.</td></tr>'}</tbody></table>`);
+    return `<tr><td>${esc(turfRecordDate(p) || '—')}<div class="muted sm">${p.createdAt ? 'Entered '+esc(dShort(normDate(null,p.createdAt))) : ''}</div></td><td><span class="badge ${turfCategoryClass(category)}">${esc(category)}</span></td><td><b>${esc(turfRecordProductName(p) || 'Unspecified product')}</b></td><td class="num">${fmt(turfRecordQuantity(p),2)} ${esc(p.unit || p.stockUnit || '')}</td><td>${esc(p.targetArea || p.area || p.location || 'Course')}</td><td><span class="badge ${status==='Applied'?'ok':status==='Issued'?'gold':'warn'}">${status}</span></td><td class="muted">${esc(p.notes || p.reason || '—')}</td><td class="right nowrap"><button class="btn btn-sm" data-act="record-view" data-source="plans" data-id="${esc(p.id)}">View</button></td></tr>`;
+  }).join('') : '<tr><td colspan="8" class="empty">No application records match these filters.</td></tr>'}</tbody></table>`);
 }
 function renderTurfCare() {
   if (!currentTurfWeekStart) currentTurfWeekStart = getSunday(today());
