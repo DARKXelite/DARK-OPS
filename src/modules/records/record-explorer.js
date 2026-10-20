@@ -37,15 +37,19 @@ export function filterOperationalRecordFeed(rows = [], {
 }
 
 /** Counts lifecycle states without confusing "issued" with proof of application. */
-export function summarizeTurfLifecycle(plans = [], asOf = "") {
-  const rows = plans.filter(p => !asOf || String(p.date || p.appliedDate || p.plannedDate || "").slice(0, 10) <= asOf);
+export function summarizeTurfLifecycle(plans = [], asOf = "", dateFor = p => p.date || p.appliedDate || p.plannedDate || "") {
+  const dateOf = p => String(dateFor(p) || "").slice(0, 10);
+  const rows = plans.filter(p => {
+    const date = dateOf(p);
+    return !asOf || !date || date <= asOf;
+  });
   const status = p => String(p.status ?? p.turfStatus ?? p.applicationStatus ?? "Planned").trim().toLowerCase();
   const counts = { planned: 0, issued: 0, applied: 0, cancelled: 0, overdue: 0, issuedWithoutMovementLink: 0, appliedWithoutRecordedQuantity: 0 };
   rows.forEach(p => {
     const s = status(p);
     if (s === "planned") {
       counts.planned++;
-      const d = String(p.date || p.plannedDate || "").slice(0, 10);
+      const d = dateOf(p);
       if (asOf && d && d < asOf) counts.overdue++;
     } else if (s === "issued") {
       counts.issued++;
