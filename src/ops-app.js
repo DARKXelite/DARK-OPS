@@ -186,7 +186,7 @@ function toast(msg, type = 'ok') {
 }
 function setConn(state) { document.documentElement.dataset.firebaseState = state || 'connecting'; const dot=$('#connDot'); if(dot) dot.className='dot '+state; const label=$('#connText'); if(label) label.textContent=state==='ok'?'Connected':state==='err'?'Connection error':'Connecting'; }
 function openModal({ title, sub = '', body = '', footer = '', size = '' }) {
-  $('#modal').className = 'modal ' + size; $('#mTitle').textContent = title; $('#mSub').textContent = sub;
+  $('#modal').className = 'modal ' + size; $('#modal').setAttribute('aria-label', title || 'Dialog'); $('#mTitle').textContent = title; $('#mSub').textContent = sub;
   $('#mBody').innerHTML = body; $('#mBody')._h = null; $('#mFoot').innerHTML = footer; $('#mFoot').style.display = footer ? 'flex' : 'none';
   $('#overlay').classList.add('open');
 }
@@ -656,7 +656,7 @@ function renderOverview() {
     if (!productCompare.has(key)) productCompare.set(key, { name, unit, category: turfPlanCategory(p), plannedQty: 0, issuedQty: 0, plannedRecords: 0, issuedRecords: 0 });
     const row = productCompare.get(key);
     const plannedQty = num(p.targetQty ?? p.plannedQty ?? p.requestedQty ?? p.plannedQuantity ?? p.targetQuantity ?? (turfRecordStatus(p) === 'Planned' ? (p.quantity ?? p.qty) : 0));
-    const issuedQty = num(p.issuedQty ?? p.issuedQuantity ?? p.issueQty ?? p.issueQuantity ?? p.quantityIssued ?? p.qtyIssued ?? p.quantityOut ?? p.qtyOut ?? (['Issued','Applied'].includes(turfRecordStatus(p)) ? (p.actualQty ?? p.appliedQty ?? p.applicationQty ?? p.quantityUsed ?? p.usedQuantity ?? p.dispensedQty ?? p.quantity ?? p.qty) : 0));
+    const issuedQty = num(p.issuedQty ?? p.issuedQuantity ?? p.issueQty ?? p.issueQuantity ?? p.quantityIssued ?? p.qtyIssued ?? p.quantityOut ?? p.qtyOut ?? (['Issued','Applied'].includes(turfRecordStatus(p)) ? (p.actualQty ?? p.appliedQty ?? p.applicationQty ?? p.quantityUsed ?? p.usedQuantity ?? p.qtyUsed ?? p.dispensedQty ?? p.quantity ?? p.qty ?? p.targetQty ?? p.plannedQty ?? p.requestedQty ?? p.plannedQuantity ?? p.targetQuantity) : 0));
     row.plannedQty += bucket === 'planned' ? Math.max(0, plannedQty) : 0;
     row.issuedQty += bucket === 'issued' ? Math.max(0, issuedQty) : 0;
     row[bucket === 'planned' ? 'plannedRecords' : 'issuedRecords'] += 1;
@@ -1709,7 +1709,7 @@ const VIEWS = {
 const RENDER = { overview: renderOverview, fleet: renderFleet, fuel: () => renderLedger(), shifts: () => renderShifts(), records: () => renderRecords(), radar: renderRadarPanel, zones: renderZonePanel, registry: renderRegistry, expenses: renderLocalExpenseLedger, users: renderUsersMaster, incidents: renderIncidents, turfcare: renderTurfCare };
 const NAV_GROUPS = {
   fleetops: { label: 'Fleet Ops', icon: 'precision_manufacturing', view: 'fleet', pages: [['fleet','Fleet'],['shifts','Run logs'],['records','Maintenance & records'],['radar','Course map']] },
-  turfops: { label: 'Turf Ops', icon: 'eco', view: 'turfcare', pages: [['turfcare','Planner & inputs']] },
+  turfops: { label: 'Turf Ops', icon: 'eco', view: 'turfcare', pages: [] },
   masters: { label: 'Store & Ledgers', icon: 'inventory_2', view: 'fuel', pages: [['fuel','Fuel ledger'],['registry','Inventory'],['expenses','Local Expenses'],['users','Users']] }
 };
 let activeNavGroup = 'insights';
@@ -1744,7 +1744,7 @@ function updateBadges(changedCollection = null) {
 function switchView(v) {
   if (!VIEWS[v]) v = 'overview'; cur = v; document.body.classList.toggle('turf-board-mode', v === 'turfcare'); history.replaceState(null, '', '#' + v);
   $$('.view').forEach(x => x.classList.toggle('active', x.id === 'v-' + v));
-  $('#pageTitle').textContent = VIEWS[v][0]; $('#pageSub').textContent = VIEWS[v][1]; $('#viewHead').style.display = v === 'overview' ? 'none' : ''; window.scrollTo(0, 0);
+  $('#pageTitle').textContent = VIEWS[v][0]; $('#pageSub').textContent = VIEWS[v][1]; $('#viewHead').style.display = (v === 'overview' || v === 'turfcare') ? 'none' : ''; window.scrollTo(0, 0);
   const mapMode = (v === 'radar' || v === 'zones');
   document.body.classList.toggle('map-mode', mapMode);
   activeNavGroup = groupForView(v);
@@ -2321,7 +2321,7 @@ function renderTurfAreaPlanDashboard(){
   el.innerHTML=grouped.length?grouped.map(g=>`<div class="ops-turf-area-row"><div class="ops-turf-area-row-head"><b>${esc(g.area)}</b><span>${g.rows.length} task${g.rows.length===1?'':'s'}</span></div>${g.rows.slice(0,6).map(p=>`<div class="ops-turf-area-task"><span>${esc(turfRecordProductName(p)||'Product')}</span><span>${esc(turfRecordStatus(p))}</span><b>${fmt(plannedQty(p),2)} ${esc(p.unit||p.stockUnit||'units')}</b></div>`).join('')}${g.rows.length>6?`<div class="muted sm">+${g.rows.length-6} more today</div>`:''}</div>`).join(''):'<div class="ops-product-compare-empty">No area-wise treatments scheduled for today.</div>';
 }
 
-function openTurfVarianceModal(from=today(),to=today()) {
+function openTurfVarianceModal(from=monthStart(today()),to=today()) {
   const body=`<div class="turf-variance-filters"><label>From date<input type="date" id="turfVarianceFrom" value="${esc(from)}"></label><label>To date<input type="date" id="turfVarianceTo" value="${esc(to)}"></label><button class="btn btn-primary" data-act="apply-turf-variance">Apply range</button><button class="btn" data-act="export-turf-variance">Export CSV</button></div><div id="turfVarianceResults"></div>`;
   openModal({title:'Turf Ops · Planned vs issued variance',sub:'Product-level reconciliation · quantities remain separated by stock unit',size:'turf-cost-analytics',body,footer:'<button class="btn" data-act="close-modal">Close</button>'});
   renderTurfVariance(from,to);
@@ -2329,7 +2329,50 @@ function openTurfVarianceModal(from=today(),to=today()) {
 function renderTurfVariance(from,to){
   const target=$('#turfVarianceResults');if(!target)return;
   const rows=(S.plans||[]).filter(p=>isTurfCategory(turfPlanCategory(p))&&turfRecordDate(p)>=from&&turfRecordDate(p)<=to&&turfRecordStatus(p)!=='Cancelled');
-  const map=new Map();for(const p of rows){const status=turfRecordStatus(p);const hasPlan=['targetQty','plannedQty','requestedQty','plannedQuantity','targetQuantity'].some(k=>p[k]!==undefined&&p[k]!==null&&p[k]!=='');const explicitIssued=num(p.issuedQty??p.issuedQuantity??p.issueQty??p.issueQuantity??p.quantityIssued??p.qtyIssued??p.quantityOut??p.qtyOut);const issued=status==='Issued'||status==='Applied'||explicitIssued>0;const planned=status==='Planned'||hasPlan||p.wasPlanned===true||p.fromPlan===true||p.planned===true;if(!issued&&!planned)continue;const name=turfRecordProductName(p)||'Unspecified product',unit=String(p.unit||p.stockUnit||p.uom||'unit not set'),key=String(p.productId||p.itemId||name).toLowerCase()+'|'+unit.toLowerCase();if(!map.has(key))map.set(key,{name,unit,planned:0,issued:0,plannedCount:0,issuedCount:0});const r=map.get(key);if(planned){const q=num(p.targetQty??p.plannedQty??p.requestedQty??p.plannedQuantity??p.targetQuantity??(status==='Planned'?(p.quantity??p.qty):0));r.planned+=q;r.plannedCount++;}if(issued){const q=explicitIssued||num(p.actualQty??p.appliedQty??p.applicationQty??p.quantityUsed??p.usedQuantity??p.dispensedQty??p.quantity??p.qty);r.issued+=q;r.issuedCount++;}}
+  const map = new Map();
+  const firstQuantity = (record, keys) => {
+    for (const key of keys) {
+      const value = record[key];
+      if (value !== undefined && value !== null && value !== '' && Number.isFinite(Number(value))) {
+        return { found: true, value: Math.max(0, Number(value)) };
+      }
+    }
+    return { found: false, value: 0 };
+  };
+  const planKeys = ['targetQty','plannedQty','requestedQty','plannedQuantity','targetQuantity'];
+  const explicitIssuedKeys = ['issuedQty','issuedQuantity','issueQty','issueQuantity','quantityIssued','qtyIssued','quantityOut','qtyOut'];
+  const actualKeys = ['actualQty','appliedQty','applicationQty','quantityUsed','usedQuantity','qtyUsed','dispensedQty'];
+  for (const p of rows) {
+    const status = turfRecordStatus(p);
+    const hasPlan = planKeys.some(k => p[k] !== undefined && p[k] !== null && p[k] !== '');
+    const explicitIssued = firstQuantity(p, explicitIssuedKeys);
+    const actual = firstQuantity(p, actualKeys);
+    const issued = status === 'Issued' || status === 'Applied' || (explicitIssued.found && explicitIssued.value > 0);
+    const planned = status === 'Planned' || hasPlan || p.wasPlanned === true || p.fromPlan === true || p.planned === true;
+    if (!issued && !planned) continue;
+
+    const name = turfRecordProductName(p) || 'Unspecified product';
+    const unit = String(p.unit ?? p.stockUnit ?? p.uom ?? p.unitOfMeasure ?? 'unit not set').trim();
+    const productKey = String(p.productId ?? p.productID ?? p.itemId ?? p.inventoryId ?? name).trim().toLowerCase();
+    const key = productKey + '|' + unit.toLowerCase();
+    if (!map.has(key)) map.set(key, {name,unit,planned:0,issued:0,plannedCount:0,issuedCount:0});
+    const row = map.get(key);
+
+    const planQuantity = firstQuantity(p, planKeys);
+    const plannedQty = planQuantity.found
+      ? planQuantity.value
+      : (status === 'Planned' ? firstQuantity(p, ['quantity','qty']).value : 0);
+
+    // Legacy records that only store targetQty and status=Issued/Applied still represent issued movement.
+    const issuedQuantity = explicitIssued.found
+      ? explicitIssued.value
+      : actual.found
+        ? actual.value
+        : (issued ? (plannedQty || firstQuantity(p, ['quantity','qty']).value) : 0);
+
+    if (planned) { row.planned += plannedQty; row.plannedCount++; }
+    if (issued) { row.issued += issuedQuantity; row.issuedCount++; }
+  }
   const list=[...map.values()].sort((a,b)=>a.name.localeCompare(b.name));window.__turfVarianceRows=list.map(r=>({...r,variance:r.issued-r.planned}));
   target.innerHTML=list.length?`<div class="table-wrap"><table class="turf-variance-table"><thead><tr><th>Product</th><th>Planned</th><th>Issued</th><th>Variance</th><th>Records</th></tr></thead><tbody>${list.map(r=>`<tr><td><b>${esc(r.name)}</b><div class="muted sm">${esc(r.unit)}</div></td><td>${fmt(r.planned,2)}</td><td>${fmt(r.issued,2)}</td><td style="color:${r.issued>r.planned?'var(--bad)':r.issued<r.planned?'var(--warn)':'var(--ok)'};font-weight:800">${r.issued-r.planned>0?'+':''}${fmt(r.issued-r.planned,2)}</td><td>${r.plannedCount} / ${r.issuedCount}</td></tr>`).join('')}</tbody></table></div><p class="muted sm">Variance = issued quantity minus planned quantity. Product quantities are not combined across units.</p>`:'<div class="ops-product-compare-empty">No planned or issued turf records found in this date range.</div>';
 }
