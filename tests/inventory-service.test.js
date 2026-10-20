@@ -116,7 +116,7 @@ test("turf plan issue atomically reduces stock, links movement, and advances pla
   assert.equal(move[2].movementType, "ISSUE");
   assert.equal(move[2].quantityDelta, -6);
   assert.equal(move[2].linkedPlanId, "plan-1");
-  assert.equal(plan[2].status, "Issued");
+  assert.equal(plan[2].status, "Partially Issued");
   assert.equal(plan[2].issuedQty, 6);
   assert.equal(plan[2].issueMovementId, move[1].id);
 });
