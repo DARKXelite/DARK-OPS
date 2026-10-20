@@ -22,7 +22,7 @@ test("Firebase client preserves SDK version and Firestore collections", async ()
   for (const sdk of ["firebase-app.js", "firebase-firestore.js", "firebase-auth.js"]) {
     assert.ok(client.includes("firebasejs/10.7.1/" + sdk), "missing pinned SDK " + sdk);
   }
-  for (const collection of ["users", "machines", "fuel_logs", "shifts", "CourseZones", "live_telemetry", "inventory", "logs", "maintenance_logs", "assignment_logs", "turf_plans", "store_inwards"]) {
+  for (const collection of ["users", "machines", "fuel_logs", "shifts", "CourseZones", "live_telemetry", "inventory", "logs", "maintenance_logs", "assignment_logs", "turf_plans", "store_inwards", "store_movements"]) {
     assert.ok(client.includes(collection), "missing existing collection " + collection);
   }
 });
