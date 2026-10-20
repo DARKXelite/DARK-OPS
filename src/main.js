@@ -1148,7 +1148,8 @@ function inventoryRowsMarkup(items) {
 function renderRegistry() {
   const items=S.inventory.slice();
   const low=items.filter(i=>num(i.stockQuantity)<=effectiveReorderLevel(i)).length;
-  const total=items.reduce((v,i)=>v+Math.max(0,num(i.stockQuantity))*Math.max(0,num(i.unitCost)),0);\n  const unpriced=items.filter(i=>num(i.stockQuantity)>0&&num(i.unitCost)<=0).length;
+  const total=items.reduce((v,i)=>v+Math.max(0,num(i.stockQuantity))*Math.max(0,num(i.unitCost)),0);
+  const unpriced=items.filter(i=>num(i.stockQuantity)>0&&num(i.unitCost)<=0).length;
   setHTML($('#storeKpis'), `<div class="kpi"><div class="kpi-label">SKUs</div><div class="kpi-value">${items.length}</div></div><div class="kpi"><div class="kpi-label">Low stock</div><div class="kpi-value">${low}</div></div><div class="kpi"><div class="kpi-label">Stock value (recorded rates)</div><div class="kpi-value">${money(total)}</div></div><div class="kpi"><div class="kpi-label">Goods receipts</div><div class="kpi-value">${S.inwards.length}</div></div><div class="kpi"><div class="kpi-label">Unpriced SKUs</div><div class="kpi-value">${unpriced}</div></div>`);
 
   if (!LOADED.inventory) {
