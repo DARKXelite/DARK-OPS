@@ -184,5 +184,128 @@ export function createInventoryService({ db, CONFIG, doc, collection, runTransac
     return { movementRef: move };
   }
 
-  return { createItemWithOpeningBalance, postGoodsInward, postLocalPurchaseStock, issueStock, adjustStock };
+  /**
+   * Posts a turf-plan issue as one atomic operation: reduce inventory, append the
+   * movement ledger row, and advance the plan to Issued. Existing issue workflows
+   * remain unchanged; this path is opt-in for explicitly linked turf plans.
+   */
+  async function issueStockForTurfPlan({ planId, itemId, quantity, reason = "Turf plan issue", reference = "", issuedTo = "", performedBy = "" }) {
+    const q = number(quantity);
+    const why = requiredText(reason, "Issue reason");
+    requiredText(planId, "Turf plan");
+    if (!itemId) throw new Error("The turf plan has no linked inventory item; reconcile the product link first");
+    if (!Number.isFinite(q) || q <= 0) throw new Error("Issue quantity must be greater than zero");
+    const itemRef = itemRefFor(itemId), planRef = doc(db, CONFIG.COL.plans, planId), move = movementRef();
+    await runTransaction(db, async tx => {
+      const itemSnap = await tx.get(itemRef);
+      const planSnap = await tx.get(planRef);
+      if (!itemSnap.exists()) throw new Error("Inventory item no longer exists");
+      if (!planSnap.exists()) throw new Error("Turf plan no longer exists");
+      const plan = planSnap.data(), item = itemSnap.data();
+      if (String(plan.status ?? "Planned").trim().toLowerCase() !== "planned") throw new Error("Only a Planned turf record can be issued");
+      if (String(plan.productId ?? plan.itemId ?? "") !== String(itemId)) throw new Error("Selected inventory item does not match the saved turf plan");
+      const plannedQty = number(plan.targetQty ?? plan.plannedQty ?? plan.requestedQty ?? plan.quantity ?? plan.qty);
+      if (!Number.isFinite(plannedQty) || plannedQty <= 0) throw new Error("The saved turf plan has no valid planned quantity");
+      if (q > plannedQty + 1e-9) throw new Error("Issue quantity cannot exceed the planned quantity");
+      const before = number(item.stockQuantity ?? 0), cost = number(item.unitCost ?? 0);
+      if (!Number.isFinite(before) || before < 0) throw new Error("Current stock balance is invalid; reconcile it before issuing stock");
+      if (q > before + 1e-9) throw new Error("Insufficient stock. Available: " + before + " " + (item.unit || "units"));
+      const after = Math.max(0, before - q), now = serverTimestamp();
+      const planReference = String(reference || ("TURFPLAN-" + planId)).trim();
+      tx.update(itemRef, { stockQuantity: after, updatedAt: now });
+      tx.set(move, {
+        itemId, itemName: item.partName || item.itemName || plan.productName || "Unnamed item",
+        category: item.category || plan.category || "Other", unit: item.unit || plan.unit || "Nos",
+        movementType: "ISSUE", quantityDelta: -q, quantityBefore: before, quantityAfter: after,
+        unitCost: Math.max(0, cost), value: +(q * Math.max(0, cost)).toFixed(2),
+        reason: why, reference: planReference, issuedTo: String(issuedTo || plan.targetArea || "").trim(),
+        performedBy: String(performedBy || "").trim(), linkedPlanId: planId, turfPlanId: planId,
+        targetArea: String(plan.targetArea || plan.area || "").trim(), createdAt: now
+      });
+      tx.update(planRef, {
+        status: "Issued", issuedQty: q, issuedAt: now, issuedBy: String(performedBy || "").trim(),
+        issuedTo: String(issuedTo || plan.targetArea || "").trim(), issueMovementId: move.id,
+        issueReference: planReference, updatedAt: now
+      });
+    });
+    return { movementRef: move };
+  }
+
+  /**
+   * Reconciles the issued quantity into applied, returned-to-store and explicitly
+   * unaccounted quantities. Any physical return increases stock and writes a
+   * matching movement in the same transaction. Unaccounted quantity needs notes.
+   */
+  async function completeTurfPlan({ planId, appliedQty, returnedQty = 0, unaccountedQty = 0, appliedBy, applicationNotes = "" }) {
+    requiredText(planId, "Turf plan");
+    const applied = number(appliedQty), returned = number(returnedQty), unaccounted = number(unaccountedQty);
+    const actor = requiredText(appliedBy, "Applied by");
+    const notes = String(applicationNotes || "").trim();
+    if (![applied, returned, unaccounted].every(Number.isFinite) || applied <= 0 || returned < 0 || unaccounted < 0) {
+      throw new Error("Enter a positive applied quantity and non-negative returned / unaccounted quantities");
+    }
+    if (unaccounted > 1e-9 && !notes) throw new Error("Add notes to explain any unaccounted quantity");
+    const planRef = doc(db, CONFIG.COL.plans, planId);
+    const now = serverTimestamp();
+    let returnMove = null;
+    await runTransaction(db, async tx => {
+      const planSnap = await tx.get(planRef);
+      if (!planSnap.exists()) throw new Error("Turf plan no longer exists");
+      const plan = planSnap.data();
+      if (String(plan.status ?? "").trim().toLowerCase() !== "issued") throw new Error("Only an Issued turf plan can be reconciled");
+      if (!plan.issueMovementId) throw new Error("This legacy issue has no linked stock movement. Reconcile it before marking the plan applied");
+      const issued = number(plan.issuedQty);
+      if (!Number.isFinite(issued) || issued <= 0) throw new Error("The recorded issue quantity is missing or invalid");
+      if (Math.abs(applied + returned + unaccounted - issued) > 1e-6) {
+        throw new Error("Applied + returned + unaccounted quantities must equal the issued quantity (" + issued + ")");
+      }
+      const itemId = String(plan.productId ?? plan.itemId ?? "");
+      let itemRef = null, item = null, before = 0, after = 0, cost = 0;
+      if (returned > 0) {
+        if (!itemId) throw new Error("The plan has no linked inventory item; reconcile before returning stock");
+        itemRef = itemRefFor(itemId);
+        const itemSnap = await tx.get(itemRef);
+        if (!itemSnap.exists()) throw new Error("Inventory item no longer exists; cannot post the return");
+        item = itemSnap.data();
+        before = number(item.stockQuantity ?? 0);
+        cost = Math.max(0, number(item.unitCost ?? 0));
+        if (!Number.isFinite(before) || before < 0) throw new Error("Current stock balance is invalid; reconcile it before returning stock");
+        after = before + returned;
+        returnMove = movementRef();
+      }
+      if (returned > 0) {
+        tx.update(itemRef, { stockQuantity: after, updatedAt: now });
+        tx.set(returnMove, {
+          itemId, itemName: item.partName || item.itemName || plan.productName || "Unnamed item",
+          category: item.category || plan.category || "Other", unit: item.unit || plan.unit || "Nos",
+          movementType: "TURF_RETURN", quantityDelta: returned, quantityBefore: before, quantityAfter: after,
+          unitCost: cost, value: +(returned * cost).toFixed(2), reason: "Unused turf product returned to store",
+          reference: String(plan.issueReference || ("TURFPLAN-" + planId)), performedBy: actor,
+          linkedPlanId: planId, turfPlanId: planId, returnForMovementId: plan.issueMovementId, createdAt: now
+        });
+      }
+      tx.update(planRef, {
+        status: "Applied", appliedQty: applied, returnedQty: returned, unaccountedQty: unaccounted,
+        appliedBy: actor, applicationNotes: notes, appliedAt: now,
+        returnMovementId: returnMove?.id || "", updatedAt: now
+      });
+    });
+    return { returnMovementRef: returnMove };
+  }
+
+  async function cancelTurfPlan({ planId, cancelledBy, reason }) {
+    requiredText(planId, "Turf plan");
+    const actor = requiredText(cancelledBy, "Cancelled by");
+    const why = requiredText(reason, "Cancellation reason");
+    const planRef = doc(db, CONFIG.COL.plans, planId);
+    await runTransaction(db, async tx => {
+      const planSnap = await tx.get(planRef);
+      if (!planSnap.exists()) throw new Error("Turf plan no longer exists");
+      const plan = planSnap.data();
+      if (String(plan.status ?? "Planned").trim().toLowerCase() !== "planned") throw new Error("Only a Planned turf record can be cancelled");
+      tx.update(planRef, { status: "Cancelled", cancelledBy: actor, cancellationReason: why, cancelledAt: serverTimestamp(), updatedAt: serverTimestamp() });
+    });
+  }
+
+  return { createItemWithOpeningBalance, postGoodsInward, postLocalPurchaseStock, issueStock, adjustStock, issueStockForTurfPlan, completeTurfPlan, cancelTurfPlan };
 }
