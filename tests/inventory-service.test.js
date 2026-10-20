@@ -2,10 +2,10 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { createInventoryService } from "../src/modules/store/inventory-service.js";
 
-function setup({ item = { category: "Fuel", stockQuantity: 10, unitCost: 80 }, itemExists = true, receiptExists = false } = {}) {
+function setup({ item = { category: "Fuel", stockQuantity: 10, unitCost: 80 }, itemExists = true, receiptExists = false, plan = { productId: "turf-1", status: "Planned", targetQty: 10, targetArea: "Greens", productName: "Fertilizer" }, planExists = true } = {}) {
   const calls = [];
   const db = { mock: true };
-  const CONFIG = { COL: { inventory: "inventory", inwards: "store_inwards", movements: "store_movements" } };
+  const CONFIG = { COL: { inventory: "inventory", inwards: "store_inwards", movements: "store_movements", plans: "turf_plans" } };
   const ref = (collection, id) => ({ collection, id });
   const service = createInventoryService({
     db, CONFIG,
@@ -17,6 +17,7 @@ function setup({ item = { category: "Fuel", stockQuantity: 10, unitCost: 80 }, i
         calls.push(["get", r]);
         if (r.collection === "inventory") return { exists: () => itemExists, data: () => item };
         if (r.collection === "store_inwards") return { exists: () => receiptExists, data: () => ({}) };
+        if (r.collection === "turf_plans") return { exists: () => planExists, data: () => plan };
         return { exists: () => false, data: () => ({}) };
       },
       set: (r, data) => calls.push(["set", r, data]),
@@ -103,4 +104,52 @@ test("local expense stock additions update weighted average cost and movement le
   assert.equal(update[2].unitCost, 130);
   assert.equal(movement[2].movementType, "LOCAL_PURCHASE");
   assert.equal(movement[2].reference, "expense-1");
+});
+
+test("turf plan issue atomically reduces stock, links movement, and advances plan status", async () => {
+  const { service, calls } = setup({ item: { category: "Fertilizers", partName: "Fertilizer", unit: "Kg", stockQuantity: 10, unitCost: 80 } });
+  await service.issueStockForTurfPlan({ planId: "plan-1", itemId: "turf-1", quantity: 6, issuedTo: "Greens", performedBy: "Storekeeper" });
+  const stock = calls.find(c => c[0] === "update" && c[1].collection === "inventory");
+  const move = calls.find(c => c[0] === "set" && c[1].collection === "store_movements");
+  const plan = calls.find(c => c[0] === "update" && c[1].collection === "turf_plans");
+  assert.equal(stock[2].stockQuantity, 4);
+  assert.equal(move[2].movementType, "ISSUE");
+  assert.equal(move[2].quantityDelta, -6);
+  assert.equal(move[2].linkedPlanId, "plan-1");
+  assert.equal(plan[2].status, "Issued");
+  assert.equal(plan[2].issuedQty, 6);
+  assert.equal(plan[2].issueMovementId, move[1].id);
+});
+
+test("turf plan issue rejects stale statuses, mismatched products and quantities above plan", async () => {
+  await assert.rejects(setup({ plan: { productId: "turf-1", status: "Applied", targetQty: 10 } }).service.issueStockForTurfPlan({ planId: "plan-1", itemId: "turf-1", quantity: 1 }), /Only a Planned/);
+  await assert.rejects(setup().service.issueStockForTurfPlan({ planId: "plan-1", itemId: "another-item", quantity: 1 }), /does not match/);
+  await assert.rejects(setup().service.issueStockForTurfPlan({ planId: "plan-1", itemId: "turf-1", quantity: 11 }), /cannot exceed/);
+});
+
+test("turf completion returns unused stock with a traceable movement and requires exact reconciliation", async () => {
+  const { service, calls } = setup({
+    item: { category: "Fertilizers", partName: "Fertilizer", unit: "Kg", stockQuantity: 4, unitCost: 80 },
+    plan: { productId: "turf-1", status: "Issued", issuedQty: 6, issueMovementId: "issue-1", issueReference: "TURFPLAN-plan-1", productName: "Fertilizer", targetArea: "Greens" }
+  });
+  await assert.rejects(service.completeTurfPlan({ planId: "plan-1", appliedQty: 4, returnedQty: 1, appliedBy: "Operator" }), /must equal the issued quantity/);
+  await assert.rejects(service.completeTurfPlan({ planId: "plan-1", appliedQty: 4, returnedQty: 1, unaccountedQty: 1, appliedBy: "Operator" }), /notes/);
+  await service.completeTurfPlan({ planId: "plan-1", appliedQty: 4, returnedQty: 1, unaccountedQty: 1, appliedBy: "Operator", applicationNotes: "One kg lost during handling" });
+  const stock = calls.filter(c => c[0] === "update" && c[1].collection === "inventory").at(-1);
+  const move = calls.find(c => c[0] === "set" && c[1].collection === "store_movements");
+  const plan = calls.filter(c => c[0] === "update" && c[1].collection === "turf_plans").at(-1);
+  assert.equal(stock[2].stockQuantity, 5);
+  assert.equal(move[2].movementType, "TURF_RETURN");
+  assert.equal(move[2].quantityDelta, 1);
+  assert.equal(move[2].returnForMovementId, "issue-1");
+  assert.equal(plan[2].status, "Applied");
+  assert.equal(plan[2].appliedQty, 4);
+  assert.equal(plan[2].returnedQty, 1);
+  assert.equal(plan[2].unaccountedQty, 1);
+});
+
+test("legacy turf issue without a movement link cannot be marked applied", async () => {
+  const { service, calls } = setup({ plan: { productId: "turf-1", status: "Issued", issuedQty: 6, targetArea: "Greens" } });
+  await assert.rejects(service.completeTurfPlan({ planId: "plan-1", appliedQty: 6, appliedBy: "Operator" }), /no linked stock movement/);
+  assert.equal(calls.some(c => c[0] === "update" && c[1].collection === "turf_plans"), false);
 });
