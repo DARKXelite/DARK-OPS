@@ -51,7 +51,7 @@ export function summarizeTurfLifecycle(plans = [], asOf = "", dateFor = p => p.d
       counts.planned++;
       const d = dateOf(p);
       if (asOf && d && d < asOf) counts.overdue++;
-    } else if (s === "issued") {
+    } else if (s === "issued" || s === "partially issued") {
       counts.issued++;
       if (!p.issueMovementId) counts.issuedWithoutMovementLink++;
     } else if (s === "applied") {
