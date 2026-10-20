@@ -5,20 +5,39 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Clover Greens Ops</title>
 <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@24,400,0,0" rel="stylesheet">
-<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.css">
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.js"></script>
 
+<link rel="stylesheet" href="/src/ops-app.css">
 
 
 
 
-<link rel="stylesheet" href="/src/styles/app.css">
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 </head>
 <body>
-<div id="startupError" class="startup-error" role="alert" hidden></div>
 
 <!-- LOGIN (only used when CONFIG.REQUIRE_LOGIN = true) -->
 <div id="login" hidden>
@@ -43,7 +62,6 @@
     <div class="th-left"><div id="wxChip" class="wx-chip" title="Course conditions · weather model"><span class="wx-text">Syncing weather&hellip;</span></div><button type="button" id="wxRainNotice" class="wx-rain-notice calm" data-act="weather-outlook" title="Seven-day rainfall forecast"><span class="material-symbols-rounded">rainy</span><span class="wx-rain-label">Checking rain forecast…</span></button></div>
     <div class="th-right">
       <span id="dateChip" class="th-date"></span>
-      <span id="firebaseStatus" class="firebase-status connecting" role="status" aria-live="polite">Connecting to Firestore…</span>
       <span class="th-brand">CLOVER GREENS RESORT &amp; GOLF</span>
       <button class="cmd-hint" onclick="toggleCmdPal()">Cmd + K</button><button class="icon-btn" data-act="signout" id="signoutBtn" title="Sign out" aria-label="Sign out" hidden><span class="material-symbols-rounded">logout</span></button>
     </div>
@@ -55,10 +73,7 @@
 
     <!-- OPERATIONS OVERVIEW -->
     <section class="view active" id="v-overview">
-      <div class="ops-dashboard-head">
-        <div><h2>Operations overview</h2><p>Fuel movement and turf application records.</p></div>
-        <div class="ops-period" id="opsPeriod">MONTH TO DATE</div>
-      </div>
+      <div class="ops-dashboard-period"><span class="ops-dashboard-period-label">OPERATIONS SNAPSHOT</span><span class="ops-period" id="opsPeriod">MONTH TO DATE</span></div>
       <div class="ops-domain-grid">
         <section class="card ops-domain-card ops-fuel-domain">
           <div class="ops-domain-head">
@@ -88,17 +103,19 @@
             <div class="ops-domain-title"><span class="ops-domain-icon turf"><span class="material-symbols-rounded">grass</span></span><div><h3>Turf Ops</h3><p>Fertilizers, pesticides and turf enhancers</p></div></div>
             <button class="btn btn-sm" data-act="nav-turfcare">Open Turf Ops <span class="material-symbols-rounded">arrow_forward</span></button>
           </div>
-          <div class="ops-domain-kpis" id="opsTurfDomainStats"></div>
-          <button class="ops-day-cost-card turf" type="button" data-act="open-day-cost" data-domain="turf" aria-label="Open Turf Ops day cost ledger">
-            <div class="ops-day-cost-top"><span class="ops-day-cost-icon"><span class="material-symbols-rounded">eco</span></span><div class="ops-day-cost-heading"><span>TURF OPS · DAY COST</span><small>Issued / applied product value today</small></div><span class="material-symbols-rounded ops-day-cost-arrow">arrow_forward</span></div>
+          <button class="ops-day-cost-card turf ops-turf-cost-feature" type="button" data-act="open-day-cost" data-domain="turf" aria-label="Open Turf Ops cost analytics">
+            <div class="ops-day-cost-top"><span class="ops-day-cost-icon"><span class="material-symbols-rounded">eco</span></span><div class="ops-day-cost-heading"><span>TURF OPS · DAY COST</span><small>Issued / applied product value today · ranked by value</small></div><span class="material-symbols-rounded ops-day-cost-arrow">arrow_forward</span></div>
             <div class="ops-day-cost-value" id="opsTurfDayCostValue">₹—</div>
-            <div class="ops-day-cost-bottom"><span id="opsTurfDayCostMeta">Waiting for application records</span><b>Open cost ledger <span class="material-symbols-rounded">north_east</span></b></div>
+            <div class="ops-day-cost-items" id="opsTurfDayCostItems"><div class="ops-day-cost-item-empty">Waiting for issue and application records…</div></div>
+            <div class="ops-day-cost-bottom"><span id="opsTurfDayCostMeta">Waiting for application records</span><b>Open cost analytics <span class="material-symbols-rounded">north_east</span></b></div>
           </button>
+          <div class="ops-domain-kpis" id="opsTurfDomainStats"></div>
           <section class="ops-mini-panel ops-plan-issue-compare">
-            <div class="ops-mini-head"><h4>Planned vs issued</h4><span id="opsPlanIssuePeriod">This month</span></div>
-            <div id="opsPlanIssueCompare" class="ops-plan-issue-grid"><div class="ops-compare-col"><span>Planned</span><b>—</b></div><div class="ops-compare-col"><span>Issued</span><b>—</b></div></div>
-            <div class="ops-unplanned-issue"><span class="ops-unplanned-label">ISSUED OUTSIDE PLAN</span><div id="opsUnplannedIssues">Waiting for turf records</div></div>
+            <div class="ops-mini-head"><h4>Planned vs issued</h4><span id="opsPlanIssuePeriod">Today</span></div>
+            <div id="opsPlanIssueCompare" class="ops-plan-issue-grid ops-product-compare" data-act="open-turf-variance" role="button" tabindex="0" aria-label="Open planned versus issued variance details"><div class="ops-product-compare-empty">Waiting for turf records…</div></div>
+            <div class="ops-unplanned-issue"><span class="ops-unplanned-label">ISSUED OUTSIDE PLAN</span><div id="opsUnplannedIssues">Waiting for turf records</div></div><div class="muted sm" style="margin-top:8px">Select this card for full variance details and a custom date range.</div>
           </section>
+          <section class="ops-mini-panel ops-turf-area-plan-card"><div class="ops-mini-head"><h4>Area-wise treatment plan</h4><span>Today</span></div><div id="opsTurfAreaPlan"><div class="ops-product-compare-empty">Loading area-wise schedule…</div></div><div class="muted sm" style="margin-top:8px">Grouped by course area, product and scheduled date.</div></section>
           <div class="ops-turf-category-stack">
             <section class="ops-turf-category"><div class="ops-category-head"><div><h4>Fertilizers</h4><span>Application records · month to date</span></div><span class="ops-category-mark fertilizer"><span class="material-symbols-rounded">spa</span></span></div><div id="opsFertilizerStats"></div><div class="ops-category-details"><div><div class="ops-mini-label">7-day log count</div><div id="opsFertilizerTrend"></div></div><div><div class="ops-mini-label">Recent records</div><div id="opsFertilizerRecent"></div></div></div></section>
             <section class="ops-turf-category"><div class="ops-category-head"><div><h4>Pesticides</h4><span>Application records · month to date</span></div><span class="ops-category-mark pesticide"><span class="material-symbols-rounded">pest_control</span></span></div><div id="opsPesticideStats"></div><div class="ops-category-details"><div><div class="ops-mini-label">7-day log count</div><div id="opsPesticideTrend"></div></div><div><div class="ops-mini-label">Recent records</div><div id="opsPesticideRecent"></div></div></div></section>
@@ -137,6 +154,8 @@
     <!-- FUEL LEDGER -->
     <section class="view" id="v-fuel">
       <div class="toolbar"><div class="grow"></div>
+        <button class="btn" data-act="group-tab" data-v="expenses" title="Open the local expenses table"><span class="material-symbols-rounded">receipt_long</span>Local Expenses</button>
+        <button class="btn btn-primary" data-act="add-local-expense" title="Add a local expense bill"><span class="material-symbols-rounded">add</span>Add Local Bill</button>
         <button class="btn" data-act="open-fuel"><span class="material-symbols-rounded">insights</span>Consumption analysis</button>
         <button class="btn" data-act="export-ledger"><span class="material-symbols-rounded">download</span>Export CSV</button>
       </div>
@@ -194,11 +213,16 @@
 
     <!-- INVENTORY MASTER / GOODS RECEIPTS -->
     <section class="view" id="v-registry">
-      <div class="toolbar" style="gap:10px;flex-wrap:wrap"><div class="grow"></div><button class="btn btn-primary" data-act="add-inward"><span class="material-symbols-rounded">move_to_inbox</span> New inward</button><button class="btn" data-act="add-part"><span class="material-symbols-rounded">add_box</span> New item master</button></div>
+      <div class="toolbar" style="gap:10px;flex-wrap:wrap"><div class="grow"></div><button class="btn" data-act="open-store-records"><span class="material-symbols-rounded">manage_search</span>Records editor</button><button class="btn btn-danger" data-act="open-data-reset"><span class="material-symbols-rounded">delete_sweep</span>Reset data</button><button class="btn btn-primary" data-act="add-inward"><span class="material-symbols-rounded">move_to_inbox</span> New inward</button><button class="btn" data-act="add-part"><span class="material-symbols-rounded">add_box</span> New item master</button></div>
       <div class="kpi-grid" id="storeKpis"></div>
       <div class="card mt"><div class="card-h"><h3>Item master & current stock</h3><button class="btn btn-sm" data-act="export-stock">Export stock</button></div><div class="table-wrap" id="invTbl"></div></div>
       <div class="card mt"><div class="card-h"><h3>Goods receipt register</h3><button class="btn btn-sm" data-act="export-inwards">Export inwards</button></div><div class="table-wrap" id="inwardTbl"></div></div>
     </section>
+    <!-- LOCAL EXPENSES -->
+    <section class="view" id="v-expenses">
+      <div class="card" id="localExpenseLedgerCard"><div id="localExpenseLedger"></div></div>
+    </section>
+
     <!-- USERS MASTER -->
     <section class="view" id="v-users"><div class="card"><div class="card-h"><h3>Users master</h3><button class="btn btn-primary btn-sm" data-act="add-user"><span class="material-symbols-rounded">person_add</span>Add user</button></div><div class="table-wrap" id="usersTbl"></div></div></section>
 
@@ -218,7 +242,7 @@
       <section class="turf-pane" id="turfWorkboardPane">
         <div class="turf-workboard-grid">
           <section class="card turf-weekly-card">
-            <div class="turf-card-head"><div><div class="turf-card-eyebrow">WEEKLY SCHEDULE</div><h3>Planned applications</h3><p>Choose a day to add work. Existing plans stay tied to their scheduled date.</p></div><div class="turf-planner-head-actions"><label class="turf-date-label">Week starting<input type="date" id="turfWeekStart" data-chg="turf-week"></label><button class="btn btn-primary btn-sm" data-act="open-planner"><span class="material-symbols-rounded">calendar_month</span>Build weekly plan</button></div></div>
+            <div class="turf-card-head"><div><div class="turf-card-eyebrow">WEEKLY SCHEDULE</div><h3>Planned applications</h3><p>Choose a day to add work. Existing plans stay tied to their scheduled date.</p></div><label class="turf-date-label">Week starting<input type="date" id="turfWeekStart" data-chg="turf-week"></label></div>
             <div class="turf-week-legend"><span><i class="legend-dot fertilizer"></i>Fertilizer</span><span><i class="legend-dot pesticide"></i>Pesticide</span><span><i class="legend-dot enhancer"></i>Turf enhancer</span></div>
             <div id="turfPlannerGrid" class="turf-planner-grid"></div>
           </section>
@@ -247,7 +271,7 @@
 </div>
 
 <!-- GOLF-BALL DOCK NAVIGATION -->
-<div id="golfballFab" class="golfball-fab hidden" data-act="dock" title="Open command dock" role="button" aria-label="Open navigation"></div>
+
 <div id="dockPill" class="dock-pill" role="navigation" aria-label="Main">
   <button class="nav-btn close-dock-btn" data-act="home-insights" title="Insights home" aria-label="Return to insights dashboard"><span class="material-symbols-rounded">query_stats</span></button>
   <div class="dock-div"></div>
@@ -269,29 +293,16 @@
 
 <div id="toasts"></div>
 
+<script type="module" src="/src/ops-app.js"></script>
 
-<script>
-(function () {
-  function showStartupError(message) {
-    var box = document.getElementById("startupError");
-    if (!box) return;
-    box.hidden = false;
-    box.textContent = "DARK-OPS startup error: " + message + " · Open browser DevTools Console for details.";
-  }
-  window.addEventListener("error", function (event) {
-    var isResourceError = event && event.target && (event.target.tagName === "SCRIPT" || event.target.tagName === "LINK");
-    if (isResourceError || (event && event.message)) {
-      showStartupError((event && event.message) || ("Failed to load " + ((event.target && (event.target.src || event.target.href)) || "a required resource")));
-    }
-  }, true);
-  window.addEventListener("unhandledrejection", function (event) {
-    var reason = event && event.reason;
-    showStartupError(reason && reason.message ? reason.message : String(reason || "Unhandled promise rejection"));
-  });
-})();
-</script>
-<script type="module" src="/src/main.js"></script>
+
+
+
+
+
+
+
+
+
 </body>
 </html>
-
-
