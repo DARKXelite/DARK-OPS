@@ -1751,7 +1751,7 @@ function renderOperationalRecordAnalytics(asOf=today()){
  const planNoQty=recentPlans.filter(p=>!(num(p.targetQty??p.plannedQty??p.quantity??p.qty)>0)||!(p.unit||p.stockUnit)).length;
  const maintenanceIncomplete=recentMaintenance.filter(r=>!(r.machineId||r.machineName)||!(r.performedBy||r.technician)).length;
  const movementMissingReference=recentMovements.filter(m=>!(m.reference||m.invoiceNumber||m.linkedPlanId||m.turfPlanId)&&!["OPENING"].includes(String(m.movementType||"").toUpperCase())).length;
- const unlinkedPlans=turfPlans.filter(p=>["issued","applied"].includes(countStatus(p.status))&&!p.issueMovementId).length;
+ const unlinkedPlans=turfPlans.filter(p=>["issued","partially issued","applied"].includes(countStatus(p.status))&&!p.issueMovementId).length;
  const appliedNoQty=turfPlans.filter(p=>countStatus(p.status)==="applied"&&!(num(p.appliedQty)>0)).length;
  const openIncidents=(S.logs||[]).filter(l=>(l.repairStatus||"Pending")!=="Resolved").length;
  const openCounts=(S.stockCounts||[]).filter(c=>!c.voided&&c.status==="VARIANCE_REVIEW").length;
@@ -1883,7 +1883,7 @@ function recordSubtitle(source,r){
 }
 function recordQuantityText(source,r){
  if(source==="fuel")return fmt(num(r.litres??r.quantity??r.qty),2)+" L";
- if(source==="plans"){const issued=num(r.issuedQty??r.issuedQuantity),applied=num(r.appliedQty??r.actualQty??r.quantityUsed),status=String(r.status||"").toLowerCase();if(status==="applied"&&applied>0)return "Applied "+fmt(applied,2)+" "+(r.unit||r.stockUnit||"")+(issued>0?" / issued "+fmt(issued,2):"");return fmt(turfRecordQuantity(r),2)+" "+(r.unit||r.stockUnit||"")+" planned";}
+ if(source==="plans"){const issued=num(r.issuedQty??r.issuedQuantity),applied=num(r.appliedQty??r.actualQty??r.quantityUsed),planned=num(r.targetQty??r.plannedQty??r.quantity??r.qty),status=String(r.status||"").toLowerCase();if(status==="applied"&&applied>0)return "Applied "+fmt(applied,2)+" "+(r.unit||r.stockUnit||"")+(issued>0?" / issued "+fmt(issued,2):"");if(issued>0)return "Issued "+fmt(issued,2)+" / planned "+fmt(planned,2)+" "+(r.unit||r.stockUnit||"");return fmt(turfRecordQuantity(r),2)+" "+(r.unit||r.stockUnit||"")+" planned";}
  if(source==="movements")return(num(r.quantityDelta)>0?"+":"")+fmt(num(r.quantityDelta),3)+" "+(r.unit||"");
  if(source==="inwards")return fmt(num(r.quantity),3)+" "+(r.unit||"");
  if(source==="stockCounts")return(num(r.varianceQuantity)>0?"+":"")+fmt(num(r.varianceQuantity),3)+" "+(r.unit||"")+" variance";
@@ -1898,7 +1898,7 @@ function recordStatusText(source,r){
 }
 function recordsForCurrentFilters(){return filterOperationalRecordFeed(buildOperationalRecordFeed(S,RECORD_SOURCE_KEYS,recordDateFor),{source:recordsTab,query:recordsSearchText,from:recordsFrom,to:recordsTo});}
 function renderRecordSavedViews(){const el=$("#recordsSavedViews");if(!el)return;const options='<option value="">Choose saved view…</option>'+recordsSavedViews.map(v=>`<option value="${esc(v.id)}">${esc(v.name)}</option>`).join("");if(el.innerHTML!==options)el.innerHTML=options;el.value=recordsSavedViews.some(v=>v.id===recordsSelectedView)?recordsSelectedView:"";}
-function recordNeedsAttentionCount(){const turf=summarizeTurfLifecycle((S.plans||[]).filter(p=>isTurfCategory(turfPlanCategory(p))),today(),p=>recordDateFor("plans",p)),variances=(S.stockCounts||[]).filter(c=>!c.voided&&c.status==="VARIANCE_REVIEW").length,incidents=(S.logs||[]).filter(l=>(l.repairStatus||"Pending")!=="Resolved").length,unlinkedIssues=(S.plans||[]).filter(p=>["issued","applied"].includes(String(p.status||"").toLowerCase())&&!p.issueMovementId).length,expenses=(S.expenses||[]).filter(e=>expIsMine(e)&&!expIsReclaimed(e)).length;return{total:turf.overdue+variances+incidents+unlinkedIssues+expenses,turf:turf.overdue,variances,incidents,unlinkedIssues,expenses};}
+function recordNeedsAttentionCount(){const turf=summarizeTurfLifecycle((S.plans||[]).filter(p=>isTurfCategory(turfPlanCategory(p))),today(),p=>recordDateFor("plans",p)),variances=(S.stockCounts||[]).filter(c=>!c.voided&&c.status==="VARIANCE_REVIEW").length,incidents=(S.logs||[]).filter(l=>(l.repairStatus||"Pending")!=="Resolved").length,unlinkedIssues=(S.plans||[]).filter(p=>["issued","partially issued","applied"].includes(String(p.status||"").toLowerCase())&&!p.issueMovementId).length,expenses=(S.expenses||[]).filter(e=>expIsMine(e)&&!expIsReclaimed(e)).length;return{total:turf.overdue+variances+incidents+unlinkedIssues+expenses,turf:turf.overdue,variances,incidents,unlinkedIssues,expenses};}
 function recordSummaryTile(label,value,detail){return `<div class="record-summary-tile"><span>${esc(label)}</span><b>${esc(value)}</b><small>${esc(detail)}</small></div>`;}
 function renderRecords(){
  const card=$("#recordsCard");if(!card)return;
@@ -1925,17 +1925,30 @@ function openRecordDetail(source,id){
  const title=recordTitle(source,record),pairs=Object.entries(record).filter(([key])=>key!=="_d"&&key!=="_h").sort(([a],[b])=>a==="id"?-1:b==="id"?1:a.localeCompare(b));
  const valueText=value=>{if(value===null||value===undefined||value==="")return"—";if(value?.toDate)return value.toDate().toLocaleString();if(Array.isArray(value)||typeof value==="object"){try{return JSON.stringify(value,(_key,v)=>v?.toDate?v.toDate().toISOString():v,2);}catch(_){return"[Complex value]";}}return String(value);};
  let actions="";
- if(source==="plans"&&isTurfCategory(turfPlanCategory(record))){const status=String(record.status||"Planned").toLowerCase(),linkedItem=S.inventory.find(i=>i.id===(record.productId||record.itemId));if(status==="planned"){actions+=`<button class="btn btn-primary" data-act="plan-issue" data-id="${esc(record.id)}">${linkedItem?"Record stock issue":"Issue unavailable: product link missing"}</button>`;actions+=`<button class="btn" data-act="plan-cancel" data-id="${esc(record.id)}">Cancel plan</button>`;}else if(status==="issued"&&record.issueMovementId){actions+=`<button class="btn btn-primary" data-act="plan-complete" data-id="${esc(record.id)}">Record application &amp; reconcile</button>`;}else if(status==="issued"){actions+='<span class="badge warn">Legacy issue: no linked movement. Reconcile before closing.</span>';}}
+ if(source==="plans"&&isTurfCategory(turfPlanCategory(record))){
+  const status=String(record.status||"Planned").toLowerCase(),linkedItem=S.inventory.find(i=>i.id===(record.productId||record.itemId));
+  const planned=num(record.targetQty??record.plannedQty??record.quantity??record.qty),issued=num(record.issuedQty??record.issuedQuantity),remaining=Math.max(0,planned-issued);
+  if(status==="planned"){
+    actions+=`<button class="btn btn-primary" data-act="plan-issue" data-id="${esc(record.id)}">${linkedItem?"Record stock issue":"Issue unavailable: product link missing"}</button>`;
+    actions+=`<button class="btn" data-act="plan-cancel" data-id="${esc(record.id)}">Cancel plan</button>`;
+  }else if(["issued","partially issued"].includes(status)&&record.issueMovementId){
+    if(remaining>1e-9&&linkedItem)actions+=`<button class="btn" data-act="plan-issue" data-id="${esc(record.id)}">Issue remaining quantity</button>`;
+    actions+=`<button class="btn btn-primary" data-act="plan-complete" data-id="${esc(record.id)}">Record application &amp; reconcile</button>`;
+  }else if(["issued","partially issued"].includes(status)){
+    actions+='<span class="badge warn">Legacy issue: no linked movement. Reconcile before closing.</span>';
+  }
+ }
  const related=(source==="plans"||source==="movements")&&(record.productId||record.itemId)?`<button class="btn btn-sm" data-act="record-related-movements" data-item-id="${esc(record.productId||record.itemId)}" data-item-name="${esc(record.productName||record.itemName||"")}">View this item's movements</button>`:"";
  const grid=pairs.map(([key,value])=>`<div class="record-detail-field"><small>${esc(key.replace(/([A-Z])/g," $1").replace(/_/g," "))}</small><b>${esc(valueText(value))}</b></div>`).join("");
- const raw=(()=>{try{return JSON.stringify(record,(_key,value)=>value?.toDate?value.toDate().toISOString():value,2);}catch(_){return"{}";}})();
+ const rawRecord=(()=>{try{return JSON.stringify(record,(_key,value)=>value?.toDate?value.toDate().toISOString():value,2);}catch(_){return"{}";}})();
  openDrawer(title,`${RECORD_SOURCE_LABELS[source]||source} · ${recordDateFor(source,record)||"Date not recorded"} · ID ${record.id}`,`
     <div class="record-detail-actions">${actions}${related}</div>
     ${source==="plans"?'<div class="alert-box" style="margin-bottom:12px">A saved status documents the workflow state. “Applied” is not independent proof of physical treatment.</div>':""}
     <div class="record-detail-grid">${grid}</div>
-    <details class="record-detail-json"><summary>Raw source record (read-only)</summary><pre>${esc(raw)}</pre></details>
+    <details class="record-detail-json"><summary>Raw source record (read-only)</summary><pre>${esc(rawRecord)}</pre></details>
   `);
 }
+
 
 /* ================= NAV / RENDER LOOP ================= */
 const VIEWS = {
@@ -2064,17 +2077,19 @@ function openTurfIssueForm(planId){
  const plan=(S.plans||[]).find(p=>p.id===planId);if(!plan)return toast("Turf plan not found","err");
  const item=S.inventory.find(i=>i.id===(plan.productId||plan.itemId));
  if(!item)return toast("This turf plan has no linked inventory item. Open its record and reconcile the product link before issuing stock.","err");
- if(String(plan.status||"Planned").toLowerCase()!=="planned")return toast("Only a Planned record can be issued","err");
- const planned=num(plan.targetQty??plan.plannedQty??plan.requestedQty??plan.quantity??plan.qty);
+ const status=String(plan.status||"Planned").toLowerCase();
+ if(!["planned","partially issued","issued"].includes(status))return toast("Only a Planned or partially issued record can receive stock","err");
+ const planned=num(plan.targetQty??plan.plannedQty??plan.requestedQty??plan.quantity??plan.qty),alreadyIssued=num(plan.issuedQty??plan.issuedQuantity??0),remaining=Math.max(0,planned-alreadyIssued);
  if(!(planned>0))return toast("The saved plan has no valid planned quantity","err");
+ if(remaining<=1e-9)return toast("The full planned quantity has already been issued","err");
  openForm({title:"Issue stock against turf plan",submit:"Post linked stock issue",html:
-   '<div class="alert-box" style="margin-bottom:12px"><b>'+esc(itemName(item))+'</b> · '+esc(plan.targetArea||plan.area||"Course")+' · Planned '+fmt(planned,3)+' '+esc(item.unit||plan.unit||"units")+' · Available '+fmt(item.stockQuantity,3)+' '+esc(item.unit||"units")+'. This action posts a stock movement and updates the plan together.</div>'+
-   '<div class="row2">'+fld("Issue quantity "+(item.unit||plan.unit||""),'<input id="turfIssueQty" type="number" min="0.001" max="'+planned+'" step="any" value="'+Math.min(planned,num(item.stockQuantity))+'" required>')+fld("Issued to / course area",'<input id="turfIssueTo" required>')+'</div>'+
+   '<div class="alert-box" style="margin-bottom:12px"><b>'+esc(itemName(item))+'</b> · '+esc(plan.targetArea||plan.area||"Course")+' · Planned '+fmt(planned,3)+' '+esc(item.unit||plan.unit||"units")+' · Already issued '+fmt(alreadyIssued,3)+' · Remaining '+fmt(remaining,3)+' · Available '+fmt(item.stockQuantity,3)+' '+esc(item.unit||"units")+'. This action posts a stock movement and updates the plan together.</div>'+
+   '<div class="row2">'+fld("Issue quantity "+(item.unit||plan.unit||""),'<input id="turfIssueQty" type="number" min="0.001" max="'+remaining+'" step="any" value="'+Math.min(remaining,num(item.stockQuantity))+'" required>')+fld("Issued to / course area",'<input id="turfIssueTo" required>')+'</div>'+
    '<div class="row2">'+fld("Issued by",'<input id="turfIssueBy" required placeholder="Storekeeper name">')+fld("Issue reference",'<input id="turfIssueRef" placeholder="Auto-linked to turf plan if blank">')+'</div>'+
    fld("Reason / task note",'<textarea id="turfIssueReason" rows="2">Issue for scheduled turf application</textarea>'),
    onSubmit:async()=>{
      const quantity=Number($("#turfIssueQty").value),issuedTo=$("#turfIssueTo").value.trim(),performedBy=$("#turfIssueBy").value.trim(),reference=$("#turfIssueRef").value.trim(),reason=$("#turfIssueReason").value.trim();
-     if(!Number.isFinite(quantity)||quantity<=0||quantity>planned+1e-9){toast("Issue quantity must be positive and cannot exceed the planned quantity","err");return false;}
+     if(!Number.isFinite(quantity)||quantity<=0||quantity>remaining+1e-9){toast("Issue quantity must be positive and cannot exceed the remaining planned quantity ("+remaining+")","err");return false;}
      if(!issuedTo||!performedBy||!reason){toast("Issued-to, issued-by and reason are required","err");return false;}
      await inventoryService.issueStockForTurfPlan({planId,itemId:item.id,quantity,reason,reference,issuedTo,performedBy});
      closeDrawer();toast("Stock issue posted and turf plan advanced to Issued. The linked movement is in the stock ledger.");scheduleRender();
@@ -2084,7 +2099,7 @@ function openTurfIssueForm(planId){
 function openTurfCompletionForm(planId){
  const plan=(S.plans||[]).find(p=>p.id===planId);if(!plan)return toast("Turf plan not found","err");
  const issued=num(plan.issuedQty);
- if(String(plan.status||"").toLowerCase()!=="issued"||!plan.issueMovementId||!(issued>0))return toast("This record lacks a linked stock issue. Reconcile the original issue before completing it.","err");
+ if(!["issued","partially issued"].includes(String(plan.status||"").toLowerCase())||!plan.issueMovementId||!(issued>0))return toast("This record lacks a linked stock issue. Reconcile the original issue before completing it.","err");
  openForm({title:"Record turf application & reconcile",submit:"Save application record",html:
    '<div class="alert-box" style="margin-bottom:12px"><b>'+esc(turfRecordProductName(plan)||plan.productName||"Turf product")+'</b> · '+esc(plan.targetArea||plan.area||"Course")+' · Issued '+fmt(issued,3)+' '+esc(plan.unit||"units")+'. Reconcile the complete issued quantity; returned stock will be put back into inventory with a return movement.</div>'+
    '<div class="row2">'+fld("Actually applied "+(plan.unit||""),'<input id="turfAppliedQty" type="number" min="0.001" step="any" value="'+issued+'" required>')+fld("Returned to store "+(plan.unit||""),'<input id="turfReturnedQty" type="number" min="0" step="any" value="0" required>')+'</div>'+
@@ -2467,6 +2482,7 @@ function turfRecordQuantity(plan) {
 function turfRecordStatus(plan) {
   const raw = String(plan && (plan.status ?? plan.applicationStatus ?? plan.issueStatus ?? plan.transactionType ?? plan.movementType ?? plan.recordType ?? plan.entryType ?? plan.logType ?? plan.actionType ?? plan.state ?? plan.action) || 'Planned').trim().toLowerCase().replace(/[_-]+/g, ' ');
   if (/\bnot applied\b|\bpending\b|\bplanned\b|\bscheduled\b/.test(raw)) return 'Planned';
+  if (/\bpartially issued\b/.test(raw)) return 'Partially Issued';
   if (/\b(applied|completed|complete|consumed|used|done)\b/.test(raw)) return 'Applied';
   if (/\b(issued|issue|dispensed|released|given out|outward|withdrawn|consumption|stock out|quantity out|out)\b/.test(raw)) return 'Issued';
   if (/\b(cancelled|canceled|void|rejected)\b/.test(raw)) return 'Cancelled';
