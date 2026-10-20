@@ -33,6 +33,17 @@ npm run build
 
 The stock movement ledger applies to transactions posted through the new inventory workflows. Existing fuel and turf records have not yet been backfilled into the ledger, so they must not be treated as a reconciled perpetual stock ledger until migration and duplicate-consumption rules are approved. Next phases should add supplier master records, purchase requisitions/orders, receiving/inspection, returns, lot/expiry tracking for chemicals, multi-store transfers, cycle counts, approval roles, and server-enforced Firestore rules.
 
+## Operational records, saved views and turf execution
+
+- The Operations record explorer consolidates maintenance, assignments, fuel issues, turf plans/applications, store movements/issues, goods receipts, closing counts, incidents, run logs and local expenses without copying or mutating their source documents.
+- Use global search, date bounds, source tabs, paging and the View drawer to inspect raw saved fields. CSV exports provide a portable report; JSON exports preserve source records for audit or troubleshooting.
+- Named record views store only the filter definition in the current browser's local storage. They are not shared across devices or users and do not save operational transactions.
+- Turf plans can be opened from the application register. For linked, planned tasks, “Record stock issue” atomically posts the inventory decrement, creates a store_movements issue row with the turf plan ID, and changes the plan to Issued. Issue quantity is capped at the saved plan quantity and current stock is checked inside the Firestore transaction.
+- Completing a linked issue requires reconciliation of the full issued quantity into applied, returned-to-store and unaccounted quantities. Returned material is added back to inventory with a linked TURF_RETURN movement; any unaccounted quantity requires a written explanation. No return or stock adjustment is inferred automatically.
+- Planned tasks may be cancelled with a named actor and reason. Cancelled records are retained for history. Older/legacy Issued records without a linked stock movement are flagged for review rather than falsely treated as reconciled.
+- Advanced Analytics adds turf lifecycle counts and data-completeness signals for missing turf product/area/quantity links, missing fuel rates/machine links, incomplete maintenance attribution, unreferenced movements, open incidents and unresolved count variances. These are review prompts, not proof of loss or physical work completion.
+- The main dashboard cards and existing general issue / receipt / count business rules are unchanged. A production rollout still needs live Firebase/browser acceptance tests and deployed Firestore rules that permit the new plan-and-inventory transaction writes for the intended staff roles.
+
 ## Physical closing stock and decision intelligence
 
 - The Store tab records a physical closing quantity for a selected item and date. It stores the expected book balance, physical count, signed variance, cost exposure, count owner, notes, ledger coverage and review status in `stock_counts`.
