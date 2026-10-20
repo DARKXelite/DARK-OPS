@@ -85,7 +85,7 @@ export function analyzeInventory({
   const totalDemandValue=abcSorted.reduce((s,x)=>s+x.demandValue,0);let running=0;
   abcSorted.forEach(r=>{const before=running/Math.max(totalDemandValue,1);r.abc=totalDemandValue===0?"N/A":before<0.8?"A":before<0.95?"B":"C";running+=r.demandValue;});
   const countRows=counts.filter(c=>!c.voided).map(c=>({...c,varianceValue:n(c.varianceValue),varianceQuantity:n(c.varianceQuantity)}));
-  const variances=countRows.filter(c=>Math.abs(c.varianceQuantity)>1e-6).sort((a,b)=>Math.abs(b.varianceValue)-Math.abs(a.varianceValue));
+  const variances=countRows.filter(c=>Math.abs(c.varianceQuantity)>1e-6&&c.status!=="RESOLVED").sort((a,b)=>Math.abs(b.varianceValue)-Math.abs(a.varianceValue));
   const totalVarianceValue=variances.reduce((s,c)=>s+Math.abs(c.varianceValue),0);
   const fuelRecent=fuel.filter(f=>dateOf(f)>=recentDate&&dateOf(f)<=asOf);
   const hoursRecent=shifts.filter(s=>dateOf(s)>=recentDate&&dateOf(s)<=asOf);
