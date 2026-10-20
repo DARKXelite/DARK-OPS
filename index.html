@@ -12,6 +12,7 @@
 
 <link rel="stylesheet" href="/src/ops-app.css">
 <link rel="stylesheet" href="/src/rbac.css">
+<link rel="stylesheet" href="/src/pin-gate.css">
 
 
 
@@ -42,10 +43,83 @@
 
 <!-- Full-screen PIN access gate -->
 <section id="pinGate" aria-label="Clover Greens Ops PIN login">
-  <div class="pin-shell">
-    <input id="pinInput" class="pin-input-capture" type="password" inputmode="numeric" pattern="[0-9]*" autocomplete="off" maxlength="8" aria-label="Enter eight digit PIN" autofocus>
-    <div class="pin-dots" id="pinDots" role="group" aria-label="PIN digits"><span class="pin-dot" data-dot="0"></span><span class="pin-dot" data-dot="1"></span><span class="pin-dot" data-dot="2"></span><span class="pin-dot" data-dot="3"></span><span class="pin-dot" data-dot="4"></span><span class="pin-dot" data-dot="5"></span><span class="pin-dot" data-dot="6"></span><span class="pin-dot" data-dot="7"></span></div>
-    <div id="pinError" class="pin-error" aria-live="polite"></div>
+  <div class="pin-layout">
+    <header class="pin-topline">
+      <div class="pin-wordmark">
+        <span class="pin-monogram" aria-hidden="true">CG<span>/</span></span>
+        <span class="pin-wordmark-copy"><strong>CLOVER GREENS</strong><small>OPERATIONS NETWORK</small></span>
+      </div>
+      <div class="pin-terminal-tag"><span class="pin-terminal-dot"></span> SECURE TERMINAL <span class="pin-tag-divider">/</span> 01</div>
+    </header>
+
+    <div class="pin-bento-grid">
+      <section class="pin-feature-card" aria-label="Course operations">
+        <div class="pin-card-overline"><span class="pin-live-dot"></span> FIELD OPERATIONS <span class="pin-overline-sep">/</span> CONTROL HUB</div>
+        <h1>Every detail.<br><span>In sync.</span></h1>
+        <p class="pin-feature-copy">A connected view of the course, from fleet and turf to the stores that keep everything moving.</p>
+
+        <div class="pin-orbit-stage" aria-hidden="true">
+          <div class="pin-orbit-halo"></div>
+          <div class="pin-orbit-ring pin-orbit-ring-outer"></div>
+          <div class="pin-orbit-ring pin-orbit-ring-mid"></div>
+          <div class="pin-orbit-ring pin-orbit-ring-inner"></div>
+          <div class="pin-orbit-core"><span>CG</span><i></i></div>
+          <span class="pin-orbit-node pin-node-a"></span>
+          <span class="pin-orbit-node pin-node-b"></span>
+          <span class="pin-orbit-node pin-node-c"></span>
+          <span class="pin-orbit-readout">COURSE SYSTEMS <b>01 / 03</b></span>
+        </div>
+
+        <div class="pin-module-grid" aria-label="Operations modules">
+          <div class="pin-module-tile">
+            <span class="pin-module-icon"><span class="material-symbols-rounded">electric_bolt</span></span>
+            <span class="pin-module-label"><strong>Fleet</strong><small>MACHINE OPS</small></span>
+            <span class="material-symbols-rounded pin-module-arrow">north_east</span>
+          </div>
+          <div class="pin-module-tile">
+            <span class="pin-module-icon"><span class="material-symbols-rounded">grass</span></span>
+            <span class="pin-module-label"><strong>Turf</strong><small>COURSE CARE</small></span>
+            <span class="material-symbols-rounded pin-module-arrow">north_east</span>
+          </div>
+          <div class="pin-module-tile">
+            <span class="pin-module-icon"><span class="material-symbols-rounded">inventory_2</span></span>
+            <span class="pin-module-label"><strong>Stores</strong><small>INVENTORY</small></span>
+            <span class="material-symbols-rounded pin-module-arrow">north_east</span>
+          </div>
+        </div>
+      </section>
+
+      <section class="pin-access-card" aria-label="Enter your access PIN">
+        <div class="pin-access-top">
+          <span class="pin-access-kicker"><span class="material-symbols-rounded">shield_lock</span> AUTHENTICATION</span>
+          <span class="pin-access-index">GATE 01</span>
+        </div>
+        <div class="pin-access-heading">
+          <div class="pin-access-signal"><span></span><span></span><span></span></div>
+          <h2>Access portal</h2>
+          <p>Enter your assigned eight-digit PIN to continue.</p>
+        </div>
+
+        <div class="pin-code-label"><span>ACCESS CODE</span><span>8 DIGITS REQUIRED</span></div>
+        <div class="pin-shell">
+          <input id="pinInput" class="pin-input-capture" type="password" inputmode="numeric" pattern="[0-9]*" autocomplete="off" maxlength="8" aria-label="Enter eight digit PIN" autofocus>
+          <div class="pin-dots" id="pinDots" role="group" aria-label="PIN digits"><span class="pin-dot" data-dot="0"></span><span class="pin-dot" data-dot="1"></span><span class="pin-dot" data-dot="2"></span><span class="pin-dot" data-dot="3"></span><span class="pin-dot" data-dot="4"></span><span class="pin-dot" data-dot="5"></span><span class="pin-dot" data-dot="6"></span><span class="pin-dot" data-dot="7"></span></div>
+          <div id="pinError" class="pin-error" aria-live="polite"></div>
+        </div>
+
+        <div class="pin-security-row">
+          <span class="material-symbols-rounded">verified_user</span>
+          <span><strong>Restricted staff access</strong><small>Protected operations workspace</small></span>
+          <span class="pin-security-mark">●</span>
+        </div>
+        <div class="pin-access-footer"><span>AUTHORIZATION REQUIRED</span><span class="pin-footer-bars"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></span></div>
+      </section>
+    </div>
+
+    <footer class="pin-bottomline">
+      <span>CLOVER GREENS RESORT &amp; GOLF <b>·</b> OPERATIONS INTELLIGENCE</span>
+      <span>AUTHORIZED PERSONNEL ONLY <i></i></span>
+    </footer>
   </div>
 </section>
 
