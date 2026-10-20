@@ -46,3 +46,10 @@
 .pin-shell{position:relative}
 .pin-dots{position:relative}
 .pin-input-capture{position:absolute;inset:0;width:100%;height:100%;opacity:0.015;z-index:5;pointer-events:auto;border:0;outline:0;background:transparent;color:transparent;caret-color:transparent;font-size:16px;cursor:text}
+
+/* Correct circular geometry and touch-to-type behaviour */
+.pin-dots{display:grid!important;grid-template-columns:repeat(8,minmax(0,1fr));align-items:center;width:min(100%,360px);gap:clamp(4px,1.5vw,9px)}
+.pin-dot{width:100%!important;height:auto!important;min-width:0;aspect-ratio:1/1;box-sizing:border-box;border-radius:50%!important;display:grid;place-items:center;overflow:hidden}
+.pin-shell{position:relative}
+.pin-input-capture{position:absolute!important;inset:0!important;width:100%!important;height:100%!important;opacity:.01!important;z-index:10!important;pointer-events:auto!important;border:0!important;outline:0!important;background:transparent!important;color:transparent!important;caret-color:transparent!important;font-size:16px!important;cursor:text}
+.pin-logo{object-fit:contain}
