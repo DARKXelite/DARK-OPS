@@ -2069,54 +2069,49 @@ const RBAC = Object.freeze({
 window.CLOVER_RBAC = RBAC;
 
 function initPinGate() {
-  const gate = $('#pinGate'), dots = $('#pinDots [data-dot]'), error = $('#pinError');
-  if (!gate || gate.dataset.initialized === 'true') return;
+  const gate = $('#pinGate'), input = $('#pinInput'), dots = $$('#pinDots [data-dot]'), error = $('#pinError');
+  if (!gate || !input || gate.dataset.initialized === 'true') return;
   gate.dataset.initialized = 'true';
-  let entered = '', lockedUntil = 0, failures = 0;
+  let lockedUntil = 0, failures = 0, busy = false;
   const refresh = () => {
+    const value = input.value.replace(/\D/g, '').slice(0, 8);
+    if (input.value !== value) input.value = value;
     dots.forEach((dot, i) => {
-      dot.classList.toggle('filled', i < entered.length);
-      dot.textContent = entered[i] || '';
+      dot.classList.toggle('filled', i < value.length);
+      dot.textContent = value[i] || '';
     });
-    $('#pinDots').setAttribute('aria-label', entered.length + ' of 8 digits entered');
+    $('#pinDots').setAttribute('aria-label', value.length + ' of 8 digits entered');
+    if (value.length === 8 && !busy) { busy = true; window.setTimeout(unlock, 100); }
   };
-  const clear = (message='') => { entered = ''; refresh(); error.textContent = message; };
+  const clear = (message='') => { input.value = ''; busy = false; refresh(); error.textContent = message; };
   const unlock = () => {
-    // Initial admin PIN requested for setup. This client-side gate is not secure authentication.
-    if (entered === '99114559') {
+    if (Date.now() < lockedUntil) { clear('Please wait before trying again.'); return; }
+    if (input.value === '99114559') {
       RBAC.session.role = 'admin'; RBAC.session.authenticated = true;
       gate.hidden = true; document.body.classList.remove('pin-locked');
       $('#signoutBtn').hidden = false;
-      clear(); startListeners();
-      toast('Welcome, Admin');
+      clear(); startListeners(); toast('Welcome, Admin');
       return;
     }
     failures++;
     if (failures >= 5) { lockedUntil = Date.now() + 30000; failures = 0; clear('Too many attempts. Try again in 30 seconds.'); }
     else clear('Incorrect PIN. ' + (5 - failures) + ' attempts remaining.');
   };
-  const press = key => {
-    if (Date.now() < lockedUntil) { error.textContent = 'Please wait before trying again.'; return; }
-    error.textContent = '';
-    if (key === 'clear') { clear(); return; }
-    if (key === 'delete') { entered = entered.slice(0,-1); refresh(); return; }
-    if (!/^\\d$/.test(key) || entered.length >= 8) return;
-    entered += key; refresh();
-    if (entered.length === 8) window.setTimeout(unlock, 100);
-  };
-  document.addEventListener('keydown', e => {
-    if (gate.hidden) return;
-    if (/^\\d$/.test(e.key)) { e.preventDefault(); press(e.key); }
-    else if (e.key === 'Backspace') { e.preventDefault(); press('delete'); }
-    else if (e.key === 'Escape') press('clear');
+  input.addEventListener('input', refresh);
+  input.addEventListener('keydown', e => {
+    if (e.key === 'Enter' && input.value.length === 8) { e.preventDefault(); if (!busy) { busy = true; unlock(); } }
+    if (e.key === 'Escape') clear();
+  });
+  gate.addEventListener('pointerdown', e => {
+    if (!e.target.closest('#pinInput')) input.focus({preventScroll:true});
   });
   $('#signoutBtn').addEventListener('click', () => {
     RBAC.session.role = null; RBAC.session.authenticated = false;
-    stopListeners(); gate.hidden = false; $('#signoutBtn').hidden = true; clear('Session locked.');
+    stopListeners(); gate.hidden = false; $('#signoutBtn').hidden = true; clear(''); input.focus();
   });
   gate.hidden = false; document.body.classList.add('pin-locked'); refresh();
+  window.setTimeout(() => input.focus({preventScroll:true}), 50);
 }
-
 
 
 function getSunday(d) {
