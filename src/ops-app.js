@@ -1693,13 +1693,22 @@ function openPhysicalCount() {
       const confidence=countDate<today()?'ESTIMATE':'CURRENT_BOOK_SNAPSHOT';
       const incomplete=!firstMovement||firstMovement>countDate;
       const status=Math.abs(variance)<0.0001?'MATCH':'VARIANCE_REVIEW';
-      await addDoc(collection(db,CONFIG.COL.stockCounts),{
-        itemId,itemName:itemName(item),category:item.category||'Other',unit:item.unit||'Nos',
-        countDate,expectedQuantity:expected,countedQuantity:physical,varianceQuantity:variance,
-        unitCost:cost,varianceValue:+(variance*cost).toFixed(2),status,confidence,
-        ledgerCoverage:incomplete?'INCOMPLETE_OR_UNVERIFIED':'AVAILABLE_MOVEMENTS_ONLY',
-        laterMovementCount:later.length,notes:$('#countNotes').value.trim(),countedBy,
-        createdAt:serverTimestamp(),voided:false
+      const countId=itemId+'__'+countDate,countRef=doc(db,CONFIG.COL.stockCounts,countId),itemRef=doc(db,CONFIG.COL.inventory,itemId);
+      await runTransaction(db,async tx=>{
+        const itemSnap=await tx.get(itemRef),countSnap=await tx.get(countRef);
+        if(!itemSnap.exists())throw new Error('Inventory item no longer exists');
+        if(countSnap.exists())throw new Error('A physical count already exists for this item and date');
+        const fresh=itemSnap.data();
+        if(Math.abs(num(fresh.stockQuantity)-num(item.stockQuantity))>1e-8)throw new Error('Stock changed while this count was being prepared. Refresh the Store view and recount.');
+        const freshCost=Math.max(0,num(fresh.unitCost));
+        tx.set(countRef,{
+          itemId,itemName:fresh.partName||fresh.itemName||itemName(item),category:fresh.category||'Other',unit:fresh.unit||'Nos',
+          countDate,expectedQuantity:expected,countedQuantity:physical,varianceQuantity:variance,
+          unitCost:freshCost,varianceValue:+(variance*freshCost).toFixed(2),status,confidence,
+          ledgerCoverage:incomplete?'INCOMPLETE_OR_UNVERIFIED':'AVAILABLE_MOVEMENTS_ONLY',
+          laterMovementCount:later.length,notes:$('#countNotes').value.trim(),countedBy,
+          createdAt:serverTimestamp(),voided:false
+        });
       });
       toast(Math.abs(variance)<0.0001?'Physical count saved: no variance':'Physical count saved; variance flagged for review');
       scheduleRender();
