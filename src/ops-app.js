@@ -1743,7 +1743,7 @@ function renderOperationalRecordAnalytics(asOf=today()){
  const turfPlans=(S.plans||[]).filter(p=>isTurfCategory(turfPlanCategory(p)));const life=summarizeTurfLifecycle(turfPlans,asOf);
  const countStatus=status=>String(status||"").toLowerCase();
  const recent=(source,rows)=>(rows||[]).filter(r=>{const d=recordDateFor(source,r);return d&&d>=from&&d<=asOf;});
- const recentFuel=recent("fuel",S.fuel),recentPlans=allPlans,recentMaintenance=recent("maintenance",S.maintenance),recentMovements=recent("movements",S.movements);
+ const recentFuel=recent("fuel",S.fuel),recentPlans=allPlans.filter(p=>isTurfCategory(turfPlanCategory(p))),recentMaintenance=recent("maintenance",S.maintenance),recentMovements=recent("movements",S.movements);
  const fuelUnpriced=recentFuel.filter(f=>!(rateForFuelLog(f)>0)).length;
  const fuelNoMachine=recentFuel.filter(f=>!(f.machineId||f.machineName)).length;
  const planNoProduct=recentPlans.filter(p=>!(p.productId||p.itemId)).length;
@@ -1764,7 +1764,7 @@ function renderOperationalRecordAnalytics(asOf=today()){
   {label:"Issue link gaps",value:life.issuedWithoutMovementLink,sub:"Issued/applied plans without a linked store movement"},
   {label:"Applied quantity gaps",value:life.appliedWithoutRecordedQuantity,sub:"Marked applied without a positive recorded quantity"}
  ];
- setHTML(turfHost,data.map(x=>`<div class="record-quality-row"><div><b>${esc(x.label)}</b><small>${esc(x.sub)}</small></div><strong>${fmt(x.value,0)}</strong></div>`).join("")+`<p class="muted sm">Coverage window for data-quality checks: ${from} to ${asOf}. Status counts include records up to the analysis date; a saved status alone is not proof of physical application.</p>`);
+ setHTML(turfHost,data.map(x=>`<div class="record-quality-row"><div><b>${esc(x.label)}</b><small>${esc(x.sub)}</small></div><strong>${fmt(x.value,0)}</strong></div>`).join("")+`<div class="record-detail-actions"><button class="btn btn-sm" data-act="open-turf-variance">Open planned vs issued reconciliation</button><button class="btn btn-sm" data-act="open-planner">Open weekly planner</button></div><p class="muted sm">Coverage window for data-quality checks: ${from} to ${asOf}. Status counts include records up to the analysis date; a saved status alone is not proof of physical application.</p>`);
  const quality=[
   ["Turf plans missing a product link",planNoProduct,"Recent plans that cannot safely post stock against an item","plans"],
   ["Turf plans missing treated area",planNoArea,"Recent plans without an area/location","plans"],
@@ -2308,8 +2308,8 @@ const C = {
   lmachine: (v, d) => { R.ledger.machine = v; RER.ledger(); }, ltype: (v) => { R.ledger.type = v; RER.ledger(); },
   'turf-week': v => { if(v) { currentTurfWeekStart = getSunday(v); renderTurfCare(); } },
   'records-saved-view': v => applySavedRecordView(v),
-  'records-from': v => { recordsFrom=v||''; recordsSelectedView=''; recordsPageSize=100; persistRecordExplorerPrefs(); renderRecords(); },
-  'records-to': v => { recordsTo=v||''; recordsSelectedView=''; recordsPageSize=100; persistRecordExplorerPrefs(); renderRecords(); },
+  'records-from': v => { recordsFrom=v||''; if(recordsTo&&recordsFrom&&recordsFrom>recordsTo)recordsTo=recordsFrom; recordsSelectedView=''; recordsPageSize=100; persistRecordExplorerPrefs(); renderRecords(); },
+  'records-to': v => { recordsTo=v||''; if(recordsFrom&&recordsTo&&recordsTo<recordsFrom)recordsFrom=recordsTo; recordsSelectedView=''; recordsPageSize=100; persistRecordExplorerPrefs(); renderRecords(); },
   'turf-app-category': v => { turfAppCategory = v; renderTurfApplications(); },
   'turf-app-status': v => { turfAppStatus = v; renderTurfApplications(); },
   'turf-product-category': v => { turfProductCategory = v; renderTurfCare(); },
