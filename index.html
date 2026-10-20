@@ -223,13 +223,37 @@
 
     <!-- INVENTORY MASTER / GOODS RECEIPTS -->
     <section class="view" id="v-registry">
-      <div class="toolbar" style="gap:10px;flex-wrap:wrap"><div class="grow"></div><button class="btn" data-act="open-store-records"><span class="material-symbols-rounded">manage_search</span>Records editor</button><button class="btn btn-danger" data-act="open-data-reset"><span class="material-symbols-rounded">delete_sweep</span>Reset data</button><button class="btn btn-primary" data-act="add-inward"><span class="material-symbols-rounded">move_to_inbox</span> New inward</button><button class="btn" data-act="issue-stock"><span class="material-symbols-rounded">outbox</span> Issue stock</button><button class="btn" data-act="adjust-stock"><span class="material-symbols-rounded">tune</span> Stock adjustment</button><button class="btn" data-act="add-part"><span class="material-symbols-rounded">add_box</span> New item master</button></div>
+      <div class="toolbar" style="gap:10px;flex-wrap:wrap"><div class="grow"></div><button class="btn" data-act="open-store-records"><span class="material-symbols-rounded">manage_search</span>Records editor</button><button class="btn btn-danger" data-act="open-data-reset"><span class="material-symbols-rounded">delete_sweep</span>Reset data</button><button class="btn btn-primary" data-act="add-inward"><span class="material-symbols-rounded">move_to_inbox</span> New inward</button><button class="btn" data-act="issue-stock"><span class="material-symbols-rounded">outbox</span> Issue stock</button><button class="btn" data-act="adjust-stock"><span class="material-symbols-rounded">tune</span> Stock adjustment</button><button class="btn" data-act="physical-count"><span class="material-symbols-rounded">fact_check</span> Closing stock count</button><button class="btn" data-act="add-part"><span class="material-symbols-rounded">add_box</span> New item master</button></div>
       <div class="kpi-grid" id="storeKpis"></div>
       <div class="card mt"><div class="card-h"><h3>Item master & current stock</h3><button class="btn btn-sm" data-act="export-stock">Export stock</button></div><div class="table-wrap" id="invTbl"></div></div>
       <div class="card mt"><div class="card-h"><h3>Goods receipt register</h3><button class="btn btn-sm" data-act="export-inwards">Export inwards</button></div><div class="table-wrap" id="inwardTbl"></div></div>
       <div class="card mt"><div class="card-h"><h3>Stock movement ledger</h3><span class="muted sm">Receipts, issues, opening balances and adjustments</span><button class="btn btn-sm" data-act="export-movements">Export movements</button></div><div class="table-wrap" id="stockMovementTbl"></div></div>
+      <div class="card mt"><div class="card-h"><h3>Physical closing stock counts</h3><span class="muted sm">Book-vs-physical variance register. Counts never auto-adjust stock.</span></div><div class="table-wrap" id="stockCountsTbl"></div></div>
     </section>
     <!-- LOCAL EXPENSES -->
+    <!-- ADVANCED ANALYTICS / DECISION INTELLIGENCE -->
+    <section class="view" id="v-analytics">
+      <div class="card">
+        <div class="card-h"><div><h3>Decision Intelligence</h3><p class="muted sm">Explainable algorithms over recorded inventory, fleet, fuel, turf and maintenance data.</p></div><button class="btn btn-sm" data-act="export-analytics">Export analysis</button></div>
+        <div class="row2" style="gap:12px;align-items:end;padding:12px 0">
+          <div class="field"><label class="f" for="analyticsAsOf">Analysis through date</label><input id="analyticsAsOf" type="date"></div>
+          <div class="field"><label class="f" for="analyticsLeadDays">Supplier lead time (days)</label><input id="analyticsLeadDays" type="number" min="1" max="365" value="7"></div>
+          <div class="field"><label class="f" for="analyticsOrderCost">Cost per purchase order (₹)</label><input id="analyticsOrderCost" type="number" min="0" step="1" value="250"></div>
+          <div class="field"><label class="f" for="analyticsHoldingRate">Annual holding rate (%)</label><input id="analyticsHoldingRate" type="number" min="1" max="100" value="20"></div>
+          <button class="btn btn-primary" data-act="run-analytics"><span class="material-symbols-rounded">psychology</span> Recalculate</button>
+        </div>
+        <div class="muted sm">Defaults are editable planning assumptions, not supplier-confirmed facts. Results update when live source records change or when recalculated.</div>
+      </div>
+      <div class="kpi-grid mt" id="analyticsKpis"></div>
+      <div class="card mt"><div class="card-h"><h3>Priority decisions</h3><span class="muted sm">Ranked by operational risk and recorded evidence</span></div><div id="analyticsInsights"></div></div>
+      <div class="card mt"><div class="card-h"><h3>Inventory intelligence matrix</h3><span class="muted sm">ABC value class · XYZ demand variability · EOQ · safety stock · forecast</span></div><div class="table-wrap" id="analyticsInventoryTbl"></div></div>
+      <div class="card mt"><div class="card-h"><h3>Physical count variance intelligence</h3><span class="muted sm">Largest recorded discrepancies; values are exposure estimates, not confirmed losses</span></div><div class="table-wrap" id="analyticsVarianceTbl"></div></div>
+      <div class="grid2 mt">
+        <div class="card"><div class="card-h"><h3>Fleet efficiency outliers</h3></div><div class="table-wrap" id="analyticsFleetTbl"></div></div>
+        <div class="card"><div class="card-h"><h3>Unusual issue-volume days</h3></div><div class="table-wrap" id="analyticsAnomalyTbl"></div></div>
+      </div>
+      <div class="card mt"><div class="card-h"><h3>Models, assumptions and data confidence</h3></div><div id="analyticsMethodology" class="muted sm" style="padding:14px"></div></div>
+    </section>
     <section class="view" id="v-expenses">
       <div class="card" id="localExpenseLedgerCard"><div id="localExpenseLedger"></div></div>
     </section>
