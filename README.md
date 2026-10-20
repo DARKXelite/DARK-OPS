@@ -32,3 +32,12 @@ npm run build
 ## Current limitations and next phase
 
 The stock movement ledger applies to transactions posted through the new inventory workflows. Existing fuel and turf records have not yet been backfilled into the ledger, so they must not be treated as a reconciled perpetual stock ledger until migration and duplicate-consumption rules are approved. Next phases should add supplier master records, purchase requisitions/orders, receiving/inspection, returns, lot/expiry tracking for chemicals, multi-store transfers, cycle counts, approval roles, and server-enforced Firestore rules.
+
+## Physical closing stock and decision intelligence
+
+- The Store tab records a physical closing quantity for a selected item and date. It stores the expected book balance, physical count, signed variance, cost exposure, count owner, notes, ledger coverage and review status in `stock_counts`.
+- Count capture is audit-only and never silently changes on-hand stock. Variances appear in the main Operational Intelligence panel and the Advanced Analytics view.
+- For historical dates, the expected closing balance is reconstructed from current on-hand quantity and later-dated movement records. Treat this as an estimate until legacy movement history has been reconciled. A date is interpreted as end-of-day; same-day later transactions are not distinguishable from the date-only record.
+- Advanced Analytics includes ABC inventory value classification, XYZ demand variability, moving-average/trend forecast, estimated economic order quantity (EOQ), service-factor safety stock, reorder points, days-of-cover/stockout risk, robust MAD issue-volume anomaly detection, physical-count variance exposure, fleet fuel-per-engine-hour comparison, and data-quality alerts.
+- Decision models are deterministic and explainable. Lead time, order cost, holding rate and service factor are assumptions. Recommendations are not purchase orders and must be checked against real supplier terms and operating plans.
+- Usage forecasts and ABC/XYZ classifications use recorded `ISSUE` movements. Existing fuel and turf logs have not been automatically deducted from inventory or backfilled into the movement ledger. Until a reviewed migration is completed, consumption-driven calculations are partial and explicitly labeled.
