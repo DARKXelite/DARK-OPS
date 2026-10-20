@@ -1838,3 +1838,112 @@ body:has(#v-turfcare.active) #v-turfcare > .turf-view-tabs {
 @media (max-width: 620px) {
   body:has(#v-turfcare.active) .content { padding-top: 62px !important; }
 }
+
+
+/* Approved compact Plan Treatments modal. Keep its title accessible while visually hiding the heading. */
+#overlay.overlay:has(#modal.turf-batch-modal) { padding:4px!important; }
+#overlay #modal.turf-batch-modal {
+  width:min(1320px,calc(100vw - 8px))!important;
+  max-width:calc(100vw - 8px)!important;
+  max-height:calc(100dvh - 8px)!important;
+  border-radius:10px!important;
+  border-width:1px!important;
+  overflow:hidden!important;
+}
+#overlay #modal.turf-batch-modal .m-head {
+  position:relative;justify-content:flex-end;align-items:center;min-height:30px;
+  padding:3px 6px!important;gap:0!important;border-bottom:0!important;
+  border-radius:9px 9px 0 0!important;background:transparent!important;
+}
+#overlay #modal.turf-batch-modal .m-head>div {
+  position:absolute!important;width:1px!important;height:1px!important;padding:0!important;
+  margin:-1px!important;overflow:hidden!important;clip:rect(0,0,0,0)!important;
+  white-space:nowrap!important;border:0!important;
+}
+#overlay #modal.turf-batch-modal .m-head .icon-btn {
+  width:27px!important;height:27px!important;min-width:27px!important;border-radius:7px!important;
+}
+#overlay #modal.turf-batch-modal .m-head .icon-btn .material-symbols-rounded {font-size:17px!important;}
+#overlay #modal.turf-batch-modal #mBody.m-body {padding:6px 10px 8px!important;min-height:0!important;}
+#overlay #modal.turf-batch-modal #mFoot.m-foot {
+  padding:7px 10px!important;gap:6px!important;border-radius:0 0 9px 9px!important;
+}
+#overlay #modal.turf-batch-modal .turf-batch-modal-body {gap:5px!important;}
+#overlay #modal.turf-batch-modal .turf-batch-modal-body>.muted.sm:first-child {
+  font-size:9px!important;line-height:1.35!important;margin:0!important;
+}
+#overlay #modal.turf-batch-modal .turf-plan-schedule-grid {gap:6px!important;margin:1px 0!important;}
+#overlay #modal.turf-batch-modal .turf-plan-schedule-grid label {gap:3px!important;font-size:9px!important;}
+#overlay #modal.turf-batch-modal .turf-plan-schedule-grid input,
+#overlay #modal.turf-batch-modal .turf-plan-schedule-grid select {
+  height:30px!important;min-height:30px!important;padding:0 7px!important;font-size:10px!important;border-radius:6px!important;
+}
+#overlay #modal.turf-batch-modal .turf-weekday-picks {
+  gap:4px!important;padding:4px 6px!important;margin:0!important;border-radius:7px!important;
+}
+#overlay #modal.turf-batch-modal .turf-weekday-picks legend {font-size:9px!important;padding:0 3px!important;}
+#overlay #modal.turf-batch-modal .turf-weekday-picks label {
+  gap:3px!important;padding:3px 5px!important;min-height:22px!important;border-radius:5px!important;
+  font-size:9px!important;line-height:1.1!important;
+}
+#overlay #modal.turf-batch-modal .turf-weekday-picks input[type="checkbox"] {
+  appearance:auto!important;-webkit-appearance:checkbox!important;width:12px!important;height:12px!important;
+  min-width:12px!important;min-height:12px!important;margin:0!important;padding:0!important;
+  flex:0 0 12px!important;accent-color:#8FD6A1;
+}
+#overlay #modal.turf-batch-modal .turf-batch-entry-grid {padding:0 2px!important;font-size:9px!important;line-height:1.2!important;}
+#overlay #modal.turf-batch-modal .turf-batch-entry-list {
+  gap:4px!important;padding:0 2px 1px!important;max-height:min(64vh,640px)!important;overscroll-behavior:contain;
+}
+#overlay #modal.turf-batch-modal .turf-batch-entry-row {
+  grid-template-columns:18px minmax(0,1.5fr) minmax(90px,.55fr) minmax(100px,.55fr)!important;
+  gap:5px!important;min-height:38px!important;padding:4px 5px!important;border-radius:7px!important;
+}
+#overlay #modal.turf-batch-modal .turf-batch-entry-row select,
+#overlay #modal.turf-batch-modal .turf-batch-entry-row input {
+  height:30px!important;min-height:30px!important;padding:0 7px!important;font-size:10px!important;border-radius:6px!important;
+}
+#overlay #modal.turf-batch-modal .turf-batch-entry-row .turf-batch-row-num {font-size:9px!important;}
+#overlay #modal.turf-batch-modal .turf-batch-entry-row .turf-batch-area {
+  height:30px!important;min-height:30px!important;padding:0 6px!important;font-size:9px!important;border-radius:6px!important;
+}
+#overlay #modal.turf-batch-modal #turfBatchNotes {
+  height:48px!important;min-height:48px!important;padding:5px 8px!important;font-size:10px!important;resize:vertical;
+}
+#overlay #modal.turf-batch-modal .turf-batch-modal-body>label[style*="grid"] {gap:3px!important;font-size:9px!important;}
+#overlay #modal.turf-batch-modal #mFoot .btn {
+  height:31px!important;min-height:31px!important;padding:0 10px!important;font-size:11px!important;
+  border-radius:7px!important;gap:5px!important;
+}
+#overlay #modal.turf-batch-modal #mFoot .btn .material-symbols-rounded {font-size:15px!important;}
+/* Weekly board header: keep the planner command visible after removing the redundant page heading. */
+.turf-card-head-planner {align-items:flex-end!important;gap:10px!important;}
+.turf-planner-head-actions {
+  display:flex;align-items:flex-end;justify-content:flex-end;gap:8px;flex-wrap:wrap;min-width:0;
+}
+.turf-planner-head-actions .turf-date-label {min-width:160px;}
+.turf-planner-head-actions .btn {height:30px!important;min-height:30px!important;padding:0 10px!important;font-size:11px!important;}
+@media(max-width:760px) {
+  #overlay #modal.turf-batch-modal {
+    width:100%!important;max-width:100%!important;max-height:98dvh!important;
+    border-radius:10px 10px 0 0!important;
+  }
+  #overlay #modal.turf-batch-modal #mBody.m-body {padding:5px 7px 7px!important;}
+  #overlay #modal.turf-batch-modal #mFoot.m-foot {padding:6px 8px!important;}
+  #overlay #modal.turf-batch-modal .turf-plan-schedule-grid {grid-template-columns:repeat(2,minmax(0,1fr))!important;}
+  #overlay #modal.turf-batch-modal .turf-plan-schedule-grid label:first-child {grid-column:1/-1;}
+  #overlay #modal.turf-batch-modal .turf-batch-entry-row {grid-template-columns:16px minmax(0,1fr) 76px!important;gap:4px!important;}
+  #overlay #modal.turf-batch-modal .turf-batch-entry-row select {grid-column:2!important;}
+  #overlay #modal.turf-batch-modal .turf-batch-entry-row input {grid-column:3!important;}
+  #overlay #modal.turf-batch-modal .turf-batch-entry-row .turf-batch-area {
+    grid-column:2/-1!important;height:24px!important;min-height:24px!important;
+  }
+  .turf-card-head-planner {align-items:stretch!important;flex-direction:column!important;}
+  .turf-planner-head-actions {width:100%;justify-content:flex-start;}
+  .turf-planner-head-actions .turf-date-label {min-width:0;flex:1 1 150px;}
+}
+@media(max-width:420px) {
+  #overlay #modal.turf-batch-modal .turf-weekday-picks {gap:3px!important;}
+  #overlay #modal.turf-batch-modal .turf-weekday-picks label {padding:3px 4px!important;font-size:8.5px!important;}
+  #overlay #modal.turf-batch-modal #mFoot .btn {padding:0 8px!important;}
+}
