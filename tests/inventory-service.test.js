@@ -93,3 +93,14 @@ test("opening stock is posted with an auditable opening movement", async () => {
   assert.equal(movement[2].movementType, "OPENING");
   assert.equal(movement[2].quantityAfter, 5);
 });
+
+test("local expense stock additions update weighted average cost and movement ledger", async () => {
+  const { service, calls } = setup({ item: { category: "Tools", stockQuantity: 2, unitCost: 100 } });
+  await service.postLocalPurchaseStock({ itemId: "tool-1", quantity: 3, rate: 150, reference: "expense-1" });
+  const update = calls.find(c => c[0] === "update" && c[1].collection === "inventory");
+  const movement = calls.find(c => c[0] === "set" && c[1].collection === "store_movements");
+  assert.equal(update[2].stockQuantity, 5);
+  assert.equal(update[2].unitCost, 130);
+  assert.equal(movement[2].movementType, "LOCAL_PURCHASE");
+  assert.equal(movement[2].reference, "expense-1");
+});
