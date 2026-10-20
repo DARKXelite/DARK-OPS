@@ -20,7 +20,7 @@ export const CONFIG = {
   WEATHER_PROXY_URL: '',
   STALE_SEC: 180,              // radar pin turns grey after this many seconds without an update
   WIND_LIMIT: 25,              // km/h, spraying advisory
-  COL: { users:'users', machines:'machines', fuel:'fuel_logs', shifts:'shifts', zones:'CourseZones', live:'live_telemetry', inventory:'inventory', logs:'logs', maintenance:'maintenance_logs', assignments:'assignment_logs', plans:'turf_plans', inwards:'store_inwards' }
+  COL: { users:'users', machines:'machines', fuel:'fuel_logs', shifts:'shifts', zones:'CourseZones', live:'live_telemetry', inventory:'inventory', logs:'logs', maintenance:'maintenance_logs', assignments:'assignment_logs', plans:'turf_plans', inwards:'store_inwards', movements:'store_movements' }
 };
 
 const app = initializeApp(firebaseConfig);
