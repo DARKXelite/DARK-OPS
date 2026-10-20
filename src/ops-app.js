@@ -1729,16 +1729,17 @@ const VIEWS = {
   zones: ["Course Map", "Geofences & course boundaries", "polyline", "Fleet Ops"],
   fuel: ["Fuel Ledger", "Fuel issues & cost control", "local_gas_station", "Store & Ledgers"],
   registry: ["Inventory Master", "Item master, receipts & stock", "database", "Store & Ledgers"],
+  analytics: ["Advanced Analytics", "Inventory intelligence & operational decisions", "query_stats", "Store & Ledgers"],
   expenses: ["Local Expenses", "Out-of-pocket purchases & office reimbursement", "payments", "Store & Ledgers"],
   users: ["Users Master", "Workforce directory", "group", "Store & Ledgers"],
   records: ["Maintenance & Records", "Service, assignments & history", "folder_managed", "Fleet Ops"],
   radar: ["Course Map", "Live fleet tracking & geofences", "my_location", "Fleet Ops"]
 };
-const RENDER = { overview: renderOverview, fleet: renderFleet, fuel: () => renderLedger(), shifts: () => renderShifts(), records: () => renderRecords(), radar: renderRadarPanel, zones: renderZonePanel, registry: renderRegistry, expenses: renderLocalExpenseLedger, users: renderUsersMaster, incidents: renderIncidents, turfcare: renderTurfCare };
+const RENDER = { overview: renderOverview, fleet: renderFleet, fuel: () => renderLedger(), shifts: () => renderShifts(), records: () => renderRecords(), radar: renderRadarPanel, zones: renderZonePanel, registry: renderRegistry, analytics: renderAdvancedAnalytics, expenses: renderLocalExpenseLedger, users: renderUsersMaster, incidents: renderIncidents, turfcare: renderTurfCare };
 const NAV_GROUPS = {
   fleetops: { label: 'Fleet Ops', icon: 'precision_manufacturing', view: 'fleet', pages: [['fleet','Fleet'],['shifts','Run logs'],['records','Maintenance & records'],['radar','Course map']] },
   turfops: { label: 'Turf Ops', icon: 'eco', view: 'turfcare', pages: [] },
-  masters: { label: 'Store & Ledgers', icon: 'inventory_2', view: 'fuel', pages: [['fuel','Fuel ledger'],['registry','Inventory'],['expenses','Local Expenses'],['users','Users']] }
+  masters: { label: 'Store & Ledgers', icon: 'inventory_2', view: 'fuel', pages: [['fuel','Fuel ledger'],['registry','Inventory'],['analytics','Advanced analytics'],['expenses','Local Expenses'],['users','Users']] }
 };
 let activeNavGroup = 'insights';
 function groupForView(v) { if (v === 'overview') return 'insights'; return Object.keys(NAV_GROUPS).find(k => NAV_GROUPS[k].view === v || NAV_GROUPS[k].pages.some(p => p[0] === v) || (k === 'fleetops' && v === 'zones')) || 'insights'; }
@@ -1795,7 +1796,8 @@ const VIEW_COLLECTIONS = {
   records: ['maintenance','assignments','fuel','machines','inventory'],
   radar: ['live','zones'],
   zones: ['zones'],
-  registry: ['inventory','inwards'],
+  registry: ['inventory','inwards','movements','stockCounts'],
+  analytics: ['inventory','inwards','movements','stockCounts','fuel','machines','shifts','plans','maintenance','logs'],
   expenses: ['expenses'],
   users: ['users'],
   incidents: ['logs'],
@@ -1968,10 +1970,13 @@ const H = {
   'export-run': () => { const { st, rows } = runData(); downloadCSV(`running_hours_${st.from}_to_${st.to}.csv`, [['Machine', 'Category', 'Operators', 'Shifts', 'Run hours', 'Distance km', 'Fuel L', 'L/hr'], ...rows.map(r => [r.name, r.cat, [...r.ops].join('; '), r.n, +r.H.toFixed(2), +r.km.toFixed(2), +r.L.toFixed(2), r.H && r.L ? +(r.L / r.H).toFixed(2) : ''])]); },
   'add-inward': () => openInward(),
   'issue-stock': () => openStockIssue(),
+  'physical-count': () => openPhysicalCount(),
+  'run-analytics': () => renderAdvancedAnalytics(),
   'adjust-stock': () => openStockAdjustment(),
   'export-stock': () => downloadCSV('inventory_stock.csv',[['Category','Item','Unit','Stock','Auto reorder at','Rate basis','Unit rate'],...S.inventory.map(i=>[i.category,itemName(i),i.unit||'Nos',i.stockQuantity,effectiveReorderLevel(i),autoReorderDetails(i).method,i.unitCost])]),
   'export-inwards': () => downloadCSV('goods_inwards.csv',[['Date','Invoice','Supplier','Category','Item','Unit','Qty','Rate','GST %','Taxable','GST amount','Total'],...S.inwards.map(r=>[r.receiptDate,r.invoiceNumber,r.supplier,r.category,r.itemName,r.unit,r.quantity,r.rate,r.gstPercent,r.taxableAmount,r.gstAmount,r.total])]),
   'export-movements': () => downloadCSV('stock_movements.csv',[['Date','Item ID','Item','Category','Movement','Qty delta','Before','After','Unit','Unit cost','Value','Reason','Reference','Issued to','Performed by'],...(S.movements||[]).map(m=>[normDate(null,m.createdAt),m.itemId,m.itemName,m.category,m.movementType,m.quantityDelta,m.quantityBefore,m.quantityAfter,m.unit,m.unitCost,m.value,m.reason,m.reference,m.issuedTo,m.performedBy])]),
+  'export-analytics': () => { const a=latestAnalytics||renderAdvancedAnalytics(); if(!a)return; downloadCSV('dark-ops-decision-intelligence.csv',[['Section','Item','Category','Stock','Value','ABC','XYZ','Forecast 30d','Reorder point','EOQ','Days cover','Recommended order','Status'],...a.items.map(i=>['Inventory',i.name,i.category,i.qty,i.value,i.abc,i.demandClass,i.forecast30,i.reorderPoint,i.eoq,i.daysCover,i.recommendedOrder,i.stockoutRisk?'STOCKOUT RISK':i.low?'REORDER':'OK']),...a.variances.map(v=>['Physical count',v.itemName||v.itemId,v.category||'',v.countedQuantity,v.varianceValue,'','','','','','', '',v.status||'REVIEW'])]); },
   'edit-user': d => { const u=S.users.find(x=>x.id===d.id); if(!u) return toast('User record not found','err'); openForm({title:'Edit workforce member',submit:'Save changes',html:fld('Full name','<input id="euName" required>')+fld('Mobile number','<input id="euMob" inputmode="tel" required>','Saved in normalized +91 format where applicable.')+fld('Role','<select id="euRole"><option value="operator">Operator</option><option value="incharge">Incharge</option><option value="storekeeper">Storekeeper (Fuel Ledger)</option><option value="storekeeper_fertilizer">Storekeeper (Fertilizers & Pesticides)</option></select>'),onSubmit:async()=>{const name=$('#euName').value.trim(), mob=normMobile($('#euMob').value), role=$('#euRole').value;if(!name){toast('Name is required','err');return false;}if(!/^\+\d{10,14}$/.test(mob)){toast('Enter a valid mobile number','err');return false;}if(S.users.some(x=>x.id!==u.id&&x.mobileNumber===mob)){toast('This mobile number is already registered','err');return false;}await updateDoc(doc(db,CONFIG.COL.users,u.id),{fullName:name,username:name,mobileNumber:mob,role});toast('User profile updated');}});setTimeout(()=>{if($('#euName'))$('#euName').value=u.fullName||u.username||'';if($('#euMob'))$('#euMob').value=u.mobileNumber||'';if($('#euRole'))$('#euRole').value=u.role||'operator';},0); },
   'add-user': () => openForm({ title: 'Register workforce member', submit: 'Add user',
     html: fld('Full name', '<input id="uName" placeholder="e.g. Rajesh Kumar">') + fld('Mobile number', '<input id="uMob" inputmode="tel" placeholder="98765 43210">', 'Saved as +91XXXXXXXXXX so the app login can match it.') + fld('Role', '<select id="uRole"><option value="operator">Operator</option><option value="incharge">Incharge</option><option value="storekeeper">Storekeeper (Fuel Ledger)</option><option value="storekeeper_fertilizer">Storekeeper (Fertilizers & Pesticides)</option></select>'),
