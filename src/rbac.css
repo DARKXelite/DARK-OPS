@@ -29,3 +29,15 @@
 .pin-dot.filled{background:linear-gradient(145deg,#E5C794,#D5B77D);border-color:#1D4533;color:#10291D;box-shadow:0 0 0 2px rgba(29,69,51,.08),0 5px 14px rgba(29,69,51,.13);transform:translateY(-1px)}
 .pin-error{color:#A52F2F}.pin-foot{color:rgba(29,69,51,.58)}
 @media(max-width:420px){.pin-logo{width:min(100%,300px);margin-bottom:10px}.pin-dots{gap:6px;width:100%}.pin-dot{font-size:13px}.pin-subtitle{margin-bottom:23px}}
+
+/* Minimal olive-glass PIN-only screen */
+#pinGate{background:radial-gradient(ellipse at 50% 50%,rgba(116,129,70,.18),transparent 58%),#20251b;color:#e7e8d9}
+.pin-shell{width:min(100%,420px);gap:0}
+.pin-logo{width:min(100%,340px);height:auto;aspect-ratio:1;object-fit:contain;margin:0 0 20px;filter:none}
+.pin-input-capture{position:absolute;opacity:.01;width:1px;height:1px;left:50%;top:50%;font-size:16px;pointer-events:none}
+.pin-dots{display:grid;grid-template-columns:repeat(8,minmax(0,1fr));gap:9px;width:min(100%,360px);margin:0}
+.pin-dot{display:grid;place-items:center;width:100%;aspect-ratio:1;border-radius:50%;border:1px solid rgba(205,213,158,.28);background:linear-gradient(145deg,rgba(255,255,255,.14),rgba(114,128,68,.12));box-shadow:inset 0 1px 0 rgba(255,255,255,.17),inset 0 -5px 12px rgba(0,0,0,.12),0 6px 18px rgba(0,0,0,.14);backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);color:#f0e6c7;font-size:15px;font-weight:650;transition:background .12s,border-color .12s,transform .12s}
+.pin-dot.filled{background:linear-gradient(145deg,#8c9560,#687747);border-color:#d4d7b0;color:#fff9e9;box-shadow:0 0 0 1px rgba(205,213,158,.12),0 5px 14px rgba(0,0,0,.2);transform:translateY(-1px)}
+.pin-error{min-height:20px;color:#f0b7a8;margin-top:12px}
+.pin-foot,.pin-eyebrow,.pin-title,.pin-subtitle{display:none!important}
+@media(max-width:420px){.pin-shell{width:100%}.pin-logo{width:min(100%,300px);margin-bottom:18px}.pin-dots{gap:6px}.pin-dot{font-size:13px}}
