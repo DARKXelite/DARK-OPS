@@ -1538,6 +1538,7 @@ function renderRegistry() {
   const receipts=[...S.inwards].sort((a,b)=>tsMs(b.createdAt)-tsMs(a.createdAt));
   setHTML($('#inwardTbl'), `<table><thead><tr><th>Date / Reference</th><th>Category / Item</th><th>Supplier</th><th class="num">Qty</th><th class="num">Rate</th><th class="num">GST</th><th class="num">Total</th></tr></thead><tbody>${!LOADED.inwards?'<tr><td colspan="7">Loading receipts…</td></tr>':receipts.length?receipts.slice(0,100).map(r=>`<tr><td>${esc(r.receiptDate||'—')}<div class="muted sm">${esc(r.invoiceNumber||r.id)}</div></td><td><span class="muted sm">${esc(r.category||'')}</span><div><b>${esc(r.itemName||'')}</b></div></td><td>${esc(r.supplier||'—')}</td><td class="num">${fmt(r.quantity,3)} ${esc(r.unit||'')}</td><td class="num">${money(r.rate,2)}</td><td class="num">${fmt(r.gstPercent,2)}%</td><td class="num"><b>${money(r.total,2)}</b></td></tr>`).join(''):'<tr><td colspan="7" class="empty">No goods receipts recorded.</td></tr>'}</tbody></table>`);
   renderStockMovementLedger();
+  renderStockCounts();
   renderLocalExpenseLedger();
 }
 // Collapse content when a category closes so large inventory masters do not leave hundreds of rows in the DOM.
@@ -1664,6 +1665,79 @@ function renderStockMovementLedger() {
   const rows=[...(S.movements||[])].sort((a,b)=>tsMs(b.createdAt)-tsMs(a.createdAt));
   setHTML(target,'<table><thead><tr><th>Date</th><th>Item</th><th>Movement</th><th class="num">Change</th><th class="num">Before</th><th class="num">After</th><th>Reason / reference</th><th>By / to</th></tr></thead><tbody>'+(!LOADED.movements?'<tr><td colspan="8">Loading movements…</td></tr>':rows.length?rows.slice(0,200).map(m=>'<tr><td>'+esc(normDate(null,m.createdAt)||'—')+'</td><td><b>'+esc(m.itemName||'Unknown item')+'</b><div class="muted sm">'+esc(m.category||'')+'</div></td><td><span class="badge '+(m.movementType==='ISSUE'?'warn':m.movementType==='ADJUSTMENT'?'gold':'ok')+'">'+esc(m.movementType||'—')+'</span></td><td class="num">'+(num(m.quantityDelta)>0?'+':'')+fmt(m.quantityDelta,3)+' '+esc(m.unit||'')+'</td><td class="num">'+fmt(m.quantityBefore,3)+'</td><td class="num"><b>'+fmt(m.quantityAfter,3)+'</b></td><td>'+esc(m.reason||'—')+'<div class="muted sm">'+esc(m.reference||m.invoiceNumber||'')+'</div></td><td>'+esc(m.performedBy||m.issuedTo||'—')+'</td></tr>').join(''):'<tr><td colspan="8" class="empty">No stock movements recorded yet.</td></tr>')+'</tbody></table>');
 }
+
+let latestAnalytics = null;
+function openPhysicalCount() {
+  openForm({title:'Record physical closing stock',submit:'Save physical count',html:
+    '<div class="alert-box" style="margin-bottom:12px"><b>Audit control:</b> this records the count and variance. It does not change official stock. Historical expected balances are estimates when the movement ledger is incomplete.</div>'+
+    '<div class="row2">'+fld('Closing stock date','<input id="countDate" type="date" value="'+today()+'" required>')+fld('Inventory item','<select id="countItem" required>'+inventoryItemOptions()+'</select>')+'</div>'+
+    '<div class="row2">'+fld('Physical quantity counted','<input id="countQty" type="number" min="0" step="any" required placeholder="Include zero if empty">')+fld('Counted by','<input id="countBy" required placeholder="Storekeeper / verifier">')+'</div>'+
+    fld('Count notes / reason','<input id="countNotes" placeholder="Count sheet, damaged stock, recount notes...">')+
+    '<div id="countPreview" class="hint">Select an item and enter the physical quantity to compare it with the book balance.</div>',
+    onSubmit:async()=>{
+      const itemId=$('#countItem').value,item=S.inventory.find(i=>i.id===itemId),countDate=$('#countDate').value,physical=Number($('#countQty').value),countedBy=$('#countBy').value.trim();
+      if(!item||!countDate||!countedBy||!Number.isFinite(physical)||physical<0){toast('Enter a valid date, item, non-negative physical quantity and counted-by name','err');return false;}
+      if(countDate>today()){toast('Closing stock date cannot be in the future','err');return false;}
+      const created=normDate(null,item.createdAt);
+      if(created&&countDate<created){toast('Count date is before this item master was created','err');return false;}
+      if(S.stockCounts.some(x=>x.itemId===itemId&&x.countDate===countDate&&!x.voided)){toast('A physical count already exists for this item and date. Review it instead of creating a duplicate.','err');return false;}
+      const later=(S.movements||[]).filter(m=>m.itemId===itemId&&((normDate(null,m.createdAt)||m.date||'')>countDate));
+      const futureDelta=later.reduce((s,m)=>s+num(m.quantityDelta),0);
+      const expected=+(num(item.stockQuantity)-futureDelta).toFixed(4);
+      const variance=+(physical-expected).toFixed(4),cost=Math.max(0,num(item.unitCost));
+      const firstMovement=(S.movements||[]).filter(m=>m.itemId===itemId).map(m=>normDate(null,m.createdAt)).filter(Boolean).sort()[0]||'';
+      const confidence=countDate<today()?'ESTIMATE':'CURRENT_BOOK_SNAPSHOT';
+      const incomplete=!firstMovement||firstMovement>countDate;
+      const status=Math.abs(variance)<0.0001?'MATCH':'VARIANCE_REVIEW';
+      await addDoc(collection(db,CONFIG.COL.stockCounts),{
+        itemId,itemName:itemName(item),category:item.category||'Other',unit:item.unit||'Nos',
+        countDate,expectedQuantity:expected,countedQuantity:physical,varianceQuantity:variance,
+        unitCost:cost,varianceValue:+(variance*cost).toFixed(2),status,confidence,
+        ledgerCoverage:incomplete?'INCOMPLETE_OR_UNVERIFIED':'AVAILABLE_MOVEMENTS_ONLY',
+        laterMovementCount:later.length,notes:$('#countNotes').value.trim(),countedBy,
+        createdAt:serverTimestamp(),voided:false
+      });
+      toast(Math.abs(variance)<0.0001?'Physical count saved: no variance':'Physical count saved: variance flagged for review',Math.abs(variance)<0.0001?'ok':'err');
+      scheduleRender();
+    }
+  });
+  const preview=()=>{const item=S.inventory.find(i=>i.id===$('#countItem')?.value);if(!item)return;const d=$('#countDate')?.value||today(),p=Number($('#countQty')?.value),future=(S.movements||[]).filter(m=>m.itemId===item.id&&(normDate(null,m.createdAt)||'')>d).reduce((s,m)=>s+num(m.quantityDelta),0),expected=+(num(item.stockQuantity)-future).toFixed(4),variance=Number.isFinite(p)&&p>=0?p-expected:null;setHTML($('#countPreview'),'<b>Estimated book closing balance:</b> '+fmt(expected,3)+' '+esc(item.unit||'units')+(variance===null?'':' · <b>Variance:</b> '+(variance>0?'+':'')+fmt(variance,3)+' '+esc(item.unit||'units')+' ('+money(variance*num(item.unitCost),2)+')')+'<div class="muted sm">Historical dates are reconstructed from recorded movements after that date. Verify ledger completeness before relying on the estimate.</div>');};
+  $('#countItem')?.addEventListener('change',preview);$('#countDate')?.addEventListener('change',preview);$('#countQty')?.addEventListener('input',preview);preview();
+}
+function renderStockCounts() {
+  const target=$('#stockCountsTbl');if(!target)return;
+  const rows=[...(S.stockCounts||[])].filter(c=>!c.voided).sort((a,b)=>String(b.countDate||'').localeCompare(String(a.countDate||'')));
+  setHTML(target,'<table><thead><tr><th>Count date</th><th>Item</th><th class="num">Book qty</th><th class="num">Physical qty</th><th class="num">Variance</th><th class="num">Value variance</th><th>Confidence</th><th>Status</th><th>Counted by</th></tr></thead><tbody>'+(!LOADED.stockCounts?'<tr><td colspan="9">Loading physical counts…</td></tr>':rows.length?rows.slice(0,200).map(x=>'<tr><td>'+esc(x.countDate||'—')+'</td><td><b>'+esc(x.itemName||x.itemId||'Unknown item')+'</b><div class="muted sm">'+esc(x.category||'')+'</div></td><td class="num">'+fmt(x.expectedQuantity,3)+' '+esc(x.unit||'')+'</td><td class="num">'+fmt(x.countedQuantity,3)+' '+esc(x.unit||'')+'</td><td class="num"><b>'+(num(x.varianceQuantity)>0?'+':'')+fmt(x.varianceQuantity,3)+'</b></td><td class="num">'+money(x.varianceValue,2)+'</td><td><span class="badge '+(x.confidence==='ESTIMATE'?'warn':'ok')+'">'+esc(x.confidence||'—')+'</span><div class="muted sm">'+esc(x.ledgerCoverage||'')+'</div></td><td><span class="badge '+(x.status==='MATCH'?'ok':'warn')+'">'+esc(x.status||'—')+'</span></td><td>'+esc(x.countedBy||'—')+'</td></tr>').join(''):'<tr><td colspan="9" class="empty">No closing physical counts recorded. Use “Closing stock count” to begin variance tracking.</td></tr>')+'</tbody></table>');
+}
+function renderAdvancedAnalytics() {
+  const host=$('#analyticsKpis');if(!host)return null;
+  const asOf=$('#analyticsAsOf')?.value||today();
+  const leadDays=clamp(num($('#analyticsLeadDays')?.value)||7,1,365);
+  const orderCost=Math.max(0,num($('#analyticsOrderCost')?.value)||250);
+  const annualHoldingRate=clamp(num($('#analyticsHoldingRate')?.value)||20,1,100)/100;
+  if($('#analyticsAsOf')&&!$('#analyticsAsOf').value)$('#analyticsAsOf').value=asOf;
+  const result=analyzeInventory({items:S.inventory,movements:S.movements,counts:S.stockCounts,
+    fuel:(S.fuel||[]).map(f=>({...f,ratePerLitre:rateForFuelLog(f)})),shifts:S.shifts,machines:S.machines,
+    plans:S.plans,maintenance:S.maintenance,logs:S.logs,asOf,leadDays,orderCost,annualHoldingRate,serviceZ:1.65});
+  latestAnalytics=result;
+  const k=result.summary;
+  setHTML(host,'<div class="kpi"><div class="kpi-label">Recorded stock value</div><div class="kpi-value">'+money(k.stockValue,0)+'</div></div><div class="kpi"><div class="kpi-label">Reorder candidates</div><div class="kpi-value">'+k.lowStockCount+'</div></div><div class="kpi"><div class="kpi-label">Stockout risk</div><div class="kpi-value">'+k.stockoutRiskCount+'</div></div><div class="kpi"><div class="kpi-label">Count variance exposure</div><div class="kpi-value">'+money(k.varianceExposure,0)+'</div></div><div class="kpi"><div class="kpi-label">Unknown-cost SKUs</div><div class="kpi-value">'+k.unpricedCount+'</div></div><div class="kpi"><div class="kpi-label">Open operational issues</div><div class="kpi-value">'+k.unresolvedIssues+'</div></div>');
+  const severityLabel=s=>s==='high'?'High priority':s==='medium'?'Review':'Information';
+  setHTML($('#analyticsInsights'),result.insights.length?'<div class="insight-list" style="padding:12px;display:grid;gap:10px">'+result.insights.map(i=>'<div class="card" style="padding:12px"><div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><span class="badge '+(i.severity==='high'?'warn':'gold')+'">'+severityLabel(i.severity)+'</span><b>'+esc(i.title)+'</b></div><p style="margin:8px 0">'+esc(i.detail)+'</p><div class="muted sm"><b>Recommended next action:</b> '+esc(i.action)+'</div></div>').join('')+'</div>':'<div class="empty">No decision alerts from the currently recorded data.</div>');
+  setHTML($('#analyticsInventoryTbl'),'<table><thead><tr><th>Item</th><th>ABC / XYZ</th><th class="num">On hand</th><th class="num">Value</th><th class="num">30d forecast</th><th class="num">Reorder point</th><th class="num">Safety stock</th><th class="num">EOQ</th><th class="num">Days cover</th><th class="num">Suggested order</th><th>Status</th></tr></thead><tbody>'+ (result.items.length?result.items.map(i=>'<tr><td><b>'+esc(i.name)+'</b><div class="muted sm">'+esc(i.category)+' · '+esc(i.sourceCoverage)+'</div></td><td><span class="badge">'+esc(i.abc||'N/A')+' / '+esc(i.demandClass)+'</span></td><td class="num">'+fmt(i.qty,2)+' '+esc(i.unit)+'</td><td class="num">'+(i.unpriced?'<span class="muted">Unpriced</span>':money(i.value,2))+'</td><td class="num">'+fmt(i.forecast30,2)+'</td><td class="num">'+fmt(i.reorderPoint,2)+'</td><td class="num">'+fmt(i.safetyStock,2)+'</td><td class="num">'+fmt(i.eoq,2)+'</td><td class="num">'+(i.daysCover===null?'Insufficient data':fmt(i.daysCover,1))+'</td><td class="num"><b>'+fmt(i.recommendedOrder,2)+'</b></td><td><span class="badge '+(i.stockoutRisk?'warn':i.low?'gold':'ok')+'">'+(i.stockoutRisk?'Stockout risk':i.low?'Review reorder':'Monitor')+'</span></td></tr>').join(''):'<tr><td colspan="11" class="empty">No inventory masters found.</td></tr>')+'</tbody></table>');
+  setHTML($('#analyticsVarianceTbl'),'<table><thead><tr><th>Date</th><th>Item</th><th class="num">Book qty</th><th class="num">Counted</th><th class="num">Variance</th><th class="num">Exposure</th><th>Confidence / status</th></tr></thead><tbody>'+ (result.variances.length?result.variances.slice(0,100).map(v=>'<tr><td>'+esc(v.countDate||'—')+'</td><td><b>'+esc(v.itemName||v.itemId||'Unknown')+'</b></td><td class="num">'+fmt(v.expectedQuantity,3)+'</td><td class="num">'+fmt(v.countedQuantity,3)+'</td><td class="num"><b>'+(num(v.varianceQuantity)>0?'+':'')+fmt(v.varianceQuantity,3)+' '+esc(v.unit||'')+'</b></td><td class="num">'+money(v.varianceValue,2)+'</td><td>'+esc(v.confidence||'—')+' · '+esc(v.status||'Review')+'</td></tr>').join(''):'<tr><td colspan="7" class="empty">No recorded physical count variances.</td></tr>')+'</tbody></table>');
+  setHTML($('#analyticsFleetTbl'),'<table><thead><tr><th>Machine</th><th class="num">Litres</th><th class="num">Hours</th><th class="num">L / engine hour</th><th class="num">Fuel cost / hour</th></tr></thead><tbody>'+ (result.machineEfficiency.length?result.machineEfficiency.slice(0,30).map(m=>'<tr><td>'+esc(m.name)+'</td><td class="num">'+fmt(m.litres,1)+'</td><td class="num">'+fmt(m.hours,1)+'</td><td class="num"><b>'+fmt(m.lph,2)+'</b></td><td class="num">'+(m.costPerHour===null?'—':money(m.costPerHour,2))+'</td></tr>').join(''):'<tr><td colspan="5" class="empty">Insufficient matched fuel and engine-hour data.</td></tr>')+'</tbody></table>');
+  setHTML($('#analyticsAnomalyTbl'),'<table><thead><tr><th>Date</th><th class="num">Issued qty</th><th class="num">Robust z</th></tr></thead><tbody>'+ (result.anomalies.length?result.anomalies.slice(0,30).map(a=>'<tr><td>'+esc(a.date)+'</td><td class="num">'+fmt(a.quantity,2)+'</td><td class="num">'+fmt(a.robustZ,2)+'</td></tr>').join(''):'<tr><td colspan="3" class="empty">No flagged issue-volume anomalies, or not enough history to detect them.</td></tr>')+'</tbody></table>');
+  const methods=[result.abcMethod,result.xyzMethod,result.anomalyMethod,
+    'Safety stock = service factor × daily demand standard deviation × √lead time. Reorder point = average daily issue quantity × lead time + safety stock.',
+    'EOQ = √(2 × annualized recorded demand × order cost ÷ annual holding cost per unit). Holding rate and order cost are configurable assumptions.',
+    'Forecast blends a linear trend projection with recent monthly average. Six-month histories are short-horizon planning signals, not guaranteed predictions.',
+    'Physical count variance = counted quantity − reconstructed book quantity. Positive means surplus; negative means shortage. Variance value is signed; insights show absolute exposure.',
+    ...result.limitations];
+  setHTML($('#analyticsMethodology'),'<ul style="padding-left:20px;margin:0;display:grid;gap:7px">'+methods.map(m=>'<li>'+esc(m)+'</li>').join('')+'</ul>');
+  return result;
+}
+
 function openInward() {
   const cats=STORE_CATS.map(c=>`<option value="${esc(c)}">${esc(c)}</option>`).join('');
   openForm({title:'Goods inward / Stock receipt',submit:'Post inward',html:
