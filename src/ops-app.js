@@ -1734,13 +1734,13 @@ function renderStockCounts() {
   setHTML(target,'<table><thead><tr><th>Count date</th><th>Item</th><th class="num">Book qty</th><th class="num">Physical qty</th><th class="num">Variance</th><th class="num">Value variance</th><th>Confidence</th><th>Status</th><th>Counted by</th><th></th></tr></thead><tbody>'+(!LOADED.stockCounts?'<tr><td colspan="9">Loading physical counts…</td></tr>':rows.length?rows.slice(0,200).map(x=>'<tr><td>'+esc(x.countDate||'—')+'</td><td><b>'+esc(x.itemName||x.itemId||'Unknown item')+'</b><div class="muted sm">'+esc(x.category||'')+'</div></td><td class="num">'+fmt(x.expectedQuantity,3)+' '+esc(x.unit||'')+'</td><td class="num">'+fmt(x.countedQuantity,3)+' '+esc(x.unit||'')+'</td><td class="num"><b>'+(num(x.varianceQuantity)>0?'+':'')+fmt(x.varianceQuantity,3)+'</b></td><td class="num">'+money(x.varianceValue,2)+'</td><td><span class="badge '+(x.confidence==='ESTIMATE'?'warn':'ok')+'">'+esc(x.confidence||'—')+'</span><div class="muted sm">'+esc(x.ledgerCoverage||'')+'</div></td><td><span class="badge '+(x.status==='MATCH'?'ok':x.status==='RESOLVED'?'ok':'warn')+'">'+esc(x.status||'—')+'</span></td><td>'+esc(x.countedBy||'—')+'</td><td>'+(x.status==='VARIANCE_REVIEW'?'<button class="btn btn-sm" data-act="resolve-stock-count" data-id="'+esc(x.id)+'">Resolve</button>':x.status==='RESOLVED'?'<span class="muted sm">'+esc(x.resolvedBy||'Reviewed')+'</span>':'—')+'</td></tr>').join(''):'<tr><td colspan="10" class="empty">No closing physical counts recorded. Use “Closing stock count” to begin variance tracking.</td></tr>')+'</tbody></table>');
 }
 function analysisQualityRow(title,count,detail,source){
- const action=source?§<button class="btn btn-sm" data-act="analytics-open-records" data-source="@{esc(source)}">Open records</button>§:"";
- return §<div class="record-quality-row"><div><b>@{esc(title)}</b><small>@{esc(detail)}</small></div><div style="display:flex;align-items:center;gap:8px"><strong>@{fmt(count,0)}</strong>@{action}</div></div>§;
+ const action=source?`<button class="btn btn-sm" data-act="analytics-open-records" data-source="${esc(source)}">Open records</button>`:"";
+ return `<div class="record-quality-row"><div><b>${esc(title)}</b><small>${esc(detail)}</small></div><div style="display:flex;align-items:center;gap:8px"><strong>${fmt(count,0)}</strong>${action}</div></div>`;
 }
 function renderOperationalRecordAnalytics(asOf=today()){
  const turfHost=$("#analyticsTurfLifecycle"),qualityHost=$("#analyticsDataQuality");if(!turfHost||!qualityHost)return;
  const from=addDays(asOf,-89),allPlans=(S.plans||[]).filter(p=>{const d=recordDateFor("plans",p);return d&&d>=from&&d<=asOf;});
- const life=summarizeTurfLifecycle(S.plans||[],asOf);
+ const turfPlans=(S.plans||[]).filter(p=>isTurfCategory(turfPlanCategory(p)));const life=summarizeTurfLifecycle(turfPlans,asOf);
  const countStatus=status=>String(status||"").toLowerCase();
  const recent=(source,rows)=>(rows||[]).filter(r=>{const d=recordDateFor(source,r);return d&&d>=from&&d<=asOf;});
  const recentFuel=recent("fuel",S.fuel),recentPlans=allPlans,recentMaintenance=recent("maintenance",S.maintenance),recentMovements=recent("movements",S.movements);
@@ -1749,10 +1749,10 @@ function renderOperationalRecordAnalytics(asOf=today()){
  const planNoProduct=recentPlans.filter(p=>!(p.productId||p.itemId)).length;
  const planNoArea=recentPlans.filter(p=>!(p.targetArea||p.area||p.location)).length;
  const planNoQty=recentPlans.filter(p=>!(num(p.targetQty??p.plannedQty??p.quantity??p.qty)>0)||!(p.unit||p.stockUnit)).length;
- const maintenanceIncomplete=recentMaintenance.filter(r=>!(r.machineId||r.machineName)&&!(r.performedBy||r.technician)).length;
+ const maintenanceIncomplete=recentMaintenance.filter(r=>!(r.machineId||r.machineName)||!(r.performedBy||r.technician)).length;
  const movementMissingReference=recentMovements.filter(m=>!(m.reference||m.invoiceNumber||m.linkedPlanId||m.turfPlanId)&&!["OPENING"].includes(String(m.movementType||"").toUpperCase())).length;
- const unlinkedPlans=(S.plans||[]).filter(p=>["issued","applied"].includes(countStatus(p.status))&&!p.issueMovementId).length;
- const appliedNoQty=(S.plans||[]).filter(p=>countStatus(p.status)==="applied"&&!(num(p.appliedQty)>0)).length;
+ const unlinkedPlans=turfPlans.filter(p=>["issued","applied"].includes(countStatus(p.status))&&!p.issueMovementId).length;
+ const appliedNoQty=turfPlans.filter(p=>countStatus(p.status)==="applied"&&!(num(p.appliedQty)>0)).length;
  const openIncidents=(S.logs||[]).filter(l=>(l.repairStatus||"Pending")!=="Resolved").length;
  const openCounts=(S.stockCounts||[]).filter(c=>!c.voided&&c.status==="VARIANCE_REVIEW").length;
  const data=[
@@ -1764,7 +1764,7 @@ function renderOperationalRecordAnalytics(asOf=today()){
   {label:"Issue link gaps",value:life.issuedWithoutMovementLink,sub:"Issued/applied plans without a linked store movement"},
   {label:"Applied quantity gaps",value:life.appliedWithoutRecordedQuantity,sub:"Marked applied without a positive recorded quantity"}
  ];
- setHTML(turfHost,data.map(x=>§<div class="record-quality-row"><div><b>@{esc(x.label)}</b><small>@{esc(x.sub)}</small></div><strong>@{fmt(x.value,0)}</strong></div>§).join("")+§<p class="muted sm">Coverage window for data-quality checks: @{from} to @{asOf}. Status counts include records up to the analysis date; a saved status alone is not proof of physical application.</p>§);
+ setHTML(turfHost,data.map(x=>`<div class="record-quality-row"><div><b>${esc(x.label)}</b><small>${esc(x.sub)}</small></div><strong>${fmt(x.value,0)}</strong></div>`).join("")+`<p class="muted sm">Coverage window for data-quality checks: ${from} to ${asOf}. Status counts include records up to the analysis date; a saved status alone is not proof of physical application.</p>`);
  const quality=[
   ["Turf plans missing a product link",planNoProduct,"Recent plans that cannot safely post stock against an item","plans"],
   ["Turf plans missing treated area",planNoArea,"Recent plans without an area/location","plans"],
@@ -1778,7 +1778,7 @@ function renderOperationalRecordAnalytics(asOf=today()){
   ["Stock variances awaiting review",openCounts,"Physical count discrepancies not yet reviewed","stockCounts"],
   ["Open operational incidents",openIncidents,"Incidents not marked resolved","logs"]
  ];
- setHTML(qualityHost,quality.map(x=>analysisQualityRow(x[0],x[1],x[2],x[3])).join("")+§<p class="muted sm">These are completeness and control signals, not confirmed losses or errors. The 90-day window is used for record-field checks; open incidents and unresolved physical counts are all-time outstanding totals.</p>§);
+ setHTML(qualityHost,quality.map(x=>analysisQualityRow(x[0],x[1],x[2],x[3])).join("")+`<p class="muted sm">These are completeness and control signals, not confirmed losses or errors. The 90-day window is used for record-field checks; open incidents and unresolved physical counts are all-time outstanding totals.</p>`);
 }
 function renderAdvancedAnalytics() {
   const host=$('#analyticsKpis');if(!host)return null;
@@ -1898,7 +1898,7 @@ function recordStatusText(source,r){
 }
 function recordsForCurrentFilters(){return filterOperationalRecordFeed(buildOperationalRecordFeed(S,RECORD_SOURCE_KEYS,recordDateFor),{source:recordsTab,query:recordsSearchText,from:recordsFrom,to:recordsTo});}
 function renderRecordSavedViews(){const el=$("#recordsSavedViews");if(!el)return;const options='<option value="">Choose saved view…</option>'+recordsSavedViews.map(v=>`<option value="${esc(v.id)}">${esc(v.name)}</option>`).join("");if(el.innerHTML!==options)el.innerHTML=options;el.value=recordsSavedViews.some(v=>v.id===recordsSelectedView)?recordsSelectedView:"";}
-function recordNeedsAttentionCount(){const turf=summarizeTurfLifecycle(S.plans||[],today()),variances=(S.stockCounts||[]).filter(c=>!c.voided&&c.status==="VARIANCE_REVIEW").length,incidents=(S.logs||[]).filter(l=>(l.repairStatus||"Pending")!=="Resolved").length,unlinkedIssues=(S.plans||[]).filter(p=>["issued","applied"].includes(String(p.status||"").toLowerCase())&&!p.issueMovementId).length,expenses=(S.expenses||[]).filter(e=>expIsMine(e)&&!expIsReclaimed(e)).length;return{total:turf.overdue+variances+incidents+unlinkedIssues+expenses,turf:turf.overdue,variances,incidents,unlinkedIssues,expenses};}
+function recordNeedsAttentionCount(){const turf=summarizeTurfLifecycle((S.plans||[]).filter(p=>isTurfCategory(turfPlanCategory(p))),today()),variances=(S.stockCounts||[]).filter(c=>!c.voided&&c.status==="VARIANCE_REVIEW").length,incidents=(S.logs||[]).filter(l=>(l.repairStatus||"Pending")!=="Resolved").length,unlinkedIssues=(S.plans||[]).filter(p=>["issued","applied"].includes(String(p.status||"").toLowerCase())&&!p.issueMovementId).length,expenses=(S.expenses||[]).filter(e=>expIsMine(e)&&!expIsReclaimed(e)).length;return{total:turf.overdue+variances+incidents+unlinkedIssues+expenses,turf:turf.overdue,variances,incidents,unlinkedIssues,expenses};}
 function recordSummaryTile(label,value,detail){return `<div class="record-summary-tile"><span>${esc(label)}</span><b>${esc(value)}</b><small>${esc(detail)}</small></div>`;}
 function renderRecords(){
  const card=$("#recordsCard");if(!card)return;
