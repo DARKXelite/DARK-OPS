@@ -111,9 +111,9 @@
           </button>
           <div class="ops-domain-kpis" id="opsTurfDomainStats"></div>
           <section class="ops-mini-panel ops-plan-issue-compare">
-            <div class="ops-mini-head"><h4>Planned vs issued</h4><span id="opsPlanIssuePeriod">Today</span></div>
+            <div class="ops-mini-head"><h4>Planned vs issued</h4><div class="ops-plan-issue-actions"><span id="opsPlanIssuePeriod">Today</span><button type="button" class="text-action" data-act="open-turf-variance">View details</button></div></div>
             <div id="opsPlanIssueCompare" class="ops-plan-issue-grid ops-product-compare" data-act="open-turf-variance" role="button" tabindex="0" aria-label="Open planned versus issued variance details"><div class="ops-product-compare-empty">Waiting for turf records…</div></div>
-            <div class="ops-unplanned-issue"><span class="ops-unplanned-label">ISSUED OUTSIDE PLAN</span><div id="opsUnplannedIssues">Waiting for turf records</div></div><div class="muted sm" style="margin-top:8px">Select this card for full variance details and a custom date range.</div>
+            <div class="ops-unplanned-issue"><span class="ops-unplanned-label">ISSUED OUTSIDE PLAN · TODAY</span><div id="opsUnplannedIssues">Waiting for turf records</div></div><div class="muted sm" style="margin-top:8px">View details opens the date-range reconciliation report.</div>
           </section>
           <section class="ops-mini-panel ops-turf-area-plan-card"><div class="ops-mini-head"><h4>Area-wise treatment plan</h4><span>Today</span></div><div id="opsTurfAreaPlan"><div class="ops-product-compare-empty">Loading area-wise schedule…</div></div><div class="muted sm" style="margin-top:8px">Grouped by course area, product and scheduled date.</div></section>
           <div class="ops-turf-category-stack">
@@ -242,7 +242,7 @@
       <section class="turf-pane" id="turfWorkboardPane">
         <div class="turf-workboard-grid">
           <section class="card turf-weekly-card">
-            <div class="turf-card-head"><div><div class="turf-card-eyebrow">WEEKLY SCHEDULE</div><h3>Planned applications</h3><p>Choose a day to add work. Existing plans stay tied to their scheduled date.</p></div><label class="turf-date-label">Week starting<input type="date" id="turfWeekStart" data-chg="turf-week"></label></div>
+            <div class="turf-card-head turf-card-head-planner"><div><div class="turf-card-eyebrow">WEEKLY SCHEDULE</div><h3>Planned applications</h3><p>Choose a day to add work. Existing plans stay tied to their scheduled date.</p></div><div class="turf-planner-head-actions"><label class="turf-date-label">Week starting<input type="date" id="turfWeekStart" data-chg="turf-week"></label><button class="btn btn-primary btn-sm" data-act="open-planner"><span class="material-symbols-rounded">calendar_month</span>Build weekly plan</button></div></div>
             <div class="turf-week-legend"><span><i class="legend-dot fertilizer"></i>Fertilizer</span><span><i class="legend-dot pesticide"></i>Pesticide</span><span><i class="legend-dot enhancer"></i>Turf enhancer</span></div>
             <div id="turfPlannerGrid" class="turf-planner-grid"></div>
           </section>
