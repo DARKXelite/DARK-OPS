@@ -2050,8 +2050,73 @@ if (CONFIG.REQUIRE_LOGIN) {
   $('#signoutBtn').hidden = false; $('#login').hidden = false;
   $('#loginForm').addEventListener('submit', async e => { e.preventDefault(); $('#loginErr').textContent = ''; try { await signInWithEmailAndPassword(auth, $('#loginEmail').value.trim(), $('#loginPass').value); } catch (err) { $('#loginErr').textContent = 'Sign-in failed. Check your email and password.'; } });
   onAuthStateChanged(auth, u => { if (u) { $('#login').hidden = true; startListeners(); } else { stopListeners(); $('#login').hidden = false; } });
-} else startListeners();
+} else initPinGate();
 switchView((location.hash || '').slice(1) || 'overview');
+
+const RBAC = Object.freeze({
+  roles: Object.freeze({
+    admin: Object.freeze(['*']),
+    manager: Object.freeze(['dashboard.read','fleet.read','fleet.write','fuel.read','fuel.write','turf.read','turf.write','inventory.read','inventory.write','expenses.read','expenses.write','reports.read','users.manage']),
+    storekeeper: Object.freeze(['dashboard.read','inventory.read','inventory.write','fuel.read','fuel.write','turf.read','turf.issue','expenses.read']),
+    operator: Object.freeze(['dashboard.read','fleet.read','shifts.write','turf.read','turf.issue'])
+  }),
+  session: { role: null, authenticated: false },
+  can(permission) {
+    const grants = this.roles[this.session.role] || [];
+    return grants.includes('*') || grants.includes(permission);
+  }
+});
+window.CLOVER_RBAC = RBAC;
+
+function initPinGate() {
+  const gate = $('#pinGate'), dots = $('#pinDots [data-dot]'), error = $('#pinError');
+  if (!gate || gate.dataset.initialized === 'true') return;
+  gate.dataset.initialized = 'true';
+  let entered = '', lockedUntil = 0, failures = 0;
+  const refresh = () => {
+    dots.forEach((dot, i) => dot.classList.toggle('filled', i < entered.length));
+    $('#pinDots').setAttribute('aria-label', entered.length + ' of 8 digits entered');
+  };
+  const clear = (message='') => { entered = ''; refresh(); error.textContent = message; };
+  const unlock = () => {
+    // Initial admin PIN requested for setup. This client-side gate is not secure authentication.
+    if (entered === '99114559') {
+      RBAC.session.role = 'admin'; RBAC.session.authenticated = true;
+      gate.hidden = true; document.body.classList.remove('pin-locked');
+      $('#signoutBtn').hidden = false;
+      clear(); startListeners();
+      toast('Welcome, Admin');
+      return;
+    }
+    failures++;
+    if (failures >= 5) { lockedUntil = Date.now() + 30000; failures = 0; clear('Too many attempts. Try again in 30 seconds.'); }
+    else clear('Incorrect PIN. ' + (5 - failures) + ' attempts remaining.');
+  };
+  const press = key => {
+    if (Date.now() < lockedUntil) { error.textContent = 'Please wait before trying again.'; return; }
+    error.textContent = '';
+    if (key === 'clear') { clear(); return; }
+    if (key === 'delete') { entered = entered.slice(0,-1); refresh(); return; }
+    if (!/^\\d$/.test(key) || entered.length >= 8) return;
+    entered += key; refresh();
+    if (entered.length === 8) window.setTimeout(unlock, 100);
+  };
+  $('#pinKeypad').addEventListener('click', e => {
+    const button = e.target.closest('[data-pin-key]');
+    if (button) press(button.dataset.pinKey);
+  });
+  document.addEventListener('keydown', e => {
+    if (gate.hidden) return;
+    if (/^\\d$/.test(e.key)) { e.preventDefault(); press(e.key); }
+    else if (e.key === 'Backspace') { e.preventDefault(); press('delete'); }
+    else if (e.key === 'Escape') press('clear');
+  });
+  $('#signoutBtn').addEventListener('click', () => {
+    RBAC.session.role = null; RBAC.session.authenticated = false;
+    stopListeners(); gate.hidden = false; $('#signoutBtn').hidden = true; clear('Session locked.');
+  });
+  gate.hidden = false; document.body.classList.add('pin-locked'); refresh();
+}
 
 
 
