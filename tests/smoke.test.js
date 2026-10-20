@@ -82,3 +82,18 @@ test("cost analytics uses recorded or inventory rates and leaves unknown fuel un
   assert.equal(svc.fuelLogCost({ litres: 5, fuelType: "Petrol" }), 0);
   assert.equal(svc.fuelCostSummary([{litres:10,fuelType:"Diesel"},{litres:5,fuelType:"Petrol"}]).unpricedLitres, 5);
 });
+
+test("active dashboard entry exposes transactional inventory posting and stock movement controls", async () => {
+  const html = await read("../index.html");
+  const app = await read("../src/ops-app.js");
+  const service = await read("../src/modules/store/inventory-service.js");
+  assert.match(html, /data-act="issue-stock"/);
+  assert.match(html, /data-act="adjust-stock"/);
+  assert.match(html, /id="stockMovementTbl"/);
+  assert.match(app, /createInventoryService/);
+  assert.match(app, /inventoryService\.postGoodsInward/);
+  assert.match(app, /inventoryService\.createItemWithOpeningBalance/);
+  assert.match(app, /renderStockMovementLedger\(\)/);
+  assert.match(service, /Insufficient stock/);
+  assert.match(service, /already been posted/);
+});
