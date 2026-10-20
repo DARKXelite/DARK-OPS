@@ -2074,10 +2074,13 @@ function initPinGate() {
   gate.dataset.initialized = 'true';
   let lockedUntil = 0, failures = 0, busy = false;
   const refresh = () => {
-    input.value = input.value.replace(/\D/g, '').slice(0, 8);
-    dots.forEach((dot, i) => { dot.classList.toggle('filled', i < input.value.length); dot.textContent = input.value[i] || ''; });
+    input.value = input.value.replace(/[^0-9]/g, '').slice(0, 8);
+    dots.forEach((dot, i) => {
+      dot.classList.toggle('filled', i < input.value.length);
+      dot.textContent = input.value[i] || '';
+    });
     $('#pinDots').setAttribute('aria-label', input.value.length + ' of 8 digits entered');
-    if (input.value.length === 8 && !busy) { busy = true; window.setTimeout(unlock, 100); }
+    if (input.value.length === 8 && !busy) { busy = true; window.setTimeout(unlock, 120); }
   };
   const clear = (message='') => { input.value = ''; busy = false; refresh(); error.textContent = message; };
   const unlock = () => {
@@ -2093,13 +2096,16 @@ function initPinGate() {
   };
   input.addEventListener('input', refresh);
   input.addEventListener('keydown', e => { if (e.key === 'Escape') clear(''); });
-  gate.addEventListener('pointerdown', e => { if (!e.target.closest('#pinInput')) input.focus({preventScroll:true}); });
+  gate.addEventListener('pointerdown', e => {
+    if (!e.target.closest('#pinInput')) { e.preventDefault(); input.focus({preventScroll:true}); }
+  });
+  gate.addEventListener('click', () => input.focus({preventScroll:true}));
   $('#signoutBtn').addEventListener('click', () => {
     RBAC.session.role = null; RBAC.session.authenticated = false;
     stopListeners(); gate.hidden = false; $('#signoutBtn').hidden = true; clear(''); input.focus();
   });
   gate.hidden = false; document.body.classList.add('pin-locked'); refresh();
-  window.setTimeout(() => input.focus({preventScroll:true}), 80);
+  window.setTimeout(() => input.focus({preventScroll:true}), 250);
 }
 
 
