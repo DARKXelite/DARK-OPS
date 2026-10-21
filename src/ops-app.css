@@ -1993,3 +1993,21 @@ body:has(#v-turfcare.active) #v-turfcare > .turf-view-tabs {
 .fnb-note { color:var(--muted); font-size:12px; line-height:1.5; }
 @media(max-width:850px) { .fnb-form-grid { grid-template-columns:repeat(2,minmax(0,1fr)); } .fnb-table { min-width:850px; } }
 @media(max-width:520px) { .fnb-form-grid { grid-template-columns:1fr; } .fnb-panel { padding:12px; } }
+
+
+/* F&B smart order import: scoped to the procurement module. */
+.fnb-import-controls{display:grid;grid-template-columns:minmax(220px,1.4fr) minmax(180px,1fr) minmax(150px,.7fr);gap:12px;margin-bottom:12px}
+.fnb-import-controls .field{min-width:0;display:flex;flex-direction:column;gap:6px}
+.fnb-import-controls input[type=file]{width:100%;min-width:0;font-size:12px}
+.fnb-import-empty{padding:14px;border:1px dashed var(--border);border-radius:10px;color:var(--muted);font-size:12px}
+.fnb-import-summary{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:14px 0 8px}
+.fnb-import-table-wrap{max-height:340px;overflow:auto}
+.fnb-import-table-wrap .fnb-table{min-width:760px}
+.fnb-import-skipped{margin-top:10px;color:var(--muted);font-size:12px}
+.fnb-import-skipped summary{cursor:pointer;padding:8px 0}
+.fnb-import-skipped ul{margin:6px 0;padding-left:22px}
+.fnb-import-skipped li{margin:5px 0;overflow-wrap:anywhere}
+.fnb-import-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:14px}
+.fnb-import-actions button:disabled{opacity:.45;cursor:not-allowed}
+.fnb-import-panel code{font-size:11px;color:var(--text);background:var(--surface-2);padding:2px 4px;border-radius:4px}
+@media(max-width:760px){.fnb-import-controls{grid-template-columns:1fr}.fnb-import-actions{justify-content:stretch}.fnb-import-actions button{flex:1}}
