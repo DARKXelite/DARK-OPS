@@ -1966,3 +1966,30 @@ body:has(#v-turfcare.active) #v-turfcare > .turf-view-tabs {
   white-space:nowrap;
   font-size:11px;
 }
+
+
+/* F&B procurement module: scoped styles only. */
+.fnb-shell { display:grid; gap:16px; }
+.fnb-tabs { display:flex; gap:8px; flex-wrap:wrap; }
+.fnb-tab.active { background:var(--accent, #526747); color:#fff; border-color:transparent; }
+.fnb-form-grid { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:12px; }
+.fnb-form-grid .field { min-width:0; }
+.fnb-panel { padding:16px; }
+.fnb-panel-head { display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; margin-bottom:14px; }
+.fnb-panel-head h3 { margin:0; }
+.fnb-table { width:100%; border-collapse:collapse; }
+.fnb-table th,.fnb-table td { padding:10px 12px; text-align:left; border-bottom:1px solid var(--line,rgba(120,130,100,.18)); vertical-align:middle; }
+.fnb-table th { color:var(--muted); font-size:11px; text-transform:uppercase; letter-spacing:.05em; }
+.fnb-days { display:inline-flex; flex-direction:column; min-width:76px; padding:8px 10px; border-radius:10px; background:rgba(160,110,35,.12); color:var(--text); text-align:center; }
+.fnb-days strong { font-size:22px; line-height:1.1; font-variant-numeric:tabular-nums; }
+.fnb-days span { font-size:10px; color:var(--muted); }
+.fnb-days.critical { background:rgba(180,65,45,.15); color:var(--bad,#b44735); }
+.fnb-inline-input { width:95px; min-width:70px; }
+.fnb-status { display:inline-flex; padding:4px 8px; border-radius:999px; font-size:11px; background:rgba(120,130,100,.12); }
+.fnb-status.pending { color:var(--warn,#a36d1c); }
+.fnb-status.partial { color:var(--accent,#526747); }
+.fnb-status.received { color:var(--good,#47734a); }
+.fnb-empty { padding:24px; text-align:center; color:var(--muted); }
+.fnb-note { color:var(--muted); font-size:12px; line-height:1.5; }
+@media(max-width:850px) { .fnb-form-grid { grid-template-columns:repeat(2,minmax(0,1fr)); } .fnb-table { min-width:850px; } }
+@media(max-width:520px) { .fnb-form-grid { grid-template-columns:1fr; } .fnb-panel { padding:12px; } }
