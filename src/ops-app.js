@@ -1835,6 +1835,8 @@ const H = {
   'fnb-tab': d => { fnbModule.setTab(d.tab); renderAll(); },
   'fnb-save-order': () => fnbModule.saveOrder(),
   'fnb-receive': d => fnbModule.receive(d.id),
+  'fnb-import-orders': () => fnbModule.importOrders(),
+  'fnb-clear-import': () => fnbModule.clearImport(),
   'open-data-reset': () => openDataReset(),
   'store-records-tab': d => { storeRecordsTab = d.tab || 'items'; renderStoreRecordsEditor(); },
   'store-delete-item': d => deleteStoreItemFromEditor(d.id),
