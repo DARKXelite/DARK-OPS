@@ -1,6 +1,7 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
 import { getFirestore, collection, addDoc, deleteDoc, doc, updateDoc, setDoc, increment, onSnapshot, getDocs, writeBatch, runTransaction, serverTimestamp, query, where, orderBy } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, signOut } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
+import { createFnbModule } from "./modules/fnb/fnb-module.js";
 
 
 const FUEL_RATE = 92.50; // Legacy reference rate; operational costing is managed in the local cost model.
@@ -23,7 +24,7 @@ const CONFIG = {
   WEATHER_PROXY_URL: '',
   STALE_SEC: 180,              // radar pin turns grey after this many seconds without an update
   WIND_LIMIT: 25,              // km/h, spraying advisory
-  COL: { users:'users', machines:'machines', fuel:'fuel_logs', shifts:'shifts', zones:'CourseZones', live:'live_telemetry', inventory:'inventory', logs:'logs', maintenance:'maintenance_logs', assignments:'assignment_logs', plans:'turf_plans', inwards:'store_inwards', expenses:'local_expenses' }
+  COL: { users:'users', machines:'machines', fuel:'fuel_logs', shifts:'shifts', zones:'CourseZones', live:'live_telemetry', inventory:'inventory', logs:'logs', maintenance:'maintenance_logs', assignments:'assignment_logs', plans:'turf_plans', inwards:'store_inwards', expenses:'local_expenses', fnbOrders:'fnb_orders', fnbReceipts:'fnb_receipts' }
 };
 
 const app = initializeApp(firebaseConfig);
@@ -62,7 +63,7 @@ function daysBetween(a, b) { const out = []; let d = a, n = 0; while (d <= b && 
 function setHTML(el, html) { if (el && el._h !== html) { el.innerHTML = html; el._h = html; } }
 
 /* ================= STATE ================= */
-const S = { users: [], machines: [], fuel: [], shifts: [], zones: [], live: [], inventory: [], logs: [], maintenance: [], assignments: [], plans: [], inwards: [], expenses: [], _v: 0 };
+const S = { users: [], machines: [], fuel: [], shifts: [], zones: [], live: [], inventory: [], logs: [], maintenance: [], assignments: [], plans: [], inwards: [], expenses: [], fnbOrders: [], fnbReceipts: [], _v: 0 };
 const COST_DEFAULTS = { dieselRate: 92.50, petrolRate: 0, labourPerHour: 0, downtimePerHour: 0, savingsPct: 10, improvementCost: 0 };
 function loadCostModel() {
   try { const saved = JSON.parse(localStorage.getItem('cloverOpsCostModel') || '{}'); return { ...COST_DEFAULTS, ...Object.fromEntries(Object.keys(COST_DEFAULTS).map(k => [k, Number.isFinite(+saved[k]) && +saved[k] >= 0 ? +saved[k] : COST_DEFAULTS[k]])) }; }
@@ -1692,6 +1693,11 @@ function renderRecords() {
   }
 }
 
+const fnbModule = createFnbModule({
+  db, CONFIG, collection, addDoc, doc, updateDoc, runTransaction, serverTimestamp,
+  num, esc, money, today, S, $, setHTML, toast
+});
+
 /* ================= NAV / RENDER LOOP ================= */
 const VIEWS = {
   overview: ["Insights", "AI-assisted operating intelligence", "query_stats", "Insights"],
@@ -1704,13 +1710,15 @@ const VIEWS = {
   expenses: ["Local Expenses", "Out-of-pocket purchases & office reimbursement", "payments", "Store & Ledgers"],
   users: ["Users Master", "Workforce directory", "group", "Store & Ledgers"],
   records: ["Maintenance & Records", "Service, assignments & history", "folder_managed", "Fleet Ops"],
-  radar: ["Course Map", "Live fleet tracking & geofences", "my_location", "Fleet Ops"]
+  radar: ["Course Map", "Live fleet tracking & geofences", "my_location", "Fleet Ops"],
+  fnb: ["F&B Operations", "Ordering, receivables & consumption analysis", "restaurant", "F&B"]
 };
-const RENDER = { overview: renderOverview, fleet: renderFleet, fuel: () => renderLedger(), shifts: () => renderShifts(), records: () => renderRecords(), radar: renderRadarPanel, zones: renderZonePanel, registry: renderRegistry, expenses: renderLocalExpenseLedger, users: renderUsersMaster, incidents: renderIncidents, turfcare: renderTurfCare };
+const RENDER = { overview: renderOverview, fleet: renderFleet, fuel: () => renderLedger(), shifts: () => renderShifts(), records: () => renderRecords(), radar: renderRadarPanel, zones: renderZonePanel, registry: renderRegistry, expenses: renderLocalExpenseLedger, users: renderUsersMaster, incidents: renderIncidents, turfcare: renderTurfCare, fnb: () => fnbModule.render() };
 const NAV_GROUPS = {
   fleetops: { label: 'Fleet Ops', icon: 'precision_manufacturing', view: 'fleet', pages: [['fleet','Fleet'],['shifts','Run logs'],['records','Maintenance & records'],['radar','Course map']] },
   turfops: { label: 'Turf Ops', icon: 'eco', view: 'turfcare', pages: [] },
-  masters: { label: 'Store & Ledgers', icon: 'inventory_2', view: 'fuel', pages: [['fuel','Fuel ledger'],['registry','Inventory'],['expenses','Local Expenses'],['users','Users']] }
+  masters: { label: 'Store & Ledgers', icon: 'inventory_2', view: 'fuel', pages: [['fuel','Fuel ledger'],['registry','Inventory'],['expenses','Local Expenses'],['users','Users']] },
+  fnb: { label: 'F&B', icon: 'restaurant', view: 'fnb', pages: [] }
 };
 let activeNavGroup = 'insights';
 function groupForView(v) { if (v === 'overview') return 'insights'; return Object.keys(NAV_GROUPS).find(k => NAV_GROUPS[k].view === v || NAV_GROUPS[k].pages.some(p => p[0] === v) || (k === 'fleetops' && v === 'zones')) || 'insights'; }
@@ -1771,7 +1779,8 @@ const VIEW_COLLECTIONS = {
   expenses: ['expenses'],
   users: ['users'],
   incidents: ['logs'],
-  turfcare: ['inventory','plans']
+  turfcare: ['inventory','plans'],
+  fnb: ['fnbOrders','fnbReceipts']
 };
 function collectionAffectsCurrentView(k) {
   return (VIEW_COLLECTIONS[cur] || []).includes(k);
@@ -1823,6 +1832,9 @@ const H = {
   'export-roi': () => exportROIReport(),
   'edit-part': d => editInventoryCost(d.id),
   'open-store-records': () => openStoreRecordsEditor(),
+  'fnb-tab': d => { fnbModule.setTab(d.tab); renderAll(); },
+  'fnb-save-order': () => fnbModule.saveOrder(),
+  'fnb-receive': d => fnbModule.receive(d.id),
   'open-data-reset': () => openDataReset(),
   'store-records-tab': d => { storeRecordsTab = d.tab || 'items'; renderStoreRecordsEditor(); },
   'store-delete-item': d => deleteStoreItemFromEditor(d.id),
