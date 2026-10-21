@@ -22,7 +22,7 @@ export function createFnbModule({
     return (S.fnbOrders || [])
       .map(order => ({ ...order, balance: orderBalance(order), pendingDays: pendingDays(order, dateToday()) }))
       .filter(order => order.balance > 0)
-      .sort((a, b) => a.orderDate.localeCompare(b.orderDate) || b.pendingDays - a.pendingDays);
+      .sort((a, b) => String(a.orderDate || "").localeCompare(String(b.orderDate || "")) || b.pendingDays - a.pendingDays);
   }
 
   function renderOrderForm() {
