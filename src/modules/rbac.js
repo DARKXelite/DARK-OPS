@@ -4,7 +4,7 @@ export const ROLE_PERMISSIONS = Object.freeze({
     "dashboard.read", "fleet.read", "fleet.write", "fuel.read", "fuel.write",
     "shifts.read", "shifts.write", "turf.read", "turf.write", "turf.issue",
     "inventory.read", "inventory.write", "expenses.read", "expenses.write",
-    "reports.read", "users.read", "fnb.read", "fnb.write", "fnb.receive",
+    "reports.read", "users.read", "fnb.read", "fnb.write", "fnb.receive", "incidents.write",
     "maintenance.read", "maintenance.write", "assignments.read", "assignments.write"
   ]),
   storekeeper: Object.freeze([
