@@ -1,0 +1,98 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+    function hasRole(allowed) {
+      return signedIn()
+        && exists(/databases/$(database)/documents/app_roles/$(request.auth.uid))
+        && get(/databases/$(database)/documents/app_roles/$(request.auth.uid)).data.active != false
+        && get(/databases/$(database)/documents/app_roles/$(request.auth.uid)).data.role in allowed;
+    }
+    function admin() { return hasRole(['admin']); }
+    function manager() { return hasRole(['admin', 'manager']); }
+    function storeTeam() { return hasRole(['admin', 'manager', 'storekeeper']); }
+    function opsTeam() { return hasRole(['admin', 'manager', 'operator']); }
+    function fnbTeam() { return hasRole(['admin', 'manager', 'storekeeper']); }
+
+    match /app_roles/{uid} {
+      allow get: if signedIn() && (request.auth.uid == uid || admin());
+      allow list: if admin();
+      allow create, update, delete: if admin()
+        && request.resource.data.keys().hasOnly(['role', 'active', 'updatedAt', 'updatedBy', 'displayName'])
+        && request.resource.data.role in ['admin', 'manager', 'storekeeper', 'operator']
+        && request.resource.data.active is bool;
+    }
+    match /users/{id} {
+      allow read: if manager();
+      allow create, update, delete: if manager();
+    }
+    match /machines/{id} {
+      allow read: if opsTeam();
+      allow write: if manager();
+    }
+    match /fuel_logs/{id} {
+      allow read, create, update: if storeTeam();
+      allow delete: if manager();
+    }
+    match /shifts/{id} {
+      allow read, create: if opsTeam();
+      allow update, delete: if manager();
+    }
+    match /CourseZones/{id} {
+      allow read: if opsTeam();
+      allow write: if manager();
+    }
+    match /live_telemetry/{id} {
+      allow read: if opsTeam();
+      allow write: if opsTeam();
+    }
+    match /inventory/{id} {
+      allow read: if signedIn() && hasRole(['admin', 'manager', 'storekeeper', 'operator']);
+      allow create, delete: if storeTeam();
+      allow update: if storeTeam()
+        || (hasRole(['operator'])
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['stockQuantity', 'updatedAt'])
+          && request.resource.data.stockQuantity is number
+          && request.resource.data.stockQuantity >= 0
+          && request.resource.data.stockQuantity <= resource.data.stockQuantity);
+    }
+    match /logs/{id} {
+      allow read: if opsTeam();
+      allow create: if opsTeam();
+      allow update, delete: if manager();
+    }
+    match /maintenance_logs/{id} {
+      allow read: if opsTeam();
+      allow write: if manager();
+    }
+    match /assignment_logs/{id} {
+      allow read: if opsTeam();
+      allow write: if manager();
+    }
+    match /turf_plans/{id} {
+      allow read: if opsTeam() || hasRole(['storekeeper']);
+      allow create, update: if opsTeam() || hasRole(['storekeeper']);
+      allow delete: if manager();
+    }
+    match /store_inwards/{id} {
+      allow read, write: if storeTeam();
+    }
+    match /local_expenses/{id} {
+      allow read: if storeTeam();
+      allow create, update, delete: if manager();
+    }
+    match /fnb_orders/{id} {
+      allow read, create, update: if fnbTeam();
+      allow delete: if manager();
+    }
+    match /fnb_receipts/{id} {
+      allow read, create: if fnbTeam();
+      allow update, delete: if manager();
+    }
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
