@@ -190,6 +190,14 @@ export function createFnbModule({
     if (quantity <= 0 || quantity > balance) { toast("Enter a received quantity above zero and no greater than the outstanding balance.", "err"); return; }
     const orderRef = doc(db, CONFIG.COL.fnbOrders, orderId);
     const receiptRef = doc(collection(db, CONFIG.COL.fnbReceipts));
+    const normName = value => String(value || "").trim().toLowerCase().replace(/[^\\p{L}\\p{N}]+/gu, " ");
+    const currentItem = (S.inventory || []).find(item =>
+      normName(item.partName || item.itemName) === normName(order.itemName) &&
+      ["F&B", "Other", order.category || "Other"].includes(item.category || "Other")
+    );
+    const inventoryRef = currentItem
+      ? doc(db, CONFIG.COL.inventory, currentItem.id)
+      : doc(collection(db, CONFIG.COL.inventory));
     try {
       await runTransaction(db, async tx => {
         const snapshot = await tx.get(orderRef);
@@ -197,11 +205,33 @@ export function createFnbModule({
         const current = snapshot.data();
         const currentBalance = orderBalance(current);
         if (quantity > currentBalance) throw new Error("Receipt exceeds the remaining balance");
+        const existingInventorySnap = currentItem ? await tx.get(inventoryRef) : null;
+        const existingInventory = existingInventorySnap?.exists() ? existingInventorySnap.data() : null;
+        const stockUnit = String(existingInventory?.unit || "Nos").trim().toLowerCase();
+        const receiptUnit = String(current.unit || "Nos").trim().toLowerCase();
+        if (existingInventory && stockUnit !== receiptUnit) {
+          throw new Error("Inventory unit mismatch for " + current.itemName + ": master uses " + (existingInventory.unit || "Nos") + " but this order uses " + (current.unit || "Nos") + ". Correct the inventory unit before receiving.");
+        }
         const receivedQty = num(current.receivedQty) + quantity;
-        tx.set(receiptRef, { orderId, itemName: current.itemName, category: current.category || "Other", supplier: current.supplier || "", unit: current.unit || "Nos", quantity, rate, receiptDate: dateToday(), createdAt: serverTimestamp() });
+        const inventoryQty = Math.max(0, num(existingInventory?.stockQuantity)) + quantity;
+        if (existingInventory) {
+          tx.update(inventoryRef, { stockQuantity: +inventoryQty.toFixed(4), unitCost: rate, updatedAt: serverTimestamp() });
+        } else {
+          tx.set(inventoryRef, {
+            partName: current.itemName, category: "F&B", domain: "F&B",
+            stockQuantity: +inventoryQty.toFixed(4), unit: current.unit || "Nos",
+            unitCost: rate, reorderLevel: 0, createdAt: serverTimestamp(), updatedAt: serverTimestamp()
+          });
+        }
+        tx.set(receiptRef, {
+          orderId, itemId: inventoryRef.id, itemName: current.itemName,
+          category: current.category || "Other", supplier: current.supplier || "",
+          unit: current.unit || "Nos", quantity, rate, receiptDate: dateToday(),
+          createdAt: serverTimestamp(), transactionType: "FNB_RECEIPT"
+        });
         tx.update(orderRef, { receivedQty, status: receivedQty >= num(current.orderedQty) ? "Received" : "Partial", updatedAt: serverTimestamp() });
       });
-      toast("Receipt saved");
+      toast("Receipt saved · F&B inventory stock updated");
     } catch (error) {
       console.error("F&B receipt failed", error);
       toast(error.message === "Receipt exceeds the remaining balance" ? error.message : "Could not save receipt. Check connection and access rules.", "err");
