@@ -19,10 +19,11 @@ service cloud.firestore {
     match /app_roles/{uid} {
       allow get: if signedIn() && (request.auth.uid == uid || admin());
       allow list: if admin();
-      allow create, update, delete: if admin()
+      allow create, update: if admin()
         && request.resource.data.keys().hasOnly(['role', 'active', 'updatedAt', 'updatedBy', 'displayName'])
         && request.resource.data.role in ['admin', 'manager', 'storekeeper', 'operator']
         && request.resource.data.active is bool;
+      allow delete: if admin();
     }
     match /users/{id} {
       allow read: if manager();
@@ -84,7 +85,10 @@ service cloud.firestore {
       allow create, update, delete: if manager();
     }
     match /fnb_orders/{id} {
-      allow read, create, update: if fnbTeam();
+      allow read, create: if fnbTeam();
+      allow update: if manager()
+        || (hasRole(['storekeeper'])
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['receivedQty', 'status', 'updatedAt']));
       allow delete: if manager();
     }
     match /fnb_receipts/{id} {
