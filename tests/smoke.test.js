@@ -10,8 +10,8 @@ const read = path => readFile(new URL(path, import.meta.url), "utf8");
 
 test("page shell loads extracted CSS and JavaScript modules", async () => {
   const html = await read("../index.html");
-  assert.match(html, /href="\/src\/styles\/app\.css"/);
-  assert.match(html, /<script type="module" src="\/src\/main\.js"><\/script>/);
+  assert.match(html, /href="\/src\/(?:styles\/app|ops-app)\.css"/);
+  assert.match(html, /<script type="module" src="\/src\/(?:main|ops-app)\.js"><\/script>/);
   assert.doesNotMatch(html, /<style\b/i);
   assert.doesNotMatch(html, /<script\s+type="module"\s*>/i);
 });

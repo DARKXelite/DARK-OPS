@@ -41,7 +41,7 @@
 <body>
 
 <!-- Full-screen PIN access gate -->
-<section id="pinGate" aria-label="Clover Greens Ops PIN login">
+<section id="pinGate" aria-label="Clover Greens Ops PIN login" hidden>
   <div class="pin-shell">
     <input id="pinInput" class="pin-input-capture" type="password" inputmode="numeric" pattern="[0-9]*" autocomplete="off" maxlength="8" aria-label="Enter eight digit PIN" autofocus>
     <div class="pin-dots" id="pinDots" role="group" aria-label="PIN digits"><span class="pin-dot" data-dot="0"></span><span class="pin-dot" data-dot="1"></span><span class="pin-dot" data-dot="2"></span><span class="pin-dot" data-dot="3"></span><span class="pin-dot" data-dot="4"></span><span class="pin-dot" data-dot="5"></span><span class="pin-dot" data-dot="6"></span><span class="pin-dot" data-dot="7"></span></div>
@@ -277,6 +277,10 @@
         <section class="card turf-log-card"><div class="turf-card-head compact"><div><h3>Product stock register</h3><p>Category, stock unit, available balance and automatically calculated reorder thresholds.</p></div><label>Category<select id="turfProductCategoryFilter" data-chg="turf-product-category"><option>All categories</option><option>Fertilizers</option><option>Pesticides</option><option>Turf Enhancements</option></select></label></div><div class="table-wrap" id="turfInvTbl"></div></section>
       </section>
     </section>
+    <!-- F&B OPERATIONS: isolated module view -->
+    <section class="view" id="v-fnb">
+      <div id="fnbRoot"></div>
+    </section>
   </main>
 </div>
 
@@ -303,6 +307,7 @@
 
 <div id="toasts"></div>
 
+<script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
 <script type="module" src="/src/ops-app.js"></script>
 
 
