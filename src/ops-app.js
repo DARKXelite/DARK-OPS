@@ -2113,7 +2113,17 @@ onAuthStateChanged(auth, async user => {
     return;
   }
   try {
-    const roleSnap = await getDoc(doc(db, "app_roles", user.uid));
+    let roleSnap = await getDoc(doc(db, "app_roles", user.uid));
+    // One-time bootstrap: the explicitly allowlisted, verified owner email receives full admin access
+    // only when no app role exists yet. Firestore rules enforce the same email/verification checks.
+    const bootstrapAdminEmail = "darkx@darkverse.go";
+    if (!roleSnap.exists() && String(user.email || "").toLowerCase() === bootstrapAdminEmail && user.emailVerified) {
+      await setDoc(doc(db, "app_roles", user.uid), {
+        role: "admin", active: true, displayName: "DARKX Administrator",
+        updatedAt: serverTimestamp(), updatedBy: user.uid
+      });
+      roleSnap = await getDoc(doc(db, "app_roles", user.uid));
+    }
     const roleData = roleSnap.exists() ? roleSnap.data() : null;
     if (!roleData || roleData.active === false || !ROLE_PERMISSIONS[roleData.role]) {
       await signOut(auth);
