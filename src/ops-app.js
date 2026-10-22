@@ -1,7 +1,8 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-import { getFirestore, collection, addDoc, deleteDoc, doc, updateDoc, setDoc, increment, onSnapshot, getDocs, writeBatch, runTransaction, serverTimestamp, query, where, orderBy } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+import { getFirestore, collection, addDoc, deleteDoc, doc, updateDoc, setDoc, getDoc, increment, onSnapshot, getDocs, writeBatch, runTransaction, serverTimestamp, query, where, orderBy } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, signOut } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
 import { createFnbModule } from "./modules/fnb/fnb-module.js";
+import { ROLE_PERMISSIONS, ROLE_LABELS, canRole, permissionForAction, permissionForView } from "./modules/rbac.js";
 
 
 const FUEL_RATE = 92.50; // Legacy reference rate; operational costing is managed in the local cost model.
@@ -15,7 +16,7 @@ const firebaseConfig = {
   appId: "1:48049661517:android:98bb300b59755541d61e04"   // TODO: replace with the WEB app id from Firebase console
 };
 const CONFIG = {
-  REQUIRE_LOGIN: false,        // set true once Firebase Auth (email/password) is enabled and a dashboard user exists
+  REQUIRE_LOGIN: true,         // RBAC requires Firebase Authentication plus an app_roles/{uid} document
   SERVICE_INTERVAL: 250,       // engine hours between services
   SERVICE_WARN: 25,            // amber when this many hours (or fewer) remain
   LAT: 12.756, LNG: 77.822,
@@ -1492,10 +1493,10 @@ function renderUsersMaster() {
   const all = [...(S.users || [])].sort((a, b) => (a.fullName || a.username || '').localeCompare(b.fullName || b.username || ''));
   const rows = all.filter(u => (!q || [u.fullName,u.username,u.mobileNumber,u.role].some(v => String(v||'').toLowerCase().includes(q))) && (usersRoleFilter === 'all' || String(u.role||'') === usersRoleFilter));
   const roles = [...new Set(all.map(u=>String(u.role||'').trim()).filter(Boolean))].sort();
-  setHTML($('#usersTbl'), `<div class="user-tools"><label class="user-search"><span class="material-symbols-rounded">search</span><input id="usersSearch" value="${esc(usersSearchText)}" placeholder="Search name, mobile or role" aria-label="Search users"></label><label class="user-role-filter">Role<select id="usersRoleFilter"><option value="all">All roles</option>${roles.map(r=>`<option value="${esc(r)}" ${usersRoleFilter===r?'selected':''}>${esc(r)}</option>`).join('')}</select></label><span class="muted sm user-count">${rows.length} of ${all.length} users</span></div><div class="table-wrap"><table><thead><tr><th>Name</th><th>Mobile</th><th>Role</th><th>Record ID</th><th class="right">Actions</th></tr></thead><tbody>${!LOADED.users ? '<tr><td colspan="5"><div class="skeleton" style="height:80px"></div></td></tr>' : rows.length ? rows.map(u => `<tr><td><b>${esc(u.fullName || u.username || 'Staff')}</b><div class="muted sm">${u.username && u.username!==u.fullName ? esc(u.username) : 'Workforce profile'}</div></td><td>${esc(u.mobileNumber || '—')}</td><td><span class="badge ${u.role === 'incharge' ? 'gold' : String(u.role||'').startsWith('storekeeper') ? 'warn' : 'ok'}">${esc(u.role || '—')}</span></td><td><code>${esc(u.id)}</code></td><td class="right" style="white-space:nowrap"><button class="btn btn-sm" data-act="edit-user" data-id="${esc(u.id)}">Edit</button> <button class="btn btn-danger btn-sm" data-act="del" data-col="users" data-id="${esc(u.id)}" data-label="${esc(u.fullName || 'this user')}"><span class="material-symbols-rounded">delete</span></button></td></tr>`).join('') : `<tr><td colspan="5" class="empty">${all.length?'No users match these filters.':'No users yet. Add a workforce member to begin.'}</td></tr>`}</tbody></table></div>`);
+  setHTML($('#usersTbl'), `<div class="user-tools"><label class="user-search"><span class="material-symbols-rounded">search</span><input id="usersSearch" value="${esc(usersSearchText)}" placeholder="Search name, mobile or role" aria-label="Search users"></label><label class="user-role-filter">Role<select id="usersRoleFilter"><option value="all">All roles</option>${roles.map(r=>`<option value="${esc(r)}" ${usersRoleFilter===r?'selected':''}>${esc(r)}</option>`).join('')}</select></label><span class="muted sm user-count">${rows.length} of ${all.length} users</span>${RBAC.can('access.manage') ? '<button class="btn btn-sm" data-act="open-role-admin">Manage app access</button>' : ''}</div><div class="table-wrap"><table><thead><tr><th>Name</th><th>Mobile</th><th>Role</th><th>Record ID</th><th class="right">Actions</th></tr></thead><tbody>${!LOADED.users ? '<tr><td colspan="5"><div class="skeleton" style="height:80px"></div></td></tr>' : rows.length ? rows.map(u => `<tr><td><b>${esc(u.fullName || u.username || 'Staff')}</b><div class="muted sm">${u.username && u.username!==u.fullName ? esc(u.username) : 'Workforce profile'}</div></td><td>${esc(u.mobileNumber || '—')}</td><td><span class="badge ${u.role === 'incharge' ? 'gold' : String(u.role||'').startsWith('storekeeper') ? 'warn' : 'ok'}">${esc(u.role || '—')}</span></td><td><code>${esc(u.id)}</code></td><td class="right" style="white-space:nowrap"><button class="btn btn-sm" data-act="edit-user" data-id="${esc(u.id)}">Edit</button> <button class="btn btn-danger btn-sm" data-act="del" data-col="users" data-id="${esc(u.id)}" data-label="${esc(u.fullName || 'this user')}"><span class="material-symbols-rounded">delete</span></button></td></tr>`).join('') : `<tr><td colspan="5" class="empty">${all.length?'No users match these filters.':'No users yet. Add a workforce member to begin.'}</td></tr>`}</tbody></table></div>`);
   const search = $('#usersSearch'); if (search && document.activeElement?.id === 'usersSearch') { search.focus(); search.setSelectionRange(search.value.length, search.value.length); }
 }
-const STORE_CATS = ['Fuel','Fertilizers','Pesticides','Turf Enhancements','Spare Parts','Tools','Other'];
+const STORE_CATS = ['Fuel','Fertilizers','Pesticides','Turf Enhancements','Spare Parts','Tools','F&B','Other'];
 const itemName = i => i.partName || i.itemName || 'Unnamed item';
 const inventoryCategoryOpen = new Set();
 function inventoryRowsMarkup(items) {
@@ -1733,7 +1734,8 @@ function renderGroupTabs() {
   el.innerHTML = `<div class="group-tabs-inner">${pages}${mapToggle}</div>`;
 }
 function buildNav() {
-  document.getElementById('nav').innerHTML = Object.entries(NAV_GROUPS).map(([key,g]) => `<button class="nav-btn ${key === activeNavGroup ? 'active' : ''}" data-act="nav-group" data-group="${key}" title="${g.label}" aria-label="${g.label}"><span class="material-symbols-rounded">${g.icon}</span><span class="nl">${g.label}</span></button>`).join('');
+  const entries = Object.entries(NAV_GROUPS).filter(([, g]) => RBAC.can(permissionForView(g.view)));
+  document.getElementById('nav').innerHTML = entries.map(([key,g]) => `<button class="nav-btn ${key === activeNavGroup ? 'active' : ''}" data-act="nav-group" data-group="${key}" title="${g.label}" aria-label="${g.label}"><span class="material-symbols-rounded">${g.icon}</span><span class="nl">${g.label}</span></button>`).join('');
 }
 function openNavGroup(key) {
   const g = NAV_GROUPS[key] || NAV_GROUPS.insights;
@@ -1750,7 +1752,9 @@ function updateBadges(changedCollection = null) {
   [['incidents', badgeCounts.incidents], ['radar', badgeCounts.radar]].forEach(([k, n]) => { const el = $(`[data-nb="${k}"]`); if (el) { el.hidden = !n; el.textContent = n; } });
 }
 function switchView(v) {
-  if (!VIEWS[v]) v = 'overview'; cur = v; document.body.classList.toggle('turf-board-mode', v === 'turfcare'); history.replaceState(null, '', '#' + v);
+  if (!VIEWS[v]) v = 'overview';
+  if (RBAC.session.authenticated && !RBAC.can(permissionForView(v))) { toast("Your role does not have access to this section.", "err"); v = "overview"; }
+  cur = v; document.body.classList.toggle('turf-board-mode', v === 'turfcare'); history.replaceState(null, '', '#' + v);
   $$('.view').forEach(x => x.classList.toggle('active', x.id === 'v-' + v));
   $('#pageTitle').textContent = VIEWS[v][0]; $('#pageSub').textContent = VIEWS[v][1]; $('#viewHead').style.display = (v === 'overview' || v === 'turfcare') ? 'none' : ''; window.scrollTo(0, 0);
   const mapMode = (v === 'radar' || v === 'zones');
@@ -2020,6 +2024,8 @@ document.addEventListener('click', e => {
   const el = e.target.closest('[data-act]');
   if (!el) { $$('.kmenu.open').forEach(x => x.classList.remove('open')); return; }
   if (el.dataset.act !== 'kebab') $$('.kmenu.open').forEach(x => x.classList.remove('open'));
+  const permission = permissionForAction(el.dataset.act, el.dataset);
+  if (permission && !RBAC.can(permission)) { toast("Your role does not have permission for this action.", "err"); return; }
   const fn = H[el.dataset.act]; if (fn) fn(el.dataset, el, e);
 });
 document.addEventListener('change', e => { const el = e.target.closest('[data-chg]'); if (el && C[el.dataset.chg]) C[el.dataset.chg](el.value, el.dataset, el); });
@@ -2057,70 +2063,89 @@ let turfAppStatus = 'All statuses';
 let turfAppSearch = '';
 let turfProductCategory = 'All categories';
 
-/* ================= BOOT ================= */
+/* ================= AUTH + RBAC BOOT ================= */
 $('#dateChip').textContent = new Date().toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' });
 buildNav(); toggleDock(false); renderWeather(); loadWeather(); setInterval(loadWeather, 30 * 60 * 1000);
-if (CONFIG.REQUIRE_LOGIN) {
-  $('#signoutBtn').hidden = false; $('#login').hidden = false;
-  $('#loginForm').addEventListener('submit', async e => { e.preventDefault(); $('#loginErr').textContent = ''; try { await signInWithEmailAndPassword(auth, $('#loginEmail').value.trim(), $('#loginPass').value); } catch (err) { $('#loginErr').textContent = 'Sign-in failed. Check your email and password.'; } });
-  onAuthStateChanged(auth, u => { if (u) { $('#login').hidden = true; startListeners(); } else { stopListeners(); $('#login').hidden = false; } });
-} else initPinGate();
-switchView((location.hash || '').slice(1) || 'overview');
 
-const RBAC = Object.freeze({
-  roles: Object.freeze({
-    admin: Object.freeze(['*']),
-    manager: Object.freeze(['dashboard.read','fleet.read','fleet.write','fuel.read','fuel.write','turf.read','turf.write','inventory.read','inventory.write','expenses.read','expenses.write','reports.read','users.manage']),
-    storekeeper: Object.freeze(['dashboard.read','inventory.read','inventory.write','fuel.read','fuel.write','turf.read','turf.issue','expenses.read']),
-    operator: Object.freeze(['dashboard.read','fleet.read','shifts.write','turf.read','turf.issue'])
-  }),
-  session: { role: null, authenticated: false },
-  can(permission) {
-    const grants = this.roles[this.session.role] || [];
-    return grants.includes('*') || grants.includes(permission);
-  }
-});
+const RBAC = {
+  roles: ROLE_PERMISSIONS,
+  session: { role: null, authenticated: false, uid: null, displayName: "" },
+  can(permission) { return this.session.authenticated && canRole(this.session.role, permission); }
+};
 window.CLOVER_RBAC = RBAC;
 
-function initPinGate() {
-  const gate = $('#pinGate'), input = $('#pinInput'), dots = $$('#pinDots [data-dot]'), error = $('#pinError');
-  if (!gate || !input || gate.dataset.initialized === 'true') return;
-  gate.dataset.initialized = 'true';
-  let lockedUntil = 0, failures = 0, busy = false;
-  const refresh = () => {
-    input.value = input.value.replace(/[^0-9]/g, '').slice(0, 8);
-    dots.forEach((dot, i) => {
-      dot.classList.toggle('filled', i < input.value.length);
-      dot.textContent = input.value[i] || '';
-    });
-    $('#pinDots').setAttribute('aria-label', input.value.length + ' of 8 digits entered');
-    if (input.value.length === 8 && !busy) { busy = true; window.setTimeout(unlock, 120); }
-  };
-  const clear = (message='') => { input.value = ''; busy = false; refresh(); error.textContent = message; };
-  const unlock = () => {
-    if (Date.now() < lockedUntil) { clear(''); return; }
-    if (input.value === '99114559') {
-      RBAC.session.role = 'admin'; RBAC.session.authenticated = true;
-      gate.hidden = true; document.body.classList.remove('pin-locked');
-      $('#signoutBtn').hidden = false; clear(); startListeners(); toast('Welcome, Admin'); return;
+function openRoleAdmin() {
+  if (!RBAC.can("access.manage")) { toast("Only an administrator can assign app access.", "err"); return; }
+  openForm({
+    title: "Assign application access",
+    sub: "The account must already exist in Firebase Authentication.",
+    submit: "Save access role",
+    html: fld("Firebase Auth user UID", '<input id="roleUid" required autocomplete="off" placeholder="Paste the user UID from Firebase Authentication">') +
+      fld("Application role", '<select id="roleValue"><option value="manager">Operations manager</option><option value="storekeeper">Storekeeper</option><option value="operator">Field operator</option><option value="admin">Administrator</option></select>') +
+      fld("Account status", '<select id="roleActive"><option value="true">Active</option><option value="false">Disabled</option></select>') +
+      '<p class="muted sm">Roles are enforced again by Firestore security rules. Do not assign Administrator unless this person should have full access.</p>',
+    onSubmit: async () => {
+      const uid = $("#roleUid").value.trim();
+      if (!uid || uid.includes("/") || uid.length > 128) { toast("Enter a valid Firebase Auth UID.", "err"); return false; }
+      const role = $("#roleValue").value;
+      const active = $("#roleActive").value === "true";
+      await setDoc(doc(db, "app_roles", uid), { role, active, updatedAt: serverTimestamp(), updatedBy: RBAC.session.uid }, { merge: true });
+      toast("Application access role saved.");
     }
-    failures++;
-    if (failures >= 5) { lockedUntil = Date.now() + 30000; failures = 0; clear('Too many attempts. Try again in 30 seconds.'); }
-    else clear('Incorrect PIN. ' + (5 - failures) + ' attempts remaining.');
-  };
-  input.addEventListener('input', refresh);
-  input.addEventListener('keydown', e => { if (e.key === 'Escape') clear(''); });
-  gate.addEventListener('pointerdown', e => {
-    if (!e.target.closest('#pinInput')) { e.preventDefault(); input.focus({preventScroll:true}); }
   });
-  gate.addEventListener('click', () => input.focus({preventScroll:true}));
-  $('#signoutBtn').addEventListener('click', () => {
-    RBAC.session.role = null; RBAC.session.authenticated = false;
-    stopListeners(); gate.hidden = false; $('#signoutBtn').hidden = true; clear(''); input.focus();
-  });
-  gate.hidden = false; document.body.classList.add('pin-locked'); refresh();
-  window.setTimeout(() => input.focus({preventScroll:true}), 250);
 }
+
+onAuthStateChanged(auth, async user => {
+  stopListeners();
+  RBAC.session.role = null; RBAC.session.authenticated = false; RBAC.session.uid = null; RBAC.session.displayName = "";
+  const login = $("#login"), gate = $("#pinGate"), error = $("#loginErr");
+  if (gate) gate.hidden = true;
+  if (!user) {
+    if (login) login.hidden = false;
+    if ($("#signoutBtn")) $("#signoutBtn").hidden = true;
+    document.body.classList.add("auth-locked");
+    buildNav();
+    return;
+  }
+  try {
+    const roleSnap = await getDoc(doc(db, "app_roles", user.uid));
+    const roleData = roleSnap.exists() ? roleSnap.data() : null;
+    if (!roleData || roleData.active === false || !ROLE_PERMISSIONS[roleData.role]) {
+      await signOut(auth);
+      if (error) error.textContent = "This account has no active application role. Ask an administrator to assign access.";
+      return;
+    }
+    RBAC.session.role = roleData.role;
+    RBAC.session.authenticated = true;
+    RBAC.session.uid = user.uid;
+    RBAC.session.displayName = roleData.displayName || user.email || "";
+    if (login) login.hidden = true;
+    if ($("#signoutBtn")) $("#signoutBtn").hidden = false;
+    document.body.classList.remove("auth-locked");
+    buildNav();
+    startListeners();
+    switchView((location.hash || "").slice(1) || "overview");
+    toast("Signed in · " + (ROLE_LABELS[roleData.role] || roleData.role));
+  } catch (err) {
+    console.error("RBAC role lookup failed", err);
+    await signOut(auth);
+    if (error) error.textContent = "Could not verify your application role. Check Firebase access rules and try again.";
+  }
+});
+$("#loginForm").addEventListener("submit", async e => {
+  e.preventDefault();
+  $("#loginErr").textContent = "";
+  try {
+    await signInWithEmailAndPassword(auth, $("#loginEmail").value.trim(), $("#loginPass").value);
+  } catch (err) {
+    console.error("Firebase sign-in failed", err);
+    $("#loginErr").textContent = "Sign-in failed. Check your credentials and confirm Email/Password sign-in is enabled.";
+  }
+});
+$("#signoutBtn").addEventListener("click", async () => {
+  try { await signOut(auth); } catch (err) { toast("Sign-out failed. Retry.", "err"); }
+});
+
 
 
 function getSunday(d) {
