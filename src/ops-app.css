@@ -2011,3 +2011,7 @@ body:has(#v-turfcare.active) #v-turfcare > .turf-view-tabs {
 .fnb-import-actions button:disabled{opacity:.45;cursor:not-allowed}
 .fnb-import-panel code{font-size:11px;color:var(--text);background:var(--surface-2);padding:2px 4px;border-radius:4px}
 @media(max-width:760px){.fnb-import-controls{grid-template-columns:1fr}.fnb-import-actions{justify-content:stretch}.fnb-import-actions button{flex:1}}
+
+/* RBAC login overlay must respect the hidden state while retaining existing theme. */
+#login[hidden]{display:none!important}
+body.auth-locked .main{visibility:hidden}
