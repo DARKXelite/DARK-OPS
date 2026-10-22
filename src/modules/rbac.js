@@ -4,7 +4,7 @@ export const ROLE_PERMISSIONS = Object.freeze({
     "dashboard.read", "fleet.read", "fleet.write", "fuel.read", "fuel.write",
     "shifts.read", "shifts.write", "turf.read", "turf.write", "turf.issue",
     "inventory.read", "inventory.write", "expenses.read", "expenses.write",
-    "reports.read", "users.read", "users.manage", "fnb.read", "fnb.write", "fnb.receive", "incidents.write",
+    "reports.read", "users.read", "users.manage", "fnb.read", "fnb.write", "fnb.receive", "fnb.delete", "fuel.delete", "shifts.delete", "incidents.write", "incidents.delete",
     "maintenance.read", "maintenance.write", "assignments.read", "assignments.write"
   ]),
   storekeeper: Object.freeze([
@@ -81,13 +81,17 @@ const ACTION_PERMISSIONS = {
 
 export function permissionForAction(action, data = {}) {
   if (action === "del") {
-    const col = data.col === "zones" ? "CourseZones" : ({
-      fuel: "fuel_logs", shifts: "shifts", inventory: "inventory", inwards: "store_inwards",
-      expenses: "local_expenses", users: "users", logs: "logs", machines: "machines",
-      maintenance: "maintenance_logs", assignments: "assignment_logs", fnbOrders: "fnb_orders",
-      fnbReceipts: "fnb_receipts"
-    })[data.col] || data.col;
-    return permissionForCollection(col, true);
+    const deletePermissions = {
+      fuel: "fuel.delete", fuel_logs: "fuel.delete",
+      shifts: "shifts.delete", logs: "incidents.delete",
+      fnbOrders: "fnb.delete", fnb_orders: "fnb.delete", fnbReceipts: "fnb.delete", fnb_receipts: "fnb.delete",
+      zones: "fleet.write", CourseZones: "fleet.write", machines: "fleet.write",
+      inventory: "inventory.write", inwards: "inventory.write", store_inwards: "inventory.write",
+      expenses: "expenses.write", local_expenses: "expenses.write",
+      users: "users.manage", maintenance: "maintenance.write", maintenance_logs: "maintenance.write",
+      assignments: "assignments.write", assignment_logs: "assignments.write"
+    };
+    return deletePermissions[data.col] || permissionForCollection(data.col, true);
   }
   if (ACTION_PERMISSIONS[action]) return ACTION_PERMISSIONS[action];
   if (/^export-/.test(action)) return "reports.read";
