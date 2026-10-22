@@ -1841,6 +1841,7 @@ const H = {
   'fnb-receive': d => fnbModule.receive(d.id),
   'fnb-import-orders': () => fnbModule.importOrders(),
   'fnb-clear-import': () => fnbModule.clearImport(),
+  'open-role-admin': () => openRoleAdmin(),
   'open-data-reset': () => openDataReset(),
   'store-records-tab': d => { storeRecordsTab = d.tab || 'items'; renderStoreRecordsEditor(); },
   'store-delete-item': d => deleteStoreItemFromEditor(d.id),
@@ -2065,7 +2066,7 @@ let turfProductCategory = 'All categories';
 
 /* ================= AUTH + RBAC BOOT ================= */
 $('#dateChip').textContent = new Date().toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' });
-buildNav(); toggleDock(false); renderWeather(); loadWeather(); setInterval(loadWeather, 30 * 60 * 1000);
+toggleDock(false); renderWeather(); loadWeather(); setInterval(loadWeather, 30 * 60 * 1000);
 
 const RBAC = {
   roles: ROLE_PERMISSIONS,
@@ -2073,6 +2074,7 @@ const RBAC = {
   can(permission) { return this.session.authenticated && canRole(this.session.role, permission); }
 };
 window.CLOVER_RBAC = RBAC;
+buildNav();
 
 function openRoleAdmin() {
   if (!RBAC.can("access.manage")) { toast("Only an administrator can assign app access.", "err"); return; }
