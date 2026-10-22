@@ -191,6 +191,7 @@ export function createFnbModule({
     if (quantity <= 0 || quantity > balance) { toast("Enter a received quantity above zero and no greater than the outstanding balance.", "err"); return; }
     const orderRef = doc(db, CONFIG.COL.fnbOrders, orderId);
     const receiptRef = doc(collection(db, CONFIG.COL.fnbReceipts));
+    const inwardRef = doc(collection(db, CONFIG.COL.inwards));
     const currentItem = findFnbInventoryMatch(S.inventory, order.itemName, order.category);
     const inventoryRef = currentItem
       ? doc(db, CONFIG.COL.inventory, currentItem.id)
@@ -220,11 +221,21 @@ export function createFnbModule({
             unitCost: rate, reorderLevel: 0, createdAt: serverTimestamp(), updatedAt: serverTimestamp()
           });
         }
+        const taxableAmount = +(quantity * rate).toFixed(2);
         tx.set(receiptRef, {
           orderId, itemId: inventoryRef.id, itemName: current.itemName,
           category: current.category || "Other", supplier: current.supplier || "",
           unit: current.unit || "Nos", quantity, rate, receiptDate: dateToday(),
-          createdAt: serverTimestamp(), transactionType: "FNB_RECEIPT"
+          createdAt: serverTimestamp(), transactionType: "FNB_RECEIPT", inwardId: inwardRef.id
+        });
+        tx.set(inwardRef, {
+          itemId: inventoryRef.id, itemName: current.itemName, category: "F&B",
+          fnbCategory: current.category || "Other", unit: current.unit || "Nos",
+          quantity, rate, gstPercent: 0, taxableAmount, gstAmount: 0, total: taxableAmount,
+          supplier: current.supplier || "", invoiceNumber: "FNB-" + receiptRef.id,
+          receiptDate: dateToday(), notes: "F&B order " + orderId,
+          transactionType: "FNB_RECEIPT", fnbOrderId: orderId, fnbReceiptId: receiptRef.id,
+          createdAt: serverTimestamp()
         });
         tx.update(orderRef, { receivedQty, status: receivedQty >= num(current.orderedQty) ? "Received" : "Partial", updatedAt: serverTimestamp() });
       });
