@@ -19,7 +19,22 @@ service cloud.firestore {
     match /app_roles/{uid} {
       allow get: if signedIn() && (request.auth.uid == uid || admin());
       allow list: if admin();
-      allow create, update: if admin()
+      // Safe one-time owner bootstrap: verified Firebase identity, exact allowlisted email,
+      // own UID only, and admin role only. It cannot overwrite an existing role.
+      allow create: if (
+          admin()
+          || (signedIn()
+            && request.auth.uid == uid
+            && request.auth.token.email == 'darkx@darkverse.go'
+            && request.auth.token.email_verified == true
+            && request.resource.data.keys().hasOnly(['role', 'active', 'updatedAt', 'updatedBy', 'displayName'])
+            && request.resource.data.role == 'admin'
+            && request.resource.data.active == true)
+        )
+        && request.resource.data.keys().hasOnly(['role', 'active', 'updatedAt', 'updatedBy', 'displayName'])
+        && request.resource.data.role in ['admin', 'manager', 'storekeeper', 'operator']
+        && request.resource.data.active is bool;
+      allow update: if admin()
         && request.resource.data.keys().hasOnly(['role', 'active', 'updatedAt', 'updatedBy', 'displayName'])
         && request.resource.data.role in ['admin', 'manager', 'storekeeper', 'operator']
         && request.resource.data.active is bool;
