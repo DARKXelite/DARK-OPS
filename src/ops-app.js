@@ -1858,7 +1858,6 @@ const H = {
     else H['export-ledger']();
   },
   dock: () => toggleDock(),
-  signout: () => signOut(auth),
   'open-fuel': openFuelModal, 'open-run': openRunModal,
   'kpi-live': () => switchView('radar'), 'kpi-svc': () => { F.sort = 'service'; switchView('fleet'); }, 'kpi-inc': () => switchView('fleet'), 'kpi-stock': () => switchView('registry'),
   rpreset: d => { if (d.p === 'custom') R[d.k].preset = 'custom'; else setPreset(R[d.k], d.p); RER[d.k](); },
@@ -2089,6 +2088,7 @@ function openRoleAdmin() {
     onSubmit: async () => {
       const uid = $("#roleUid").value.trim();
       if (!uid || uid.includes("/") || uid.length > 128) { toast("Enter a valid Firebase Auth UID.", "err"); return false; }
+      if (uid === RBAC.session.uid && $("#roleActive").value === "false") { toast("You cannot disable the administrator account in its own session.", "err"); return false; }
       const role = $("#roleValue").value;
       const active = $("#roleActive").value === "true";
       await setDoc(doc(db, "app_roles", uid), { role, active, updatedAt: serverTimestamp(), updatedBy: RBAC.session.uid }, { merge: true });
