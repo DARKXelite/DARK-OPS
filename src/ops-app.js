@@ -2097,6 +2097,8 @@ function openRoleAdmin() {
   });
 }
 
+document.body.classList.add("auth-locked");
+$("#login").hidden = false;
 onAuthStateChanged(auth, async user => {
   stopListeners();
   RBAC.session.role = null; RBAC.session.authenticated = false; RBAC.session.uid = null; RBAC.session.displayName = "";
