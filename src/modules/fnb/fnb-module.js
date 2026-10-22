@@ -1,4 +1,5 @@
 import { parseOrderRows, parseTextOrders } from "./fnb-import.js";
+import { findFnbInventoryMatch, canReceiveIntoInventory } from "./inventory-link.js";
 
 export function pendingDays(order, today) {
   const start = new Date(String(order.orderDate || today) + "T00:00:00");
@@ -185,16 +186,12 @@ export function createFnbModule({
     if (!order) { toast("Order not found. Refresh and retry.", "err"); return; }
     const quantity = num($("#fnbReceiveQty-" + orderId)?.value);
     const rateValue = $("#fnbReceiveRate-" + orderId)?.value;
-    const rate = rateValue === "" ? 0 : Math.max(0, num(rateValue));
+    const rate = rateValue === "" ? Math.max(0, num(order.expectedRate)) : Math.max(0, num(rateValue));
     const balance = orderBalance(order);
     if (quantity <= 0 || quantity > balance) { toast("Enter a received quantity above zero and no greater than the outstanding balance.", "err"); return; }
     const orderRef = doc(db, CONFIG.COL.fnbOrders, orderId);
     const receiptRef = doc(collection(db, CONFIG.COL.fnbReceipts));
-    const normName = value => String(value || "").trim().toLowerCase().replace(/[^\\p{L}\\p{N}]+/gu, " ");
-    const currentItem = (S.inventory || []).find(item =>
-      normName(item.partName || item.itemName) === normName(order.itemName) &&
-      ["F&B", "Other", order.category || "Other"].includes(item.category || "Other")
-    );
+    const currentItem = findFnbInventoryMatch(S.inventory, order.itemName, order.category);
     const inventoryRef = currentItem
       ? doc(db, CONFIG.COL.inventory, currentItem.id)
       : doc(collection(db, CONFIG.COL.inventory));
@@ -207,15 +204,15 @@ export function createFnbModule({
         if (quantity > currentBalance) throw new Error("Receipt exceeds the remaining balance");
         const existingInventorySnap = currentItem ? await tx.get(inventoryRef) : null;
         const existingInventory = existingInventorySnap?.exists() ? existingInventorySnap.data() : null;
-        const stockUnit = String(existingInventory?.unit || "Nos").trim().toLowerCase();
-        const receiptUnit = String(current.unit || "Nos").trim().toLowerCase();
-        if (existingInventory && stockUnit !== receiptUnit) {
+        if (existingInventory && !canReceiveIntoInventory(existingInventory, current.unit)) {
           throw new Error("Inventory unit mismatch for " + current.itemName + ": master uses " + (existingInventory.unit || "Nos") + " but this order uses " + (current.unit || "Nos") + ". Correct the inventory unit before receiving.");
         }
         const receivedQty = num(current.receivedQty) + quantity;
         const inventoryQty = Math.max(0, num(existingInventory?.stockQuantity)) + quantity;
         if (existingInventory) {
-          tx.update(inventoryRef, { stockQuantity: +inventoryQty.toFixed(4), unitCost: rate, updatedAt: serverTimestamp() });
+          const stockUpdate = { stockQuantity: +inventoryQty.toFixed(4), updatedAt: serverTimestamp() };
+          if (rate > 0) stockUpdate.unitCost = rate;
+          tx.update(inventoryRef, stockUpdate);
         } else {
           tx.set(inventoryRef, {
             partName: current.itemName, category: "F&B", domain: "F&B",
