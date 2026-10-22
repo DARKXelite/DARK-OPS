@@ -158,7 +158,8 @@ export function createFnbModule({
       importPreview = null;
     } catch (error) {
       console.error("F&B order import failed", error);
-      toast("Imported " + imported + " of " + rows.length + ". Import stopped at the first save error; review pending orders before retrying.", "err");
+      if (imported > 0 && importPreview) importPreview = { ...importPreview, rows: rows.slice(imported) };
+      toast("Imported " + imported + " of " + rows.length + ". Only the remaining rows stay in the preview, so retrying will not duplicate the successful prefix.", "err");
     } finally { importBusy = false; render(); }
   }
   async function saveOrder() {
