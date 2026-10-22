@@ -1611,6 +1611,7 @@ function deleteStoreItemFromEditor(id) {
 }
 function deleteStoreInwardFromEditor(id) {
   const receipt=S.inwards.find(x=>x.id===id); if(!receipt)return;
+  if(receipt.transactionType === "FNB_RECEIPT"){toast("This receipt is linked to F&B order history. Manage it through F&B to avoid a stock mismatch.","err");return;}
   openForm({title:'Delete goods receipt',submit:'Delete receipt & reverse stock',danger:true,html:`<p style="margin:0 0 10px">Delete GRN <b>${esc(receipt.invoiceNumber||receipt.id)}</b> for <b>${esc(receipt.itemName||'item')}</b>?</p><p class="muted sm">This will subtract ${fmt(receipt.quantity,3)} ${esc(receipt.unit||'units')} from the linked item's current stock. This cannot be undone.</p>`,onSubmit:async()=>{
     await runTransaction(db,async tx=>{
       const receiptRef=doc(db,CONFIG.COL.inwards,id), receiptSnap=await tx.get(receiptRef);
