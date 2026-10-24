@@ -16,7 +16,7 @@ const firebaseConfig = {
   appId: "1:48049661517:android:98bb300b59755541d61e04"   // TODO: replace with the WEB app id from Firebase console
 };
 const CONFIG = {
-  REQUIRE_LOGIN: true,         // RBAC requires Firebase Authentication plus an app_roles/{uid} document
+  REQUIRE_LOGIN: false,        // TEMPORARY UI-only testing bypass; Firestore rules remain enforced
   SERVICE_INTERVAL: 250,       // engine hours between services
   SERVICE_WARN: 25,            // amber when this many hours (or fewer) remain
   LAT: 12.756, LNG: 77.822,
@@ -2106,9 +2106,11 @@ onAuthStateChanged(auth, async user => {
   const login = $("#login"), gate = $("#pinGate"), error = $("#loginErr");
   if (gate) gate.hidden = true;
   if (!user) {
-    if (login) login.hidden = false;
+    // TEMPORARY: hide the login screen so the UI can be inspected without signing in.
+    // This does not grant Firestore access; existing security rules still deny unauthenticated requests.
+    if (login) login.hidden = true;
     if ($("#signoutBtn")) $("#signoutBtn").hidden = true;
-    document.body.classList.add("auth-locked");
+    document.body.classList.remove("auth-locked");
     buildNav();
     return;
   }
