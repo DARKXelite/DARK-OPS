@@ -2118,10 +2118,10 @@ onAuthStateChanged(auth, async user => {
   }
   try {
     let roleSnap = await getDoc(doc(db, "app_roles", user.uid));
-    // One-time bootstrap: the explicitly allowlisted, verified owner email receives full admin access
-    // only when no app role exists yet. Firestore rules enforce the same email/verification checks.
-    const bootstrapAdminEmail = "darkx@darkverse.go";
-    if (!roleSnap.exists() && String(user.email || "").toLowerCase() === bootstrapAdminEmail && user.emailVerified) {
+    // One-time bootstrap for the explicitly allowlisted first-owner UID.
+    // Firestore rules must enforce the same UID, own-document-only, admin-only creation.
+    const bootstrapAdminUid = "C1l8ArB3GlSaAQr6iw4O9RKGGik1";
+    if (!roleSnap.exists() && user.uid === bootstrapAdminUid) {
       await setDoc(doc(db, "app_roles", user.uid), {
         role: "admin", active: true, displayName: "DARKX Administrator",
         updatedAt: serverTimestamp(), updatedBy: user.uid
