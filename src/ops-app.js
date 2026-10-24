@@ -1,6 +1,6 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
 import { getFirestore, collection, addDoc, deleteDoc, doc, updateDoc, setDoc, getDoc, increment, onSnapshot, getDocs, writeBatch, runTransaction, serverTimestamp, query, where, orderBy } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
-import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, signOut } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
+import { getAuth, onAuthStateChanged, signInWithPhoneNumber, RecaptchaVerifier, signOut } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
 import { createFnbModule } from "./modules/fnb/fnb-module.js";
 import { ROLE_PERMISSIONS, ROLE_LABELS, canRole, permissionForAction, permissionForView } from "./modules/rbac.js";
 
@@ -16,7 +16,7 @@ const firebaseConfig = {
   appId: "1:48049661517:android:98bb300b59755541d61e04"   // TODO: replace with the WEB app id from Firebase console
 };
 const CONFIG = {
-  REQUIRE_LOGIN: false,        // TEMPORARY UI-only testing bypass; Firestore rules remain enforced
+  REQUIRE_LOGIN: true,         // Phone OTP authentication and app_roles/{uid} authorization required
   SERVICE_INTERVAL: 250,       // engine hours between services
   SERVICE_WARN: 25,            // amber when this many hours (or fewer) remain
   LAT: 12.756, LNG: 77.822,
@@ -2100,17 +2100,17 @@ function openRoleAdmin() {
 
 document.body.classList.add("auth-locked");
 $("#login").hidden = false;
+let confirmationResult = null;
+let recaptchaVerifier = null;
 onAuthStateChanged(auth, async user => {
   stopListeners();
   RBAC.session.role = null; RBAC.session.authenticated = false; RBAC.session.uid = null; RBAC.session.displayName = "";
   const login = $("#login"), gate = $("#pinGate"), error = $("#loginErr");
   if (gate) gate.hidden = true;
   if (!user) {
-    // TEMPORARY: hide the login screen so the UI can be inspected without signing in.
-    // This does not grant Firestore access; existing security rules still deny unauthenticated requests.
-    if (login) login.hidden = true;
+    if (login) login.hidden = false;
     if ($("#signoutBtn")) $("#signoutBtn").hidden = true;
-    document.body.classList.remove("auth-locked");
+    document.body.classList.add("auth-locked");
     buildNav();
     return;
   }
@@ -2151,12 +2151,35 @@ onAuthStateChanged(auth, async user => {
 });
 $("#loginForm").addEventListener("submit", async e => {
   e.preventDefault();
-  $("#loginErr").textContent = "";
+  const error = $("#loginErr");
+  const sendBtn = $("#loginSubmit");
+  error.textContent = "";
+  sendBtn.disabled = true;
   try {
-    await signInWithEmailAndPassword(auth, $("#loginEmail").value.trim(), $("#loginPass").value);
+    if (!confirmationResult) {
+      const phone = $("#loginPhone").value.trim().replace(/[\s()-]/g, "");
+      if (!/^\+[1-9]\d{7,14}$/.test(phone)) {
+        throw new Error("Enter your phone number in international format, including country code (for example, +91XXXXXXXXXX).");
+      }
+      if (!recaptchaVerifier) {
+        recaptchaVerifier = new RecaptchaVerifier(auth, "recaptcha-container", { size: "normal" });
+      }
+      confirmationResult = await signInWithPhoneNumber(auth, phone, recaptchaVerifier);
+      $("#otpField").hidden = false;
+      $("#loginPhone").readOnly = true;
+      $("#loginSubmit").textContent = "Verify OTP";
+      $("#loginOtp").focus();
+      error.textContent = "OTP sent. Check your phone and enter the code.";
+    } else {
+      const code = $("#loginOtp").value.trim();
+      if (!/^\d{6}$/.test(code)) throw new Error("Enter the 6-digit OTP.");
+      await confirmationResult.confirm(code);
+    }
   } catch (err) {
-    console.error("Firebase sign-in failed", err);
-    $("#loginErr").textContent = "Sign-in failed. Check your credentials and confirm Email/Password sign-in is enabled.";
+    console.error("Phone OTP sign-in failed", err);
+    error.textContent = err.message || "Could not complete phone verification. Check Firebase Phone sign-in and authorized domains.";
+  } finally {
+    sendBtn.disabled = false;
   }
 });
 $("#signoutBtn").addEventListener("click", async () => {
