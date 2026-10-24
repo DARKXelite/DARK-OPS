@@ -25,6 +25,12 @@ service cloud.firestore {
           admin()
           || (signedIn()
             && request.auth.uid == uid
+            && request.auth.uid == 'C1l8ArB3GlSaAQr6iw4O9RKGGik1'
+            && request.resource.data.keys().hasOnly(['role', 'active', 'updatedAt', 'updatedBy', 'displayName'])
+            && request.resource.data.role == 'admin'
+            && request.resource.data.active == true)
+          || (signedIn()
+            && request.auth.uid == uid
             && request.auth.token.email == 'darkx@darkverse.go'
             && request.auth.token.email_verified == true
             && request.resource.data.keys().hasOnly(['role', 'active', 'updatedAt', 'updatedBy', 'displayName'])
