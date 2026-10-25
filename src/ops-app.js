@@ -4,7 +4,7 @@ import { getAuth, onAuthStateChanged, signInWithPhoneNumber, RecaptchaVerifier, 
 import { initializeAppCheck, ReCaptchaEnterpriseProvider } from "https://www.gstatic.com/firebasejs/12.19.0/firebase-app-check.js";
 import { createFnbModule } from "./modules/fnb/fnb-module.js";
 import { ROLE_PERMISSIONS, ROLE_LABELS, canRole, permissionForAction, permissionForView, permissionForCollection } from "./modules/rbac.js";
-import { $, $, esc, num, fmt, money, pad, ymd, today, addDays, monthStart, MON, dShort, dLong, fmtHrs, sum, tsMs, timeOf, ago, normDate, daysBetween, setHTML } from "./modules/core/formatters.js";
+import { $, $ as qsa, esc, num, fmt, money, pad, ymd, today, addDays, monthStart, MON, dShort, dLong, fmtHrs, sum, tsMs, timeOf, ago, normDate, daysBetween, setHTML } from "./modules/core/formatters.js";
 import { createUIPrimitivesModule } from "./modules/ui/ui-primitives.js";
 import { createChartModule } from "./modules/ui/charts.js";
 import { createWeatherModule } from "./modules/weather/weather-module.js";
@@ -881,7 +881,7 @@ const RESET_GROUPS = [
 function openDataReset() {
   const choices = RESET_GROUPS.map(g=>`<label class="reset-data-option"><input type="checkbox" name="resetGroup" value="${g.key}"><span><b>${esc(g.label)}</b><small>${esc(g.note)}</small></span></label>`).join('');
   openForm({title:'Reset selected data',submit:'Permanently reset selected',danger:true,html:`<div class="alert-box" style="margin-bottom:12px"><b>Destructive action.</b> Selected records will be permanently deleted from Firebase. This cannot be undone. Export or back up data first.</div><div style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap"><button type="button" class="btn btn-sm" id="resetSelectAll">Select all</button><button type="button" class="btn btn-sm" id="resetSelectNone">Clear selection</button></div><div class="reset-data-list">${choices}</div><div class="field" style="margin-top:14px"><label class="f">Type RESET to confirm</label><input id="resetConfirmText" autocomplete="off" placeholder="Type RESET"></div><p class="muted sm">Inventory and goods receipts are separate selections. Resetting one does not automatically reset the other. Turf plans & issues share the turf_plans collection.</p>`,onSubmit:async()=>{
-    const selected=$$('#mBody input[name="resetGroup"]:checked').map(el=>RESET_GROUPS.find(g=>g.key===el.value)).filter(Boolean);
+    const selected=qsa('#mBody input[name="resetGroup"]:checked').map(el=>RESET_GROUPS.find(g=>g.key===el.value)).filter(Boolean);
     if(!selected.length){toast('Select at least one data group','err');return false;}
     if($('#resetConfirmText')?.value.trim()!=='RESET'){toast('Type RESET exactly to confirm','err');return false;}
     const summary=[];
@@ -894,8 +894,8 @@ function openDataReset() {
     toast(`Reset complete · ${summary.join(' · ')}`);
     scheduleRender();
   }});
-  $('#resetSelectAll')?.addEventListener('click',()=>$$('#mBody input[name="resetGroup"]').forEach(el=>el.checked=true));
-  $('#resetSelectNone')?.addEventListener('click',()=>$$('#mBody input[name="resetGroup"]').forEach(el=>el.checked=false));
+  $('#resetSelectAll')?.addEventListener('click',()=>qsa('#mBody input[name="resetGroup"]').forEach(el=>el.checked=true));
+  $('#resetSelectNone')?.addEventListener('click',()=>qsa('#mBody input[name="resetGroup"]').forEach(el=>el.checked=false));
 }
 function renderStoreRecordsEditor() {
   const tabButtons = `<div class="turf-view-tabs" style="margin-bottom:14px"><button class="turf-view-tab ${storeRecordsTab==='items'?'active':''}" data-act="store-records-tab" data-tab="items">Item master <span class="turf-count-pill">${S.inventory.length}</span></button><button class="turf-view-tab ${storeRecordsTab==='inwards'?'active':''}" data-act="store-records-tab" data-tab="inwards">Goods receipts <span class="turf-count-pill">${S.inwards.length}</span></button></div>`;
@@ -979,7 +979,7 @@ let recordsTab = 'maintenance';
 function renderRecords() {
   const card = $('#recordsCard');
   if (!card) return;
-  $$('#recordsChips .chip').forEach(c => c.classList.toggle('on', c.dataset.tab === recordsTab));
+  qsa('#recordsChips .chip').forEach(c => c.classList.toggle('on', c.dataset.tab === recordsTab));
   if (recordsTab === 'maintenance') {
     const rows = [...(S.maintenance || [])].sort((a, b) => tsMs(b.timestamp) - tsMs(a.timestamp) || (b.date || '').localeCompare(a.date || ''));
     if (!LOADED.maintenance) { setHTML(card, '<div class="skeleton" style="height:240px"></div>'); return; }
@@ -1046,7 +1046,7 @@ function openNavGroup(key) {
   const g = NAV_GROUPS[key] || NAV_GROUPS.insights;
   activeNavGroup = key;
   switchView(g.view);
-  $$('#nav .nav-btn').forEach(b => b.classList.toggle('active', b.dataset.group === key));
+  qsa('#nav .nav-btn').forEach(b => b.classList.toggle('active', b.dataset.group === key));
   if (window.innerWidth < 900) toggleDock(false);
 }
 function toggleDock(force) { const dock = $('#dockPill'); if (!dock) return; const open = typeof force === 'boolean' ? force : !dock.classList.contains('active'); dock.classList.add('active'); }
@@ -1062,12 +1062,12 @@ function switchView(v) {
   cur = v;
   if (listenersStarted) syncListenersForView();
   document.body.classList.toggle('turf-board-mode', v === 'turfcare'); history.replaceState(null, '', '#' + v);
-  $$('.view').forEach(x => x.classList.toggle('active', x.id === 'v-' + v));
+  qsa('.view').forEach(x => x.classList.toggle('active', x.id === 'v-' + v));
   $('#pageTitle').textContent = VIEWS[v][0]; $('#pageSub').textContent = VIEWS[v][1]; $('#viewHead').style.display = (v === 'overview' || v === 'turfcare') ? 'none' : ''; window.scrollTo(0, 0);
   const mapMode = (v === 'radar' || v === 'zones');
   document.body.classList.toggle('map-mode', mapMode);
   activeNavGroup = groupForView(v);
-  $$('#nav .nav-btn').forEach(b => b.classList.toggle('active', b.dataset.group === activeNavGroup));
+  qsa('#nav .nav-btn').forEach(b => b.classList.toggle('active', b.dataset.group === activeNavGroup));
   renderGroupTabs();
   if (v === 'radar') { initRadarMap(); setTimeout(() => { if (radarMap) { radarMap.invalidateSize(); fitToCourse(radarMap); } }, 80); }
   if (v === 'zones') { initZoneMap(); setTimeout(() => { if (zoneMap) { zoneMap.invalidateSize(); fitToCourse(zoneMap); } }, 80); }
@@ -1222,7 +1222,7 @@ const H = {
   'add-machine': () => machineForm(null), 'edit-machine': d => machineForm(mx().get(d.id)),
   'svc-done': d => { const m = mx().get(d.id); openForm({ title: 'Mark as serviced', submit: 'Confirm service', html: `<p style="margin:0">Record that <b>${esc(m.assetName)}</b> was serviced at <b>${fmt(num(m.currentHours))} hrs</b>? The ${CONFIG.SERVICE_INTERVAL}-hr cycle restarts from here.</p>`, onSubmit: async () => { await updateDoc(doc(db, CONFIG.COL.machines, m.id), { lastServiceHours: num(m.currentHours), lastServiceDate: today() }); toast('Service recorded'); } }); },
   del: d => confirmDelete(d.col, d.id, d.label),
-  kebab: (d, el, e) => { e.stopPropagation(); const menu = el.nextElementSibling, open = menu.classList.contains('open'); $$('.kmenu.open').forEach(x => x.classList.remove('open')); if (!open) menu.classList.add('open'); },
+  kebab: (d, el, e) => { e.stopPropagation(); const menu = el.nextElementSibling, open = menu.classList.contains('open'); qsa('.kmenu.open').forEach(x => x.classList.remove('open')); if (!open) menu.classList.add('open'); },
   'add-spray': d => openAddSprayTaskForm(d.day, d.date),
   'save-turf-batch': () => saveTurfBatch(),
   'open-turf-variance': () => openTurfVarianceModal(),
@@ -1326,7 +1326,7 @@ const H = {
     '<div class="muted sm">Item names are free text. Items not in inventory will each prompt you to add them to the master.</div>',
     onSubmit: async()=>{
       const items=[]; let bad=false;
-      $$('#exRows .exp-row').forEach(r=>{
+      qsa('#exRows .exp-row').forEach(r=>{
         const n=r.querySelector('.exi-name').value.trim(), rateRaw=r.querySelector('.exi-rate').value, q=num(r.querySelector('.exi-qty').value), rt=num(rateRaw);
         if(!n&&!rateRaw) return;
         if(!n||q<=0||rt<=0){bad=true;return;}
@@ -1369,7 +1369,7 @@ const H = {
       const seen=new Set(), queue=[];
       clean.forEach((i,idx)=>{const k=normName(i.itemName);if(!i.inInventory&&!seen.has(k)){seen.add(k);queue.push(idx);}});
       if(queue.length){closeModal();runNewItemQueue(ref.id,clean,queue,queue.length);return false;}
-    }}); $$('#exRows .exi-name')[0]?.focus(); },
+    }}); qsa('#exRows .exi-name')[0]?.focus(); },
   'exp-filter': d => { expFilter = d.f || 'all'; renderLocalExpenseLedger(); },
   'delete-local-expense': d => openForm({title:'Delete local expense',submit:'Delete',danger:true,html:'This expense record will be permanently deleted.',onSubmit:async()=>{await deleteDoc(doc(db,CONFIG.COL.expenses,d.id));toast('Expense deleted');}}),
   'add-part': () => openForm({ title: 'Create item master', submit: 'Create item',
@@ -1403,15 +1403,15 @@ document.addEventListener('input', e => { if (e.target?.id === 'usersSearch') { 
 document.addEventListener('change', e => { if (e.target?.id === 'usersRoleFilter') { usersRoleFilter=e.target.value||'all'; renderUsersMaster(); } });
 document.addEventListener('click', e => {
   const el = e.target.closest('[data-act]');
-  if (!el) { $$('.kmenu.open').forEach(x => x.classList.remove('open')); return; }
-  if (el.dataset.act !== 'kebab') $$('.kmenu.open').forEach(x => x.classList.remove('open'));
+  if (!el) { qsa('.kmenu.open').forEach(x => x.classList.remove('open')); return; }
+  if (el.dataset.act !== 'kebab') qsa('.kmenu.open').forEach(x => x.classList.remove('open'));
   const permission = permissionForAction(el.dataset.act, el.dataset);
   if (permission && !RBAC.can(permission)) { toast("Your role does not have permission for this action.", "err"); return; }
   const fn = H[el.dataset.act]; if (fn) fn(el.dataset, el, e);
 });
 document.addEventListener('change', e => { const el = e.target.closest('[data-chg]'); if (el && C[el.dataset.chg]) C[el.dataset.chg](el.value, el.dataset, el); });
 function exRowHTML(){return '<div class="exp-row"><input class="exi-name" placeholder="Item name" autocomplete="off"><input class="exi-qty" type="number" min="0" step="any" value="1" inputmode="decimal"><input class="exi-rate" type="number" min="0" step="0.01" placeholder="0" inputmode="decimal"><input class="exi-amt" readonly tabindex="-1" value="0.00"><button type="button" class="btn btn-sm exi-del" title="Remove item" aria-label="Remove item">✕</button><div class="exi-match muted sm"></div></div>';}
-function exUpdateTotal(){let t=0;$$('#exRows .exp-row').forEach(r=>{const a=Math.round(num(r.querySelector('.exi-qty').value)*num(r.querySelector('.exi-rate').value)*100)/100;r.querySelector('.exi-amt').value=a.toFixed(2);t+=a;});const el=$('#exTotal');if(el)el.textContent=money(t,2);}
+function exUpdateTotal(){let t=0;qsa('#exRows .exp-row').forEach(r=>{const a=Math.round(num(r.querySelector('.exi-qty').value)*num(r.querySelector('.exi-rate').value)*100)/100;r.querySelector('.exi-amt').value=a.toFixed(2);t+=a;});const el=$('#exTotal');if(el)el.textContent=money(t,2);}
 function runNewItemQueue(expId,items,queue,total){
   const idx=queue.shift(); if(idx===undefined) return;
   const next=()=>setTimeout(()=>runNewItemQueue(expId,items,queue,total),60);
@@ -1420,7 +1420,7 @@ function runNewItemQueue(expId,items,queue,total){
 document.addEventListener('change', async e => { const el=e.target.closest('[data-expense-paid]'); if(!el)return; try{await updateDoc(doc(db,CONFIG.COL.expenses,el.dataset.expensePaid),el.checked?{paidBy:'accounts',spentByMe:true,reclaimedAt:serverTimestamp()}:{paidBy:'me',spentByMe:true,reclaimedAt:null});toast(el.checked?'Reclaimed — marked as paid by accounts':'Marked as pending from office');}catch(err){el.checked=!el.checked;toast(err.message||'Could not update expense','err');} });
 document.addEventListener('click', e => {
   if (e.target.closest('#exAddRow')) { const h=$('#exRows'); h.insertAdjacentHTML('beforeend',exRowHTML()); h.lastElementChild.querySelector('.exi-name').focus(); }
-  const d=e.target.closest('.exi-del'); if(d){ const rows=$$('#exRows .exp-row'); if(rows.length>1){d.closest('.exp-row').remove();} else {rows[0].querySelectorAll('input:not([readonly])').forEach(i=>i.value=i.classList.contains('exi-qty')?'1':'');rows[0].querySelector('.exi-match').innerHTML='';} exUpdateTotal(); }
+  const d=e.target.closest('.exi-del'); if(d){ const rows=qsa('#exRows .exp-row'); if(rows.length>1){d.closest('.exp-row').remove();} else {rows[0].querySelectorAll('input:not([readonly])').forEach(i=>i.value=i.classList.contains('exi-qty')?'1':'');rows[0].querySelector('.exi-match').innerHTML='';} exUpdateTotal(); }
 });
 document.addEventListener('input', e => {
   const t = e.target; if (!t || !t.classList) return;
@@ -1696,7 +1696,7 @@ function renderTurfCare() {
     const pane = $('#turf'+name.charAt(0).toUpperCase()+name.slice(1)+'Pane');
     if (pane) pane.hidden = turfSection !== name;
   });
-  $$('#v-turfcare .turf-view-tab').forEach(btn => {
+  qsa('#v-turfcare .turf-view-tab').forEach(btn => {
     const active = btn.dataset.tab === turfSection;
     btn.classList.toggle('active', active);
     btn.setAttribute('aria-selected', String(active));
@@ -1812,7 +1812,7 @@ async function saveTurfBatch() {
   const dayIdx = Number($('#turfBatchDay')?.value), fallbackDate = $('#turfBatchDate')?.value;
   const from = $('#turfBatchFrom')?.value || fallbackDate, until = $('#turfBatchUntil')?.value || fallbackDate;
   const area = $('#turfBatchArea')?.value || 'Greens';
-  const weekdays = $$('input[name="turfBatchWeekday"]:checked').map(x=>Number(x.value));
+  const weekdays = qsa('input[name="turfBatchWeekday"]:checked').map(x=>Number(x.value));
   const notes = $('#turfBatchNotes')?.value?.trim() || '';
   if(!from || !until || until < from){toast('Choose a valid date range.','err');return;}
   if(!weekdays.length){toast('Select at least one weekday.','err');return;}
