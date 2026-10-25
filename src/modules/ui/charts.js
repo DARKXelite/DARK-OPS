@@ -1,6 +1,6 @@
 /** Function-based Chart module. Dependencies are injected from the application context. */
 export function createChartModule(deps) {
-  const { esc, fmt } = deps;
+  const { fmt, sc } = deps;
 function barChart(items, { unit = '', h = 190 } = {}) {
   if (!items.length) return '<div class="empty">No data in this range</div>';
   const W_ = 640, pl = 38, pb = 26, pt = 16, pr = 8, max = Math.max(1, ...items.map(i => i.value)), n = items.length;
