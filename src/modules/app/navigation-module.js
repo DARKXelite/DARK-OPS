@@ -105,7 +105,7 @@ function stopOneListener(k) {
 function syncListenersForView() {
   if (!listenersStarted) return;
   setConn('');
-  const desired = new Set(VIEW_COLLECTIONS[cur] || []);
+  const desired = new Set(VIEW_COLLECTIONS[getCurrentView()] || []);
   Object.keys(CONFIG.COL).forEach(k => {
     const permitted = RBAC.can(permissionForCollection(CONFIG.COL[k], false));
     const shouldListen = desired.has(k) && permitted;
