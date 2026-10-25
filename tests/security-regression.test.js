@@ -32,7 +32,7 @@ test("owner bootstrap is restricted to the exact UID and admin role", async () =
   const ownerUid = "C1l8ArB3GlSaAQr6iw4O9RKGGik1";
   assert.ok(js.includes(ownerUid), "app bootstrap must use the documented owner UID");
   assert.ok(rules.includes(ownerUid), "Firestore bootstrap must use the same owner UID");
-  assert.doesNotMatch(rules, /request\\.auth\\.token\\.email/, "alternate email bootstrap must not grant administrator access");
+  assert.doesNotMatch(rules, /request\.auth\.token\.email/, "alternate email bootstrap must not grant administrator access");
   assert.match(js, /if \(!roleSnap\.exists\(\) && user\.uid === bootstrapAdminUid\)/);
   assert.match(rules, /request\.auth\.uid == uid[\s\S]{0,160}request\.auth\.uid == 'C1l8ArB3GlSaAQr6iw4O9RKGGik1'[\s\S]{0,300}request\.resource\.data\.role == 'admin'[\s\S]{0,100}request\.resource\.data\.active == true/);
 });
