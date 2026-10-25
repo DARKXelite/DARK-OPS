@@ -43,20 +43,27 @@ service cloud.firestore {
         && (!d.keys().hasAny(['sourceRow']) || (d.sourceRow is number && d.sourceRow >= 0));
     }
 
-    function validFnbReceiptOrderUpdate() {
+    function validFnbReceiptOrderUpdate(id) {
       let d = request.resource.data;
       let old = resource.data;
-      return d.diff(old).affectedKeys().hasOnly(['receivedQty', 'status', 'updatedAt'])
+      let receiptPath = /databases/$(database)/documents/fnb_receipts/$(d.lastReceiptId);
+      let quantityDelta = d.receivedQty - old.receivedQty;
+      return d.diff(old).affectedKeys().hasOnly(['receivedQty', 'status', 'updatedAt', 'lastReceiptId'])
         && d.orderedQty is number && old.orderedQty is number
         && d.orderedQty == old.orderedQty
-        && d.receivedQty is number
-        && old.receivedQty is number
+        && d.receivedQty is number && old.receivedQty is number
         && d.receivedQty > old.receivedQty
+        && d.lastReceiptId is string && d.lastReceiptId.size() > 0
+        // Receipt and order balance must be posted in the same transaction.
+        && existsAfter(receiptPath)
+        && getAfter(receiptPath).data.orderId == id
+        && getAfter(receiptPath).data.quantity is number
+        && quantityDelta > getAfter(receiptPath).data.quantity - 0.000001
+        && quantityDelta < getAfter(receiptPath).data.quantity + 0.000001
         // Tiny tolerance accommodates IEEE-754 decimal arithmetic, not meaningful over-receipt.
         && d.receivedQty <= d.orderedQty + 0.000001
         && d.updatedAt == request.time
-        && ((d.receivedQty == 0 && d.status == 'Pending')
-          || (d.receivedQty > 0 && d.receivedQty < d.orderedQty && d.status == 'Partial')
+        && ((d.receivedQty > 0 && d.receivedQty < d.orderedQty && d.status == 'Partial')
           || (d.receivedQty >= d.orderedQty && d.receivedQty <= d.orderedQty + 0.000001 && d.status == 'Received'));
     }
 
@@ -130,7 +137,7 @@ service cloud.firestore {
         && getAfter(receiptPath).data.rate == d.rate;
     }
 
-    function validFnbReceiptCreate() {
+    function validFnbReceiptCreate(id) {
       let d = request.resource.data;
       let orderPath = /databases/$(database)/documents/fnb_orders/$(d.orderId);
       return d.keys().hasOnly([
@@ -154,6 +161,7 @@ service cloud.firestore {
         && d.transactionType == 'FNB_RECEIPT'
         && d.inwardId is string && d.inwardId.size() > 0
         && exists(orderPath)
+        && getAfter(orderPath).data.lastReceiptId == id
         && getAfter(orderPath).data.receivedQty is number
         && get(orderPath).data.receivedQty is number
         && getAfter(orderPath).data.receivedQty - get(orderPath).data.receivedQty > d.quantity - 0.000001
@@ -260,13 +268,13 @@ service cloud.firestore {
       allow read: if fnbTeam();
       allow create: if fnbTeam() && validFnbOrderCreate();
       // Receipt updates may change only receipt balance, status, and server timestamp.
-      allow update: if fnbTeam() && validFnbReceiptOrderUpdate();
+      allow update: if fnbTeam() && validFnbReceiptOrderUpdate(id);
       allow delete: if manager();
     }
     match /fnb_receipts/{id} {
       allow read: if fnbTeam();
       // A receipt must be paired with the matching order-balance increase in the same transaction.
-      allow create: if fnbTeam() && validFnbReceiptCreate();
+      allow create: if fnbTeam() && validFnbReceiptCreate(id);
       // Receipt ledger records are immutable. Correct errors through a documented reversal flow.
       allow update, delete: if false;
     }
