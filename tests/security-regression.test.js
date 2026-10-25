@@ -70,3 +70,23 @@ test("legacy Firebase module cannot disable authentication and matches the web a
   assert.match(active, /1:48049661517:web:8075879055223c9cd61e04/);
   assert.doesNotMatch(legacy, /REQUIRE_LOGIN:\s*false/);
 });
+
+test("F&B writes enforce order and receipt invariants", async () => {
+  const rules = await read("../firestore.rules");
+  assert.match(rules, /function validFnbOrderCreate\(\)/);
+  assert.match(rules, /d\.orderedQty is number && d\.orderedQty > 0/);
+  assert.match(rules, /d\.receivedQty is number && d\.receivedQty == 0/);
+  assert.match(rules, /function validFnbReceiptOrderUpdate\(\)/);
+  assert.match(rules, /d\.receivedQty <= d\.orderedQty/);
+  assert.match(rules, /function validFnbReceiptCreate\(\)/);
+  assert.match(rules, /getAfter\(orderPath\)\.data\.receivedQty - get\(orderPath\)\.data\.receivedQty == d\.quantity/);
+  assert.match(rules, /allow update, delete: if false;/);
+});
+
+test("store inward records validate schemas and protect F&B-linked records", async () => {
+  const rules = await read("../firestore.rules");
+  assert.match(rules, /function validNormalInwardCreate\(\)/);
+  assert.match(rules, /function validFnbInwardCreate\(id\)/);
+  assert.match(rules, /getAfter\(receiptPath\)\.data\.inwardId == id/);
+  assert.match(rules, /resource\.data\.transactionType != 'FNB_RECEIPT'[\s\S]{0,120}request\.resource\.data\.transactionType != 'FNB_RECEIPT'/);
+});
