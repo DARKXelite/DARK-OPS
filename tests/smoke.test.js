@@ -19,7 +19,7 @@ test("page shell loads extracted CSS and JavaScript modules", async () => {
 test("Firebase client preserves SDK version and Firestore collections", async () => {
   const client = await read("../src/firebase/client.js");
   for (const sdk of ["firebase-app.js", "firebase-firestore.js", "firebase-auth.js"]) {
-    assert.ok(client.includes("firebasejs/10.7.1/" + sdk), "missing pinned SDK " + sdk);
+    assert.ok(client.includes("firebasejs/12.19.0/" + sdk), "missing pinned SDK " + sdk);
   }
   for (const collection of ["users", "machines", "fuel_logs", "shifts", "CourseZones", "live_telemetry", "inventory", "logs", "maintenance_logs", "assignment_logs", "turf_plans", "store_inwards"]) {
     assert.ok(client.includes(collection), "missing existing collection " + collection);
