@@ -52,11 +52,12 @@ service cloud.firestore {
         && d.receivedQty is number
         && old.receivedQty is number
         && d.receivedQty > old.receivedQty
-        && d.receivedQty <= d.orderedQty
+        // Tiny tolerance accommodates IEEE-754 decimal arithmetic, not meaningful over-receipt.
+        && d.receivedQty <= d.orderedQty + 0.000001
         && d.updatedAt == request.time
         && ((d.receivedQty == 0 && d.status == 'Pending')
           || (d.receivedQty > 0 && d.receivedQty < d.orderedQty && d.status == 'Partial')
-          || (d.receivedQty == d.orderedQty && d.status == 'Received'));
+          || (d.receivedQty >= d.orderedQty && d.receivedQty <= d.orderedQty + 0.000001 && d.status == 'Received'));
     }
 
     function validNormalInwardCreate() {
@@ -155,7 +156,8 @@ service cloud.firestore {
         && exists(orderPath)
         && getAfter(orderPath).data.receivedQty is number
         && get(orderPath).data.receivedQty is number
-        && getAfter(orderPath).data.receivedQty - get(orderPath).data.receivedQty == d.quantity
+        && getAfter(orderPath).data.receivedQty - get(orderPath).data.receivedQty > d.quantity - 0.000001
+        && getAfter(orderPath).data.receivedQty - get(orderPath).data.receivedQty < d.quantity + 0.000001
         && getAfter(orderPath).data.receivedQty <= getAfter(orderPath).data.orderedQty;
     }
 
