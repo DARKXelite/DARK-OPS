@@ -40,7 +40,7 @@ npm run build
 
 ## Firebase and data safety
 
-The dashboard keeps its existing Firebase browser SDK imports pinned to version 10.7.1. Existing client configuration values and Firestore collection names are preserved. Treat collection names, query/listener behavior, authentication assumptions, and Firebase access rules as compatibility constraints.
+The dashboard keeps its existing Firebase browser SDK imports pinned to version 12.19.0. Existing client configuration values and Firestore collection names are preserved. Treat collection names, query/listener behavior, authentication assumptions, and Firebase access rules as compatibility constraints.
 
 Ordinary add/update/delete/increment operations go through the repository adapter. The weekly turf planner writes as a batch, and goods inward updates the stock master plus receipt ledger in one transaction. These are deliberately explicit, tested use cases rather than generic writes.
 
