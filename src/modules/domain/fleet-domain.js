@@ -50,16 +50,6 @@ function monthlyCostSnapshot() {
     maintenanceCost, machineCosts, serviceDue: S.machines.filter(m => svc(m).remaining <= CONFIG.SERVICE_WARN), lowStock: inv.low };
 }
 
-const LOADED = {};
-let cur = 'overview', curModalRender = null;
-const getCurrentView = () => cur;
-const F = { q: '', cat: 'All', fuel: 'All', sort: 'service' };
-const R = {
-  fuel:   { preset: 'today', from: today(), to: today() },
-  run:    { preset: 'today', from: today(), to: today() },
-  ledger: { preset: 'today', from: today(), to: today(), machine: '', type: '' },
-  shifts: { preset: 'last7', from: addDays(today(), -6), to: today(), machine: '', op: '' }
-};
 let _mx = null, _mxv = -1;
 function mx() { if (_mxv !== S._v) { _mx = new Map(); S.machines.forEach(m => { _mx.set(m.id, m); if (m.assetName) _mx.set(m.assetName, m); }); _mxv = S._v; } return _mx; }
 const mKey = id => { if (!id) return 'Unknown'; const m = mx().get(id); return m ? m.id : 'raw:' + id; };
