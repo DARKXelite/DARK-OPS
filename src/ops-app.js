@@ -1992,9 +1992,34 @@ const H = {
       const clean=items.map(({_ex,_stock,...rest})=>rest);
       const doc0={itemName:clean.length===1?clean[0].itemName:clean[0].itemName+' +'+(clean.length-1)+' more',items:clean,itemCount:clean.length,amount:total,paidBy,spentByMe:paidBy==='me',date:$('#exDate').value||today(),vendor:$('#exVendor').value.trim(),createdAt:serverTimestamp()};
       if(clean.length===1){doc0.qty=clean[0].qty;doc0.rate=clean[0].rate;}
-      const ref=await addDoc(collection(db,CONFIG.COL.expenses),doc0);
+      // Persist the bill and linked stock additions atomically, so a failed write cannot leave
+      // an expense saved without its corresponding inventory movement.
+      const ref=doc(collection(db,CONFIG.COL.expenses));
+      const stockMovements=new Map();
+      for(const item of items){
+        if(!item._ex||!item._stock) continue;
+        const id=String(item._ex.id);
+        const movement=stockMovements.get(id)||{qty:0,rate:item.rate};
+        movement.qty+=item.qty;
+        if(!(movement.rate>0)&&item.rate>0) movement.rate=item.rate;
+        stockMovements.set(id,movement);
+      }
+      await runTransaction(db,async tx=>{
+        const movements=[];
+        for(const [id,movement] of stockMovements){
+          const itemRef=doc(db,CONFIG.COL.inventory,id);
+          const snap=await tx.get(itemRef);
+          if(!snap.exists()) throw new Error('An inventory item disappeared while saving this bill. Refresh and retry.');
+          movements.push({id,ref:itemRef,data:snap.data(),movement});
+        }
+        tx.set(ref,doc0);
+        for(const entry of movements){
+          const update={stockQuantity:Math.max(0,num(entry.data.stockQuantity))+entry.movement.qty,updatedAt:serverTimestamp()};
+          if(!num(entry.data.unitCost)&&entry.movement.rate>0) update.unitCost=entry.movement.rate;
+          tx.update(entry.ref,update);
+        }
+      });
       toast('Bill saved · '+money(total,2));
-      for(const i of items){ if(i._ex&&i._stock){const upd={stockQuantity:increment(i.qty)};if(!num(i._ex.unitCost))upd.unitCost=i.rate;await updateDoc(doc(db,CONFIG.COL.inventory,i._ex.id),upd);} }
       const seen=new Set(), queue=[];
       clean.forEach((i,idx)=>{const k=normName(i.itemName);if(!i.inInventory&&!seen.has(k)){seen.add(k);queue.push(idx);}});
       if(queue.length){closeModal();runNewItemQueue(ref.id,clean,queue,queue.length);return false;}
