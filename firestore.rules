@@ -16,6 +16,79 @@ service cloud.firestore {
     function opsTeam() { return hasRole(['admin', 'manager', 'operator']); }
     function fnbTeam() { return hasRole(['admin', 'manager', 'storekeeper']); }
 
+    function validFnbOrderCreate() {
+      let d = request.resource.data;
+      return d.keys().hasOnly([
+          'itemName', 'category', 'supplier', 'orderDate', 'orderedQty', 'receivedQty',
+          'unit', 'expectedRate', 'notes', 'status', 'createdAt', 'updatedAt',
+          'importSource', 'sourceFile', 'sourceRow'
+        ])
+        && d.keys().hasAll([
+          'itemName', 'category', 'supplier', 'orderDate', 'orderedQty', 'receivedQty',
+          'unit', 'expectedRate', 'notes', 'status', 'createdAt', 'updatedAt'
+        ])
+        && d.itemName is string && d.itemName.size() > 0 && d.itemName.size() <= 200
+        && d.category is string && d.category.size() <= 100
+        && d.supplier is string && d.supplier.size() > 0 && d.supplier.size() <= 200
+        && d.orderDate is string && d.orderDate.size() == 10
+        && d.orderedQty is number && d.orderedQty > 0
+        && d.receivedQty is number && d.receivedQty == 0
+        && d.unit is string && d.unit.size() > 0 && d.unit.size() <= 30
+        && d.expectedRate is number && d.expectedRate >= 0
+        && d.notes is string && d.notes.size() <= 1000
+        && d.status == 'Pending'
+        && d.createdAt == request.time && d.updatedAt == request.time
+        && (!d.keys().hasAny(['importSource']) || d.importSource == 'file')
+        && (!d.keys().hasAny(['sourceFile']) || (d.sourceFile is string && d.sourceFile.size() <= 255))
+        && (!d.keys().hasAny(['sourceRow']) || (d.sourceRow is number && d.sourceRow >= 0));
+    }
+
+    function validFnbReceiptOrderUpdate() {
+      let d = request.resource.data;
+      let old = resource.data;
+      return d.diff(old).affectedKeys().hasOnly(['receivedQty', 'status', 'updatedAt'])
+        && d.orderedQty is number && old.orderedQty is number
+        && d.orderedQty == old.orderedQty
+        && d.receivedQty is number
+        && old.receivedQty is number
+        && d.receivedQty > old.receivedQty
+        && d.receivedQty <= d.orderedQty
+        && d.updatedAt == request.time
+        && ((d.receivedQty == 0 && d.status == 'Pending')
+          || (d.receivedQty > 0 && d.receivedQty < d.orderedQty && d.status == 'Partial')
+          || (d.receivedQty == d.orderedQty && d.status == 'Received'));
+    }
+
+    function validFnbReceiptCreate() {
+      let d = request.resource.data;
+      let orderPath = /databases/$(database)/documents/fnb_orders/$(d.orderId);
+      return d.keys().hasOnly([
+          'orderId', 'itemId', 'itemName', 'category', 'supplier', 'unit', 'quantity',
+          'rate', 'receiptDate', 'createdAt', 'transactionType', 'inwardId'
+        ])
+        && d.keys().hasAll([
+          'orderId', 'itemId', 'itemName', 'category', 'supplier', 'unit', 'quantity',
+          'rate', 'receiptDate', 'createdAt', 'transactionType', 'inwardId'
+        ])
+        && d.orderId is string && d.orderId.size() > 0
+        && d.itemId is string && d.itemId.size() > 0
+        && d.itemName is string && d.itemName.size() > 0 && d.itemName.size() <= 200
+        && d.category is string && d.category.size() <= 100
+        && d.supplier is string && d.supplier.size() <= 200
+        && d.unit is string && d.unit.size() > 0 && d.unit.size() <= 30
+        && d.quantity is number && d.quantity > 0
+        && d.rate is number && d.rate >= 0
+        && d.receiptDate is string && d.receiptDate.size() == 10
+        && d.createdAt == request.time
+        && d.transactionType == 'FNB_RECEIPT'
+        && d.inwardId is string && d.inwardId.size() > 0
+        && exists(orderPath)
+        && getAfter(orderPath).data.receivedQty is number
+        && get(orderPath).data.receivedQty is number
+        && getAfter(orderPath).data.receivedQty - get(orderPath).data.receivedQty == d.quantity
+        && getAfter(orderPath).data.receivedQty <= getAfter(orderPath).data.orderedQty;
+    }
+
     match /app_roles/{uid} {
       allow get: if signedIn() && (request.auth.uid == uid || admin());
       allow list: if admin();
@@ -106,15 +179,18 @@ service cloud.firestore {
       allow create, update, delete: if manager();
     }
     match /fnb_orders/{id} {
-      allow read, create: if fnbTeam();
-      allow update: if manager()
-        || (hasRole(['storekeeper'])
-          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['receivedQty', 'status', 'updatedAt']));
+      allow read: if fnbTeam();
+      allow create: if fnbTeam() && validFnbOrderCreate();
+      // Receipt updates may change only receipt balance, status, and server timestamp.
+      allow update: if fnbTeam() && validFnbReceiptOrderUpdate();
       allow delete: if manager();
     }
     match /fnb_receipts/{id} {
-      allow read, create: if fnbTeam();
-      allow update, delete: if manager();
+      allow read: if fnbTeam();
+      // A receipt must be paired with the matching order-balance increase in the same transaction.
+      allow create: if fnbTeam() && validFnbReceiptCreate();
+      // Receipt ledger records are immutable. Correct errors through a documented reversal flow.
+      allow update, delete: if false;
     }
     match /{document=**} {
       allow read, write: if false;
