@@ -18,6 +18,7 @@ import { createTurfOperationsModule } from "./modules/turf/turf-operations-modul
 import { createActionHandlersModule } from "./modules/actions/action-handlers.js";
 import { createFleetDomainModule } from "./modules/domain/fleet-domain.js";
 import { createLedgerViewsModule } from "./modules/views/ledger-views.js";
+import { createRangeControlsModule } from "./modules/ui/range-controls.js";
 import { createCommandPaletteModule } from "./modules/app/command-palette.js";
 import { createAuthControllerModule } from "./modules/app/auth-controller.js";
 import { registerAppEventDelegation } from "./modules/app/event-delegation.js";
@@ -111,16 +112,14 @@ function renderWeather(...args) { return weatherModule.renderWeather(...args); }
 function loadWeather(...args) { return weatherModule.loadWeather(...args); }
 function enableRainNotifications(...args) { return weatherModule.enableRainNotifications(...args); }
 /* ================= RANGE CONTROLS ================= */
-const PRESETS = [['today','Today'],['yesterday','Yesterday'],['last7','Last 7 days'],['month','This month'],['lastmonth','Last month'],['custom','Custom']];
-function setPreset(st, p) {
-  const t = today(); st.preset = p;
-  if (p === 'today') { st.from = st.to = t; } else if (p === 'yesterday') { st.from = st.to = addDays(t, -1); }
-  else if (p === 'last7') { st.from = addDays(t, -6); st.to = t; } else if (p === 'month') { st.from = monthStart(t); st.to = t; }
-  else if (p === 'lastmonth') { const e = addDays(monthStart(t), -1); st.from = monthStart(e); st.to = e; }
-}
-const rangeBar = k => { const st = R[k]; return `<div class="rangebar"><div class="chips">${PRESETS.map(([p, l]) => `<button class="chip ${st.preset === p ? 'on' : ''}" data-act="rpreset" data-k="${k}" data-p="${p}">${l}</button>`).join('')}</div><div class="dates"><label>From<input type="date" value="${st.from}" max="${today()}" data-chg="rfrom" data-k="${k}"></label><label>To<input type="date" value="${st.to}" max="${today()}" data-chg="rto" data-k="${k}"></label></div></div>`; };
-const rangeLabel = st => st.from === st.to ? dLong(st.from) : `${dLong(st.from)} – ${dLong(st.to)}`;
-const RER = { fuel: () => renderFuelModal(), run: () => renderRunModal(), ledger: () => renderLedger(true), shifts: () => renderShifts(true) };
+const rangeControls = createRangeControlsModule({
+  R, today, addDays, monthStart, dLong, renderFuelModal, renderRunModal, renderLedger, renderShifts
+});
+const PRESETS = rangeControls.PRESETS;
+const setPreset = (...args) => rangeControls.setPreset(...args);
+const rangeBar = (...args) => rangeControls.rangeBar(...args);
+const rangeLabel = (...args) => rangeControls.rangeLabel(...args);
+const RER = rangeControls.RER;
 
 /* ================= OVERVIEW ================= */
 function tile(act, icon, tone, label, value, unit, sub) {
