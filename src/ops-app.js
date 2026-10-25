@@ -108,11 +108,22 @@ function inventoryCostSummary(items=S.inventory) {
     reorderValue: items.reduce((a, i) => a + Math.max(0, effectiveReorderLevel(i) - num(i.stockQuantity)) * Math.max(0, num(i.unitCost)), 0), low: items.filter(i => num(i.stockQuantity) <= effectiveReorderLevel(i)) };
 }
 function monthPlansCost(from, to) {
-  const rows = (S.plans || []).filter(p => p.date && p.date >= from && p.date <= to);
-  let cost = 0, priced = 0, unpriced = 0, totalQty = 0;
-  rows.forEach(p => { const prod = S.inventory.find(i => i.id === p.productId) || S.inventory.find(i => i.partName === p.productName); const qty = Math.max(0, num(p.targetQty)); totalQty += qty; if (prod && num(prod.unitCost) > 0) { cost += qty * num(prod.unitCost); priced++; } else unpriced++; });
-  return { rows, cost, priced, unpriced, totalQty };
+  const rows = allTurfPlanRecords().filter(p => {
+    const date = turfRecordDate(p);
+    return date && date >= from && date <= to && isTurfCategory(turfPlanCategory(p)) && ['Issued','Applied'].includes(turfRecordStatus(p));
+  });
+  const lines = rows.map(turfCostLine);
+  const priced = lines.filter(line => line.cost !== null && Number.isFinite(line.cost));
+  const unpriced = lines.filter(line => line.cost === null);
+  return {
+    rows,
+    cost: priced.reduce((sum, line) => sum + line.cost, 0),
+    priced: priced.length,
+    unpriced: unpriced.length,
+    totalQty: lines.reduce((sum, line) => sum + Math.max(0, num(line.qty)), 0)
+  };
 }
+
 function monthlyCostSnapshot() {
   const t = today(), from = monthStart(t), thirty = addDays(t, -29);
   const mFuel = fuelCostSummary(fuelIn(from, t)), d30Fuel = fuelCostSummary(fuelIn(thirty, t));
@@ -474,7 +485,7 @@ function buildReorderUsageIndex() {
     if(item) push(item,date,qty,{machine:f.machineName||mName(f.machineId)||'Unknown machine',source:'fuel'});
   });
   // Turf usage counts issued/applied entries, never still-planned work.
-  (S.plans||[]).forEach(p=>{
+  allTurfPlanRecords().forEach(p=>{
     const status=turfRecordStatus(p); if(!['Issued','Applied'].includes(status)) return;
     const date=turfRecordDate(p), item=turfProductForPlan(p) || resolveInventoryItem(p.productId ?? p.itemId ?? p.inventoryId,turfRecordProductName(p));
     if(!item || !isTurfCategory(item.category)) return;
@@ -571,7 +582,7 @@ function renderTurfUsageIntelligence(t=today()) {
   const target=$('#opsTurfUsageIntel'); if(!target)return;
   const from=addDays(t,-29), weekdayCounts=Array.from({length:7},()=>({logs:0,days:0}));
   daysBetween(from,t).forEach(d=>weekdayCounts[new Date(d+'T12:00:00').getDay()].days++);
-  const rows=(S.plans||[]).map(p=>{
+  const rows=allTurfPlanRecords().map(p=>{
     const date=turfRecordDate(p), status=turfRecordStatus(p), item=turfProductForPlan(p);
     const category=turfCategoryLabel(p.category||item?.category||'');
     const name=turfRecordProductName(p)||itemName(item||{});
@@ -602,7 +613,7 @@ function renderOverview() {
   const todayFuel = fuelIn(t, t);
   const weekFuel = fuelIn(weekStart, t);
   const turfDate = p => turfRecordDate(p);
-  const monthPlans = (S.plans || []).filter(p => { const d=turfDate(p); return d && d >= month && d <= t; });
+  const monthPlans = allTurfPlanRecords().filter(p => { const d=turfDate(p); return d && d >= month && d <= t; });
   const fuelLitres = rows => rows.reduce((a, f) => a + Math.max(0, num(f.litres ?? f.quantity ?? f.qty)), 0);
   const machineTotals = new Map();
   monthFuel.forEach(f => {
@@ -638,7 +649,7 @@ function renderOverview() {
     {key:'pesticide', label:'Pesticides', ids:['opsPesticideStats','opsPesticideTrend','opsPesticideRecent']},
     {key:'enhancer', label:'Turf Enhancers', ids:['opsEnhancerStats','opsEnhancerTrend','opsEnhancerRecent']}
   ];
-  const allPlans = (S.plans || []).filter(p => { const d=turfRecordDate(p); return d && d <= t && categoryForPlan(p); });
+  const allPlans = allTurfPlanRecords().filter(p => { const d=turfRecordDate(p); return d && d <= t && categoryForPlan(p); });
   const weekPlans = allPlans.filter(p => turfRecordDate(p) >= weekStart);
   const monthTurfRows = monthPlans.filter(p => categoryForPlan(p));
   const appliedTurfRows = monthTurfRows.filter(p => ['Applied','Issued'].includes(turfRecordStatus(p))); 
@@ -805,8 +816,12 @@ function dayFleetCostLines(day = today()) {
   return [...dayFuelCostLines(day), ...dayMaintenanceCostLines(day)].sort((a,b) => (b.date || '').localeCompare(a.date || '') || tsMs(b.record.timestamp) - tsMs(a.record.timestamp));
 }
 function dayTurfCostLines(day = today()) {
-  return (S.plans || []).filter(p => turfRecordDate(p) === day && isTurfCategory(turfPlanCategory(p))).map(turfCostLine).sort((a,b) => tsMs(b.record.issuedAt ?? b.record.issueTimestamp ?? b.record.appliedAt ?? b.record.completedAt ?? b.record.timestamp ?? b.record.createdAt ?? b.record.createdTime) - tsMs(a.record.issuedAt ?? a.record.issueTimestamp ?? a.record.appliedAt ?? a.record.completedAt ?? a.record.timestamp ?? a.record.createdAt ?? a.record.createdTime));
+  return allTurfPlanRecords()
+    .filter(p => turfRecordDate(p) === day && isTurfCategory(turfPlanCategory(p)))
+    .map(turfCostLine)
+    .sort((a, b) => turfRecordTimestamp(b.record) - turfRecordTimestamp(a.record));
 }
+
 function summariseCostLines(lines, countableOnly = false) {
   const relevant = countableOnly ? lines.filter(x => x.countable) : lines;
   const priced = relevant.filter(x => x.cost !== null && Number.isFinite(x.cost));
@@ -882,7 +897,7 @@ function exportDayCostLedger(domain = 'fleet') {
 }
 
 function buildTurfCostAnalytics(from, to) {
-  const allRows = (S.plans || []).filter(p => {
+  const allRows = allTurfPlanRecords().filter(p => {
     const date = turfRecordDate(p);
     return date && date >= from && date <= to && isTurfCategory(turfPlanCategory(p)) && ['Issued','Applied'].includes(turfRecordStatus(p));
   }).map(turfCostLine).sort((a,b) => (b.cost ?? -1) - (a.cost ?? -1) || b.date.localeCompare(a.date) || a.name.localeCompare(b.name));
@@ -892,46 +907,18 @@ function buildTurfCostAnalytics(from, to) {
   const productMap = new Map();
   allRows.forEach(row => {
     const product = turfProductForPlan(row.record);
-    const key = `${product?.id || String(row.name).trim().toLowerCase()}|${String(row.unit).toLowerCase()}`;
+    const key = (product?.id || String(row.name).trim().toLowerCase()) + '|' + String(row.unit).toLowerCase();
     if (!productMap.has(key)) productMap.set(key,{name:row.name,category:row.category,unit:row.unit,qty:0,value:0,hasPriced:false,records:0,unpriced:0});
-    const productRow=productMap.get(key); productRow.qty+=Math.max(0,num(row.qty)); productRow.records++;
-    if(row.cost!==null){productRow.value+=row.cost;productRow.hasPriced=true;}else productRow.unpriced++;
+    const productRow=productMap.get(key);
+    productRow.qty+=Math.max(0,num(row.qty));
+    productRow.records++;
+    if(row.cost !== null && Number.isFinite(row.cost)){ productRow.value+=row.cost; productRow.hasPriced=true; }
+    else productRow.unpriced++;
   });
-  const products=[...productMap.values()].map(row=>({...row,value:row.hasPriced?row.value:null})).sort((a,b)=>(b.value===null?-1:b.value)-(a.value===null?-1:a.value)||a.name.localeCompare(b.name));
-  const startMs=new Date(from+'T00:00:00').getTime(), endMs=new Date(to+'T00:00:00').getTime();
-  const spanDays=Math.max(1,Math.floor((endMs-startMs)/86400000)+1);
-  const bucketSize=Math.max(1,Math.ceil(spanDays/28));
-  const buckets=[];
-  for(let offset=0;offset<spanDays;offset+=bucketSize){
-    const bucketFrom=addDays(from,offset),bucketTo=addDays(from,Math.min(spanDays-1,offset+bucketSize-1));
-    buckets.push({from:bucketFrom,to:bucketTo,label:bucketSize===1?dShort(bucketFrom):`${dShort(bucketFrom)}–${dShort(bucketTo)}`,value:0});
-  }
-  priced.forEach(row=>{const offset=Math.max(0,Math.floor((new Date(row.date+'T00:00:00').getTime()-startMs)/86400000));const idx=Math.min(buckets.length-1,Math.floor(offset/bucketSize));if(idx>=0&&buckets[idx])buckets[idx].value+=row.cost;});
-  const productsChart=products.filter(row=>row.value!==null).slice(0,8).map(row=>({label:row.name.length>17?row.name.slice(0,16)+'…':row.name,value:row.value}));
-  const linesHtml=allRows.length?allRows.map(row=>`<tr><td>${esc(row.date)}</td><td><span class="badge ${turfCategoryClass(row.category)}">${esc(row.category)}</span></td><td><b>${esc(row.name)}</b></td><td><span class="badge ${row.status==='Applied'?'ok':'gold'}">${esc(row.status)}</span></td><td class="num">${fmt(row.qty,3)} ${esc(row.unit)}</td><td class="num">${row.rate>0?`${money(row.rate,2)} / ${esc(row.unit)}`:'—'}</td><td class="num"><b>${row.cost===null?'Unpriced':money(row.cost)}</b></td><td>${esc(row.source)}</td></tr>`).join(''):'<tr><td colspan="8" class="empty">No issued/applied turf-product records in this date range.</td></tr>';
-  return `<div class="turf-cost-analytics-results">
-    <div class="turf-cost-summary-grid">
-      <div class="turf-cost-summary primary"><small>PRICED ISSUE / APPLICATION VALUE</small><b>${allRows.length&&!priced.length?'₹—':money(total)}</b><span>Inventory rate × logged issue/application quantity</span></div>
-      <div class="turf-cost-summary"><small>ISSUED / APPLIED RECORDS</small><b>${fmt(allRows.length,0)}</b><span>Recorded status; physical use not independently verified</span></div>
-      <div class="turf-cost-summary"><small>UNPRICED RECORDS</small><b>${fmt(unpriced.length,0)}</b><span>Missing product link, unit match, or inventory rate</span></div>
-      <div class="turf-cost-summary"><small>PRODUCT / UNIT LINES</small><b>${fmt(products.length,0)}</b><span>Different stock units kept separate</span></div>
-    </div>
-    <div class="turf-cost-chart-grid">
-      <section class="turf-cost-panel"><div class="turf-cost-panel-head"><div><small>SPEND TREND</small><h3>Recorded value over time</h3></div><span>${bucketSize===1?'Daily':bucketSize<8?'Weekly buckets':'Range buckets'}</span></div>${priced.length?barChart(buckets,{unit:'₹',h:210}):'<div class="turf-cost-chart-empty">No priced issue/application value in this range.</div>'}</section>
-      <section class="turf-cost-panel"><div class="turf-cost-panel-head"><div><small>PRODUCT MIX</small><h3>Highest recorded value</h3></div><span>Top 8</span></div>${productsChart.length?barChart(productsChart,{unit:'₹',h:210}):'<div class="turf-cost-chart-empty">No products have a reliable cost in this range.</div>'}</section>
-    </div>
-    <section class="turf-cost-panel turf-cost-detail-panel"><div class="turf-cost-panel-head"><div><small>ERP DETAIL REGISTER</small><h3>Issued line items</h3></div><span>${fmt(allRows.length,0)} lines · value descending</span></div><div class="table-wrap"><table class="turf-cost-table"><thead><tr><th>Date</th><th>Category</th><th>Product</th><th>Status</th><th class="num">Quantity</th><th class="num">Unit rate</th><th class="num">Recorded value</th><th>Cost basis</th></tr></thead><tbody>${linesHtml}</tbody></table></div>
-    <p class="turf-cost-caveat">Cost is an estimate from the linked Inventory Master unit cost. A value is calculated only when the product link and unit match and a positive unit cost exists. Planned-only records are excluded; unpriced rows are kept visible instead of being treated as ₹0.</p></section>
-  </div>`;
+  const products=[...productMap.values()].sort((a,b)=>b.value-a.value||a.name.localeCompare(b.name));
+  return { allRows, priced, unpriced, total, products };
 }
-function renderTurfCostAnalytics(from, to) {
-  const fromInput=$('#turfCostFrom'),toInput=$('#turfCostTo');
-  if(!fromInput||!toInput)return;
-  if(!from||!to)return;
-  if(from>to){const swap=from;from=to;to=swap;fromInput.value=from;toInput.value=to;}
-  const results=$('#turfCostAnalyticsResults');
-  if(results) results.innerHTML=buildTurfCostAnalytics(from,to);
-}
+
 function openTurfCostAnalytics() {
   const to=today(),from=monthStart(to);
   openModal({title:'Turf Ops · Cost Analytics',sub:'Issued product cost · date-filtered ERP register',size:'turf-cost-analytics',body:`
@@ -950,7 +937,7 @@ function exportTurfCostRange() {
   const from=$('#turfCostFrom')?.value,to=$('#turfCostTo')?.value;
   if(!from||!to){toast('Choose a valid date range first','err');return;}
   const low=from<=to?from:to,high=from<=to?to:from;
-  const lines=(S.plans||[]).filter(p=>{const date=turfRecordDate(p);return date&&date>=low&&date<=high&&isTurfCategory(turfPlanCategory(p))&&['Issued','Applied'].includes(turfRecordStatus(p));}).map(turfCostLine).sort((a,b)=>(b.cost??-1)-(a.cost??-1));
+  const lines=allTurfPlanRecords().filter(p=>{const date=turfRecordDate(p);return date&&date>=low&&date<=high&&isTurfCategory(turfPlanCategory(p))&&['Issued','Applied'].includes(turfRecordStatus(p));}).map(turfCostLine).sort((a,b)=>(b.cost??-1)-(a.cost??-1));
   downloadCSV(`turf_cost_analytics_${low}_to_${high}.csv`,[['Date','Category','Product','Status','Quantity','Unit','Unit Rate','Recorded Value','Cost Basis'],...lines.map(row=>[row.date,row.category,row.name,row.status,row.qty,row.unit,row.rate||'',row.cost===null?'':row.cost,row.source])]);
 }
 
@@ -1227,9 +1214,9 @@ function oaFuelMachineDays(){
   return [...map.values()].map(r=>({...r,lph:r.hours>0?r.litres/r.hours:null})).sort((a,b)=>b.date.localeCompare(a.date)||b.litres-a.litres||a.name.localeCompare(b.name));
 }
 function oaTurfLines(){
-  return (S.plans||[]).filter(p=>{const d=turfRecordDate(p);return d&&d>=OA.from&&d<=OA.to&&isTurfCategory(turfPlanCategory(p))&&turfRecordStatus(p)!=='Cancelled';}).map(p=>{
+  return allTurfPlanRecords().filter(p=>{const d=turfRecordDate(p);return d&&d>=OA.from&&d<=OA.to&&isTurfCategory(turfPlanCategory(p))&&turfRecordStatus(p)!=='Cancelled';}).map(p=>{
     const line=turfCostLine(p),product=turfProductForPlan(p);
-    return {...line,record:p,area:String(p.targetArea||p.area||p.location||'Unassigned').trim()||'Unassigned',productId:String(p.productId||p.productID||p.itemId||p.inventoryId||product&&product.id||''),unit:String(p.unit||p.stockUnit||p.uom||product&&product.unit||'Unit not set'),plannedQty:Math.max(0,num(p.targetQty??p.plannedQty??p.requestedQty??p.plannedQuantity??p.targetQuantity??(line.status==='Planned'?(p.quantity??p.qty):0))),notes:String(p.notes||p.reason||'').trim()};
+    return {...line,record:p,area:String(p.targetZoneOrMachine||p.targetArea||p.area||p.location||'Unassigned').trim()||'Unassigned',productId:String(p.productId||p.productID||p.itemId||p.inventoryId||product&&product.id||''),unit:String(p.unit||p.stockUnit||p.uom||product&&product.unit||'Unit not set'),plannedQty:Math.max(0,num(p.targetQty??p.plannedQty??p.requestedQty??p.plannedQuantity??p.targetQuantity??(line.status==='Planned'?(p.quantity??p.qty):0))),notes:String(p.notes||p.reason||'').trim()};
   }).sort((a,b)=>b.date.localeCompare(a.date)||(tsMs(b.record.issuedAt??b.record.appliedAt??b.record.timestamp??b.record.createdAt)-tsMs(a.record.issuedAt??a.record.appliedAt??a.record.timestamp??a.record.createdAt)));
 }
 function oaUnitTotals(lines,selector){
@@ -2171,7 +2158,7 @@ const H = {
   'nav-inventory-master': () => switchView('registry'),
   'turf-tab': d => setTurfSection(d.tab),
   'turf-category-products': d => { turfProductCategory = d.category || 'All categories'; setTurfSection('products'); },
-  'export-turf-applications': () => { const rows=[...S.plans].filter(p=>isTurfCategory(turfPlanCategory(p))).sort((a,b)=>turfRecordDate(a).localeCompare(turfRecordDate(b))); downloadCSV('turf-application-records.csv', [['Date','Category','Product','Quantity','Unit','Treated area','Status','Notes','Created at'], ...rows.map(p=>[turfRecordDate(p),turfPlanCategory(p),turfRecordProductName(p),turfRecordQuantity(p),p.unit||p.stockUnit||p.uom||'',p.targetArea||p.area||p.location||'',turfRecordStatus(p),p.notes||p.reason||'',p.createdAt ? new Date(tsMs(p.createdAt)).toISOString() : ''])]); },
+  'export-turf-applications': () => { const rows=allTurfPlanRecords().filter(p=>isTurfCategory(turfPlanCategory(p))).sort((a,b)=>turfRecordDate(a).localeCompare(turfRecordDate(b))); downloadCSV('turf-application-records.csv', [['Date','Category','Product','Quantity','Unit','Treated area','Status','Notes','Created at'], ...rows.map(p=>[turfRecordDate(p),turfPlanCategory(p),turfRecordProductName(p),turfRecordQuantity(p),p.unit||p.stockUnit||p.uom||'',p.targetArea||p.area||p.location||'',turfRecordStatus(p),p.notes||p.reason||'',p.createdAt ? new Date(tsMs(p.createdAt)).toISOString() : ''])]); },
   'rec-tab': d => { recordsTab = d.tab; renderRecords(); },
   'export-records': () => {
     if (recordsTab === 'maintenance') downloadCSV('maintenance.csv', [['Date','Type','Machine','Hours','Parts','By','Notes'], ...(S.maintenance||[]).map(r => [r.date, r.type, r.machineName||r.machineId, r.hoursAtEvent, JSON.stringify(r.partsUsed||[]), r.performedBy, r.notes])]);
@@ -2767,7 +2754,7 @@ function renderTurfCategoryCards(targetId, products) {
 function renderTurfApplications() {
   const target = $('#turfApplicationsTbl');
   if (!target) return;
-  const all = [...(S.plans || [])].filter(p => isTurfCategory(turfPlanCategory(p)));
+  const all = allTurfPlanRecords().filter(p => isTurfCategory(turfPlanCategory(p)));
   const q = turfAppSearch.trim().toLowerCase();
   const rows = all.filter(p => {
     const category = turfPlanCategory(p);
@@ -2806,7 +2793,7 @@ function renderTurfCare() {
   const turfItems = S.inventory.filter(i => isTurfCategory(i.category));
   const lowStock = turfItems.filter(i => num(i.stockQuantity) <= effectiveReorderLevel(i));
   const todayStr = today();
-  const allPlans = (S.plans || []).filter(p => isTurfCategory(turfPlanCategory(p)));
+  const allPlans = allTurfPlanRecords().filter(p => isTurfCategory(turfPlanCategory(p)));
   const plannedThisWeek = allPlans.filter(p => turfRecordDate(p) >= currentTurfWeekStart && turfRecordDate(p) <= addDays(currentTurfWeekStart,6) && turfRecordStatus(p) === 'Planned');
   const monthStartStr = monthStart(todayStr);
   const issuedAppliedMTD = allPlans.filter(p => turfRecordDate(p) >= monthStartStr && turfRecordDate(p) <= todayStr && turfRecordStatus(p)==='Issued').length;
@@ -2937,7 +2924,7 @@ function renderTurfAreaPlanDashboard(){
   const todayStr=today();
   const areaName=p=>String(p.targetArea||p.area||p.location||'').trim();
   const plannedQty=p=>num(p.targetQty??p.plannedQty??p.requestedQty??p.plannedQuantity??p.targetQuantity??(turfRecordStatus(p)==='Planned'?(p.quantity??p.qty):0));
-  const plans=(S.plans||[]).filter(p=>isTurfCategory(turfPlanCategory(p))&&turfRecordDate(p)===todayStr&&turfRecordStatus(p)!=='Cancelled')
+  const plans=allTurfPlanRecords().filter(p=>isTurfCategory(turfPlanCategory(p))&&turfRecordDate(p)===todayStr&&turfRecordStatus(p)!=='Cancelled')
     .sort((a,b)=>areaName(a).localeCompare(areaName(b))||turfRecordProductName(a).localeCompare(turfRecordProductName(b)));
   const areas=['Greens','Fairway','Nursery','Driving Range','Short Game Area','Roughs'];
   const grouped=areas.map(area=>({area,rows:plans.filter(p=>areaName(p).toLowerCase()===area.toLowerCase())})).filter(g=>g.rows.length);
@@ -2953,7 +2940,7 @@ function openTurfVarianceModal(from=monthStart(today()),to=today()) {
 }
 function renderTurfVariance(from,to){
   const target=$('#turfVarianceResults');if(!target)return;
-  const rows=(S.plans||[]).filter(p=>isTurfCategory(turfPlanCategory(p))&&turfRecordDate(p)>=from&&turfRecordDate(p)<=to&&turfRecordStatus(p)!=='Cancelled');
+  const rows=allTurfPlanRecords().filter(p=>isTurfCategory(turfPlanCategory(p))&&turfRecordDate(p)>=from&&turfRecordDate(p)<=to&&turfRecordStatus(p)!=='Cancelled');
   const map = new Map();
   const firstQuantity = (record, keys) => {
     for (const key of keys) {
