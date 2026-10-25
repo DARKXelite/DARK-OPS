@@ -1,6 +1,6 @@
 /** Function-based Fleet module. Dependencies are injected from the application context. */
 export function createFleetModule(deps) {
-  const { $, addDays, addDoc, barChart, collection, CONFIG, daysBetween, db, dLong, doc, dShort, eff, esc, F, fld, fmt, fmtHrs, fuelCostSummary, fuelIn, fuelLogCost, fuelTypeFromRecord, getDocs, H, liveKeys, LOADED, mKey, mName, money, monthStart, mx, num, openDrawer, openForm, openModal, pad, R, rangeBar, rangeLabel, rateForFuelLog, S, setCurModalRenderer, setHTML, shiftsIn, sortFuel, sparkline, splitFuel, sum, svc, TILE, timeOf, toast, today, tsMs, TTR, updateDoc } = deps;
+  const { $, ATTR, CONFIG, F, H, LOADED, R, S, TILE, addDays, addDoc, barChart, collection, dLong, dShort, daysBetween, db, doc, eff, esc, fld, fmt, fmtHrs, fuelCostSummary, fuelIn, fuelLogCost, fuelTypeFromRecord, getDocs, liveKeys, mKey, mName, money, monthStart, mx, num, openDrawer, openForm, openModal, pad, rangeBar, rangeLabel, rateForFuelLog, setCurModalRenderer, setHTML, shiftsIn, sortFuel, sparkline, splitFuel, sum, svc, timeOf, toast, today, tsMs, updateDoc } = deps;
 function renderFleet() {
   const cats = ['All', ...new Set(S.machines.map(m => m.category).filter(Boolean))];
   setHTML($('#catChips'), cats.map(c => `<button class="chip ${F.cat === c ? 'on' : ''}" data-act="fcat" data-v="${esc(c)}">${esc(c)}</button>`).join(''));
