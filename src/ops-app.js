@@ -2681,7 +2681,7 @@ const TP_WEEKDAYS = [
 ];
 function tpDayOfWeek(dateStr) { return new Date(dateStr + 'T12:00:00').getDay(); }
 function tpDefaultWeekdays(dateStr) { return [tpDayOfWeek(dateStr)]; }
-let tpState = { date: '', validUntil: '', weekdays: [], area: 'Greens', category: 'Fertilizers', lines: {}, notes: {} };
+let tpState = { date: '', validUntil: '', weekdays: [], weekdaysTouched: false, area: 'Greens', category: 'Fertilizers', lines: {}, notes: {} };
 
 function tpCanonicalArea(area) {
   const value = String(area || '').trim().toLowerCase();
@@ -2781,6 +2781,7 @@ function openTurfPlanner() {
     date: start,
     validUntil: start,
     weekdays: tpDefaultWeekdays(start),
+    weekdaysTouched: false,
     area: 'Greens',
     category: 'Fertilizers',
     lines: {},
@@ -3042,7 +3043,7 @@ document.addEventListener('change', event => {
     if (!dateInput.value) return;
     tpState.date = dateInput.value;
     if (!tpState.validUntil || tpState.validUntil < tpState.date) tpState.validUntil = tpState.date;
-    tpState.weekdays = tpDefaultWeekdays(tpState.date);
+    if (!tpState.weekdaysTouched) tpState.weekdays = tpDefaultWeekdays(tpState.date);
     tpState.lines = {};
     tpState.notes = {};
     renderTp();
@@ -3062,6 +3063,7 @@ document.addEventListener('change', event => {
     if (weekdayInput.checked) selected.add(day);
     else selected.delete(day);
     tpState.weekdays = [...selected].sort((a, b) => a - b);
+    tpState.weekdaysTouched = true;
     renderTp();
     return;
   }
