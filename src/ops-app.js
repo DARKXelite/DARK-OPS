@@ -284,7 +284,6 @@ const NAV_GROUPS = {
   masters: { label: 'Store & Ledgers', icon: 'inventory_2', view: 'fuel', pages: [['fuel','Fuel ledger'],['registry','Inventory'],['expenses','Local Expenses'],['users','Users']] },
   fnb: { label: 'F&B', icon: 'restaurant', view: 'fnb', pages: [] }
 };
-let activeNavGroup = 'insights';
 const navigationController = createNavigationController({
   NAV_GROUPS, VIEWS, RENDER, RBAC, permissionForView, S, liveNow,
   $, qsa, toast, initRadarMap, initZoneMap,
@@ -585,7 +584,7 @@ const APP_CONTEXT = {
   previewInward,
   query,
   qsa,
-  raf,
+
   rangeBar,
   rangeLabel,
   rateForFuelLog,
