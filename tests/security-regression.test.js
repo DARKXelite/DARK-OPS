@@ -61,3 +61,12 @@ test("Vercel config retains baseline browser security headers", async () => {
   assert.equal(headerMap.get("x-content-type-options"), "nosniff");
   assert.equal(headerMap.get("x-frame-options"), "DENY");
 });
+
+test("legacy Firebase module cannot disable authentication and matches the web app config", async () => {
+  const legacy = await read("../src/firebase/client.js");
+  const active = await read("../src/ops-app.js");
+  assert.match(legacy, /REQUIRE_LOGIN:\s*true/);
+  assert.match(legacy, /1:48049661517:web:8075879055223c9cd61e04/);
+  assert.match(active, /1:48049661517:web:8075879055223c9cd61e04/);
+  assert.doesNotMatch(legacy, /REQUIRE_LOGIN:\s*false/);
+});
