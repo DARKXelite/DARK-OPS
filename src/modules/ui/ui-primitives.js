@@ -1,6 +1,6 @@
 /** Function-based UIPrimitives module. Dependencies are injected from the application context. */
 export function createUIPrimitivesModule(deps) {
-  const { $, db, deleteDoc, doc, esc, ONFIG, setCurModalRenderer } = deps;
+  const { $, CONFIG, db, deleteDoc, doc, esc, setCurModalRenderer } = deps;
 function toast(msg, type = 'ok') {
   const t = document.createElement('div'); t.className = 'toast' + (type === 'err' ? ' err' : type === 'warn' ? ' warn' : '');
   t.innerHTML = `<span class="material-symbols-rounded">${type === 'err' ? 'error' : type === 'warn' ? 'warning' : 'check_circle'}</span><span>${esc(msg)}</span>`;
