@@ -1261,7 +1261,7 @@ const navigation = createNavigation({
   getCurrentView: () => cur,
   setCurrentView: value => { cur = value; },
   getModalRenderer: () => curModalRender,
-  renderers: { overview: renderOverview, fleet: renderFleet, fuel: () => renderLedger(), shifts: () => renderShifts(), records: () => renderRecords(), radar: renderRadarPanel, zones: renderZonePanel, registry: renderRegistry, users: renderUsersMaster, incidents: renderIncidents, turfcare: renderTurfCare },
+  renderers: { overview: renderOverview, fleet: renderFleet, fuel: () => renderLedger(), shifts: () => renderShifts(), records: () => renderRecords(), radar: renderRadarPanel, zones: renderZonePanel, registry: renderRegistry, expenses: renderLocalExpenseLedger, users: renderUsersMaster, incidents: renderIncidents, turfcare: renderTurfCare },
   initRadarMap: () => initRadarMap(),
   initZoneMap: () => initZoneMap(),
   getRadarMap: () => radarMap,
