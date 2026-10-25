@@ -51,6 +51,20 @@ test("Firestore requires explicit active roles and denies unspecified collection
 });
 
 
+test("cost-model settings are sanitized and storage failures are non-fatal", async () => {
+  const module = await import("../src/modules/cost/cost-model-storage.js");
+  const storage = { getItem: () => JSON.stringify({ dieselRate: -10, petrolRate: "oops", savingsPct: 35 }), setItem: (key, value) => { storage.lastKey = key; storage.lastValue = value; } };
+  const model = module.loadCostModel(storage);
+  assert.equal(model.dieselRate, module.COST_DEFAULTS.dieselRate);
+  assert.equal(model.petrolRate, module.COST_DEFAULTS.petrolRate);
+  assert.equal(model.savingsPct, 35);
+  module.persistCostModel(model, storage);
+  assert.equal(storage.lastKey, "cloverOpsCostModel");
+  assert.ok(JSON.parse(storage.lastValue).savingsPct === 35);
+  assert.doesNotThrow(() => module.loadCostModel({ getItem: () => { throw new Error("blocked"); } }));
+  assert.doesNotThrow(() => module.persistCostModel(model, { setItem: () => { throw new Error("blocked"); } }));
+});
+
 test("composition root initializes mutable state before injecting feature modules", async () => {
   const js = await read("../src/ops-app.js");
   assert.match(js, /const LOADED = \{\}/);
@@ -110,22 +124,24 @@ test("store inward records validate schemas and protect F&B-linked records", asy
 });
 
 test("App Check is initialized before Firestore when a site key is configured", async () => {
+  const client = await read("../src/modules/firebase/client.js");
   const js = await read("../src/ops-app.js");
-  const appCheckImport = js.indexOf("firebase-app-check.js");
-  const activation = js.indexOf("initializeAppCheck(app");
-  const firestore = js.indexOf("const db = getFirestore(app)");
+  const appCheckImport = client.indexOf("firebase-app-check.js");
+  const activation = client.indexOf("initializeAppCheck(app");
+  const firestore = client.indexOf("getFirestore(app)");
   assert.notEqual(appCheckImport, -1);
   assert.notEqual(activation, -1);
   assert.ok(activation < firestore, "App Check must initialize before Firestore is used");
-  assert.match(js, /VITE_FIREBASE_APP_CHECK_SITE_KEY/);
-  assert.match(js, /isTokenAutoRefreshEnabled:\s*true/);
+  assert.match(client, /VITE_FIREBASE_APP_CHECK_SITE_KEY/);
+  assert.match(client, /isTokenAutoRefreshEnabled:\s*true/);
+  assert.match(js, /from "\.\/modules\/firebase\/client\.js"/);
 });
 
 test("realtime listeners are filtered by the current user's collection permissions", async () => {
-  const js = await read("../src/ops-app.js");
+  const listeners = await read("../src/modules/app/firestore-listener-controller.js");
   const rbac = await read("../src/modules/rbac.js");
-  assert.match(js, /permissionForCollection\(CONFIG\.COL\[k\], false\)/);
-  assert.match(js, /if \(!RBAC\.can\(requiredPermission\)\)/);
+  assert.match(listeners, /RBAC\.can\(permissionForCollection\(CONFIG\.COL\[k\], false\)\)/);
+  assert.match(listeners, /const shouldListen = desired\.has\(k\) && permitted/);
   assert.match(rbac, /store_inwards:\s*"inventory\.receipts\.read"/);
   assert.match(rbac, /operator: Object\.freeze\(\[[\s\S]*?"inventory\.read"/);
 });
