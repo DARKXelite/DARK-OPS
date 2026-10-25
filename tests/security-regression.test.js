@@ -86,8 +86,10 @@ test("F&B writes enforce order and receipt invariants", async () => {
 
 test("store inward records validate schemas and protect F&B-linked records", async () => {
   const rules = await read("../firestore.rules");
-  assert.match(rules, /function validNormalInwardCreate\(\)/);
+  assert.match(rules, /function validNormalInwardCreate\(id\)/);
   assert.match(rules, /function validFnbInwardCreate\(id\)/);
+  assert.match(rules, /getAfter\(itemPath\)\.data\.lastInwardId == id/);
+  assert.match(rules, /getAfter\(itemPath\)\.data\.stockQuantity - get\(itemPath\)\.data\.stockQuantity > d\.quantity - 0\.000001/);
   assert.match(rules, /getAfter\(receiptPath\)\.data\.inwardId == id/);
   assert.match(rules, /resource\.data\.transactionType != 'FNB_RECEIPT'[\s\S]{0,120}request\.resource\.data\.transactionType != 'FNB_RECEIPT'/);
 });
