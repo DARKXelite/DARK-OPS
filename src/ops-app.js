@@ -2248,8 +2248,8 @@ $("#loginForm").addEventListener("submit", async e => {
   sendBtn.disabled = true;
   try {
     if (sendingOtp) {
-      const phone = $("#loginPhone").value.trim().replace(/[\\s()-]/g, "");
-      if (!/^\\+[1-9]\\d{7,14}$/.test(phone)) {
+      const phone = $("#loginPhone").value.trim().replace(/[\s()-]/g, "");
+      if (!/^\+[1-9]\d{7,14}$/.test(phone)) {
         throw new Error("Enter your phone number in international format, including country code (for example, +91XXXXXXXXXX).");
       }
       if (!recaptchaVerifier) {
@@ -2263,7 +2263,7 @@ $("#loginForm").addEventListener("submit", async e => {
       error.textContent = "OTP sent. Check your phone and enter the code.";
     } else {
       const code = $("#loginOtp").value.trim();
-      if (!/^\\d{6}$/.test(code)) throw new Error("Enter the 6-digit OTP.");
+      if (!/^\d{6}$/.test(code)) throw new Error("Enter the 6-digit OTP.");
       await confirmationResult.confirm(code);
     }
   } catch (err) {
