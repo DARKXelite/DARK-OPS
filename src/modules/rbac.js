@@ -14,7 +14,8 @@ export const ROLE_PERMISSIONS = Object.freeze({
   ]),
   operator: Object.freeze([
     "dashboard.read", "fleet.read", "shifts.read", "shifts.write",
-    "turf.read", "turf.issue", "incidents.write"
+    "turf.read", "turf.issue", "incidents.write", "inventory.read",
+    "maintenance.read", "assignments.read"
   ])
 });
 
