@@ -2915,6 +2915,7 @@ async function saveTpCategoryTab() {
 
     const noteKey = area + '::' + category;
     const note = String(tpState.notes[noteKey] || '').trim();
+    const storedArea = area === 'Fairways' ? 'Fairway' : area;
     const desiredByDateProduct = new Map();
     for (const date of dates) {
       for (const line of desiredLines.values()) {
@@ -2942,8 +2943,8 @@ async function saveTpCategoryTab() {
           category: line.product.category || category,
           targetQty: line.totalQty,
           unit: line.unit,
-          targetArea: area,
-          area,
+          targetArea: storedArea,
+          area: storedArea,
           scope: line.perGreen ? 'per_area' : 'overall',
           validFrom: from,
           validUntil: until,
@@ -2972,8 +2973,8 @@ async function saveTpCategoryTab() {
         category: line.product.category || category,
         targetQty: line.totalQty,
         unit: line.unit,
-        targetArea: area,
-        area,
+        targetArea: storedArea,
+        area: storedArea,
         scope: line.perGreen ? 'per_area' : 'overall',
         validFrom: from,
         validUntil: until,
