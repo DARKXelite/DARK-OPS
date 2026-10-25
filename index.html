@@ -123,7 +123,7 @@
 
     <!-- OPERATIONS OVERVIEW -->
     <section class="view active" id="v-overview">
-      <div class="ops-dashboard-period"><span class="ops-dashboard-period-label">OPERATIONS SNAPSHOT</span><span class="ops-period" id="opsPeriod">MONTH TO DATE</span></div>
+      <div class="ops-dashboard-period"><span class="ops-dashboard-period-label">OPERATIONS SNAPSHOT</span><button type="button" class="btn btn-primary btn-sm ops-analytics-launch" data-act="open-ops-analytics" data-domain="overview"><span class="material-symbols-rounded">query_stats</span>Analytics &amp; Ledgers</button><span class="ops-period" id="opsPeriod">MONTH TO DATE</span></div>
       <div class="ops-domain-grid">
         <section class="card ops-domain-card ops-fuel-domain">
           <div class="ops-domain-head">
@@ -204,6 +204,7 @@
     <!-- FUEL LEDGER -->
     <section class="view" id="v-fuel">
       <div class="toolbar"><div class="grow"></div>
+        <button class="btn" data-act="open-ops-analytics" data-domain="fuel"><span class="material-symbols-rounded">analytics</span>Fuel analytics</button>
         <button class="btn" data-act="group-tab" data-v="expenses" title="Open the local expenses table"><span class="material-symbols-rounded">receipt_long</span>Local Expenses</button>
         <button class="btn btn-primary" data-act="add-local-expense" title="Add a local expense bill"><span class="material-symbols-rounded">add</span>Add Local Bill</button>
         <button class="btn" data-act="open-fuel"><span class="material-symbols-rounded">insights</span>Consumption analysis</button>
@@ -280,7 +281,7 @@
     <section class="view" id="v-turfcare">
       <div class="turf-page-head">
         <div><div class="turf-eyebrow">COURSE INPUTS · APPLICATION CONTROL</div><h2>Application workboard</h2><p>Plan applications, review records and check current stock before work.</p></div>
-        <div class="turf-primary-actions"><button class="btn" data-act="turf-tab" data-tab="products"><span class="material-symbols-rounded">inventory_2</span>Products & stock</button><button class="btn btn-primary" data-act="open-planner"><span class="material-symbols-rounded">calendar_month</span>Build weekly plan</button></div>
+        <div class="turf-primary-actions"><button class="btn" data-act="open-ops-analytics" data-domain="turf"><span class="material-symbols-rounded">analytics</span>Analytics &amp; Ledgers</button><button class="btn" data-act="turf-tab" data-tab="products"><span class="material-symbols-rounded">inventory_2</span>Products & stock</button><button class="btn btn-primary" data-act="open-planner"><span class="material-symbols-rounded">calendar_month</span>Build weekly plan</button></div>
       </div>
       <div class="turf-metrics" id="turfKpiGrid"></div>
       <div class="turf-view-tabs" role="tablist" aria-label="Turf operations views">
