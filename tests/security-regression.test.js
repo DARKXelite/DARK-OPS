@@ -126,3 +126,21 @@ test("F&B receipt rules require matching inward and stock records", async () => 
   assert.match(rules, /getAfter\(inventoryPath\)\.data\.lastReceiptId == id/);
   assert.match(rules, /getAfter\(inventoryPath\)\.data\.stockQuantity - get\(inventoryPath\)\.data\.stockQuantity > d\.quantity - 0\.000001/);
 });
+
+test("OTP send failures reset expired reCAPTCHA state without discarding a pending OTP on wrong-code errors", async () => {
+  const js = await read("../src/ops-app.js");
+  assert.match(js, /const sendingOtp = !confirmationResult/);
+  assert.match(js, /if \(sendingOtp\) \{[\s\S]{0,240}confirmationResult = null/);
+  assert.match(js, /recaptchaVerifier\?\.clear\(\)/);
+  assert.match(js, /await confirmationResult\.confirm\(code\)/);
+});
+
+test("Firestore realtime listeners are scoped to the selected view", async () => {
+  const js = await read("../src/ops-app.js");
+  assert.match(js, /const desired = new Set\(VIEW_COLLECTIONS\[cur\] \|\| \[\]\)/);
+  assert.match(js, /if \(listenersStarted\) syncListenersForView\(\)/);
+  assert.match(js, /function stopOneListener\(k\)/);
+  assert.match(js, /listenerEpochs\.get\(k\) !== epoch/);
+  assert.match(js, /registry: \['inventory','inwards','expenses'\]/);
+  assert.match(js, /expenses: \['expenses','inventory'\]/);
+});
