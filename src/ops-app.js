@@ -2129,7 +2129,7 @@ onAuthStateChanged(auth, async user => {
       roleSnap = await getDoc(doc(db, "app_roles", user.uid));
     }
     const roleData = roleSnap.exists() ? roleSnap.data() : null;
-    if (!roleData || roleData.active === false || !ROLE_PERMISSIONS[roleData.role]) {
+    if (!roleData || roleData.active !== true || !ROLE_PERMISSIONS[roleData.role]) {
       await signOut(auth);
       if (error) error.textContent = "This account has no active application role. Ask an administrator to assign access.";
       return;
