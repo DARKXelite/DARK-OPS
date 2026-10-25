@@ -17,8 +17,10 @@ test("navigation groups operational views without DOM dependencies", () => {
   assert.equal(nav.groupForView("overview"),"insights");
   assert.equal(nav.groupForView("fleet"),"fleetops");
   assert.equal(nav.groupForView("records"),"fleetops");
+  assert.equal(nav.groupForView("incidents"),"fleetops");
   assert.equal(nav.groupForView("turfcare"),"turfops");
   assert.equal(nav.groupForView("registry"),"masters");
+  assert.equal(nav.groupForView("expenses"),"masters");
 });
 test("unknown views resolve to the default insights group", () => {
   const {nav}=setup();
