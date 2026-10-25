@@ -1801,7 +1801,7 @@ const VIEW_COLLECTIONS = {
   records: ['maintenance','assignments','fuel','machines','inventory','users'],
   radar: ['live','zones','machines'],
   zones: ['zones'],
-  registry: ['inventory','inwards','users','machines','logs','maintenance','assignments','plans','fuel','shifts'],
+  registry: ['inventory','inwards','expenses'],
   expenses: ['expenses','inventory'],
   users: ['users'],
   incidents: ['logs','machines'],
