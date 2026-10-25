@@ -2751,7 +2751,7 @@ function tpLineForProduct(product) {
   const plan = existing[0];
   // Read legacy planner fields when present, but write only the application's established plan fields.
   const legacyPerGreen = num(plan.perGreenQty ?? plan.quantityPerGreen);
-  const perGreen = legacyPerGreen > 0 || String(plan.scope || '').toLowerCase() === 'per_area';
+  const perGreen = tpState.area === 'Greens' && (legacyPerGreen > 0 || String(plan.scope || '').toLowerCase() === 'per_area');
   const total = num(plan.targetQty ?? plan.quantity ?? plan.qty);
   const qty = legacyPerGreen > 0 ? legacyPerGreen : perGreen ? total / 18 : total;
   return { qty, perGreen };
@@ -2897,11 +2897,28 @@ async function saveTpCategoryTab() {
     const allCategoryPlans = tpMatchingPlanRecords(area, category);
     // The existing app already uses validFrom, validUntil and repeatWeekdays for turf schedules.
     // Replacing an overlapping recurring series keeps this planner compatible with that same record shape.
+    const overlappingProducts = new Set();
+    for (const productId of desiredLines.keys()) {
+      const conflict = allCategoryPlans.find(plan =>
+        String(plan.productId || plan.itemId || plan.inventoryId || '') === productId &&
+        tpIsRepeatSeries(plan) &&
+        plan.validFrom !== from &&
+        tpDateRangeOverlaps(plan.validFrom, plan.validUntil, from, until)
+      );
+      if (conflict) overlappingProducts.add(productId);
+    }
+    if (overlappingProducts.size) {
+      const names = [...overlappingProducts].map(id => itemName(S.inventory.find(item => String(item.id) === id) || { partName: id }));
+      toast('A recurring plan already overlaps this date range for ' + names.join(', ') + '. Edit that plan using its original start date, or choose a non-overlapping range.', 'err');
+      return;
+    }
+    // Treat records anchored on this exact start date as the same series being edited.
+    // Other series are left intact; overlapping series for the same product are blocked above.
     const oldSeries = allCategoryPlans.filter(plan =>
       tpIsRepeatSeries(plan) &&
+      plan.validFrom === from &&
       tpDateRangeOverlaps(plan.validFrom, plan.validUntil, from, until)
     );
-    const oldSeriesIds = new Set(oldSeries.map(plan => plan.id));
     const selectedDateSet = new Set(dates);
     const selectedSingleDatePlans = allCategoryPlans.filter(plan =>
       !tpIsRepeatSeries(plan) &&
