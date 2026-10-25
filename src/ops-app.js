@@ -1,6 +1,7 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
 import { getFirestore, collection, addDoc, deleteDoc, doc, updateDoc, setDoc, getDoc, increment, onSnapshot, getDocs, writeBatch, runTransaction, serverTimestamp, query, where, orderBy } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 import { getAuth, onAuthStateChanged, signInWithPhoneNumber, RecaptchaVerifier, signOut } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
+import { initializeAppCheck, ReCaptchaEnterpriseProvider } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app-check.js";
 import { createFnbModule } from "./modules/fnb/fnb-module.js";
 import { ROLE_PERMISSIONS, ROLE_LABELS, canRole, permissionForAction, permissionForView, permissionForCollection } from "./modules/rbac.js";
 
@@ -31,6 +32,20 @@ const CONFIG = {
 };
 
 const app = initializeApp(firebaseConfig);
+// App Check activates only when a public reCAPTCHA Enterprise site key is configured in Vercel.
+// Do not enable Firebase App Check enforcement until this has been verified on production traffic.
+const appCheckSiteKey = import.meta.env.VITE_FIREBASE_APP_CHECK_SITE_KEY || "";
+if (appCheckSiteKey) {
+  try {
+    initializeAppCheck(app, {
+      provider: new ReCaptchaEnterpriseProvider(appCheckSiteKey),
+      isTokenAutoRefreshEnabled: true
+    });
+  } catch (error) {
+    console.error("Firebase App Check initialization failed; refusing to continue with a broken security configuration.", error);
+    throw error;
+  }
+}
 const db = getFirestore(app);
 const auth = getAuth(app);
 
