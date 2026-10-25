@@ -12,7 +12,7 @@ import {
 
 export function createAuthControllerModule(context) {
   const {
-    auth, $, RBAC, ROLE_LABELS, ROLE_PERMISSIONS, CONFIG, LOADED, S,
+    auth, db, $, RBAC, ROLE_LABELS, ROLE_PERMISSIONS, CONFIG, LOADED, S,
     getDoc, doc, setDoc, serverTimestamp, stopListeners, buildNav,
     renderAll, switchView, startListeners, toast, openForm, fld
   } = context;
