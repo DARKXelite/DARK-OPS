@@ -38,7 +38,7 @@
 
 
 </head>
-<body>
+<body class="auth-locked">
 
 <!-- Full-screen PIN access gate -->
 <section id="pinGate" aria-label="Clover Greens Ops PIN login" hidden>
@@ -50,17 +50,55 @@
 </section>
 
 <!-- PHONE OTP LOGIN -->
-<div id="login" hidden>
-  <form class="login-card" id="loginForm">
-    <div class="brand" style="padding:0 0 18px"><div class="brand-mark"><span class="material-symbols-rounded">golf_course</span></div><div><b style="color:var(--text)">Clover Greens Ops</b><span class="s" style="color:var(--muted)">Secure phone verification</span></div></div>
-    <div class="field"><label class="f" for="loginPhone">Phone number</label><input type="tel" id="loginPhone" required autocomplete="tel" inputmode="tel" placeholder="+91XXXXXXXXXX"></div>
-    <div class="field" id="otpField" hidden><label class="f" for="loginOtp">6-digit OTP</label><input type="text" id="loginOtp" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6}" maxlength="6" placeholder="Enter OTP"></div>
-    <div id="recaptcha-container" style="margin:12px 0"></div>
-    <div id="loginErr" class="hint" style="color:var(--bad);min-height:18px" aria-live="polite"></div>
-    <button class="btn btn-primary" id="loginSubmit" style="width:100%;height:42px" type="submit">Send OTP</button>
-    <p class="muted sm" style="margin-top:12px">Your phone number must be assigned an active app role by an administrator.</p>
-  </form>
-</div>
+<section id="login" aria-label="Clover Greens Ops sign in">
+  <div class="login-layout">
+    <aside class="login-story" aria-label="Clover Greens Operations">
+      <div class="login-story-top"><span class="story-orbit"></span><span class="story-kicker">CLOVER GREENS RESORT &amp; GOLF</span></div>
+      <div class="story-content">
+        <div class="story-emblem" aria-hidden="true"><span class="clover-petal p1"></span><span class="clover-petal p2"></span><span class="clover-petal p3"></span><span class="clover-petal p4"></span><span class="clover-core"></span></div>
+        <p class="story-eyebrow">ONE COURSE. ONE CONTROL ROOM.</p>
+        <h1>Operations,<br><em>in sync.</em></h1>
+        <p class="story-copy">A clear view of the fleet, turf and teams that keep every round running smoothly.</p>
+      </div>
+      <div class="story-bottom"><span class="story-status-dot"></span><span>Private operations workspace</span><span class="story-bottom-line"></span><span>CG / OPS</span></div>
+    </aside>
+    <div class="login-panel">
+      <form class="login-card" id="loginForm" novalidate>
+        <div class="login-brand">
+          <img class="login-logo" src="/assets/clover-greens-mark.svg" alt="Clover Greens emblem" width="58" height="35">
+          <div><div class="login-brand-name">Clover Greens</div><div class="login-brand-sub">GOLFSCAPES · OPERATIONS</div></div>
+        </div>
+        <div id="loginPhoneStep">
+          <p class="login-eyebrow">SECURE ACCESS</p>
+          <h2 class="login-title">Welcome back.</h2>
+          <p class="login-description">Sign in with your registered mobile number.</p>
+          <div class="login-field">
+            <label class="login-label" for="loginPhone">Mobile number</label>
+            <div class="phone-control"><span class="phone-country">+91 <span aria-hidden="true">⌄</span></span><input type="tel" id="loginPhone" required autocomplete="tel-national" inputmode="tel" placeholder="98765 43210" aria-describedby="phoneHelp"></div>
+            <p class="login-field-help" id="phoneHelp">Use the number assigned to your operations account.</p>
+          </div>
+        </div>
+        <div id="loginOtpStep" hidden>
+          <button type="button" class="login-back" id="changePhone"><span aria-hidden="true">←</span> Change number</button>
+          <p class="login-eyebrow">PHONE VERIFICATION</p>
+          <h2 class="login-title">Check your messages.</h2>
+          <p class="login-description">Enter the 6-digit code sent to <strong id="otpPhoneLabel">your mobile</strong>.</p>
+          <div class="login-field" id="otpField">
+            <label class="login-label" for="loginOtp">One-time passcode</label>
+            <input class="otp-input" type="text" id="loginOtp" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6}" maxlength="6" placeholder="••••••" aria-label="Six digit verification code" aria-describedby="otpHelp">
+            <p class="login-field-help" id="otpHelp">Verification starts automatically after the last digit.</p>
+          </div>
+        </div>
+        <div id="recaptcha-container" class="login-recaptcha"></div>
+        <div id="loginErr" class="login-error" aria-live="polite" role="status"></div>
+        <button class="login-submit" id="loginSubmit" type="submit"><span>Send verification code</span><span class="login-submit-arrow" aria-hidden="true">↗</span></button>
+        <div class="login-assurance"><span class="assurance-lock" aria-hidden="true">✓</span><span>Protected by Firebase authentication</span><span class="assurance-divider"></span><span>OTP sign-in</span></div>
+        <p class="login-access-note">Access is limited to mobile numbers with an active role assigned by an administrator.</p>
+      </form>
+      <footer class="login-footer"><span>© Clover Greens Resort &amp; Golf</span><span>Built for the people behind the course.</span></footer>
+    </div>
+  </div>
+</section>
 
 
 <!-- COMMAND PALETTE -->
