@@ -1,6 +1,6 @@
 /** Function-based Weather module. Dependencies are injected from the application context. */
 export function createWeatherModule(deps) {
-  const { C, CONFIG, dLong, dShort, esc, fmt, num, toast, today } = deps;
+  const { , $, CONFIG, dLong, dShort, esc, fmt, num, toast, today } = deps;
   let W = null, Wfail = false;
 function wxKind(c) {
   if (c === 0) return 'clear'; if (c === 1 || c === 2) return 'partly'; if (c === 3) return 'cloud';
