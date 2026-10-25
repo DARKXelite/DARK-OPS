@@ -16,7 +16,9 @@ jobs:
         with:
           node-version: 22
       - name: Install dependencies
-        run: npm install --no-audit --no-fund
+        run: npm install --no-fund
+      - name: Audit dependency tree
+        run: npm audit --audit-level=high
       - name: Run smoke tests
         run: npm test
       - name: Build production assets
