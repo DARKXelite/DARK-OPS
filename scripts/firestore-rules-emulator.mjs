@@ -170,6 +170,7 @@ test("F&B receipt, stock inward, and order balance must commit together", async 
       category: "F&B",
       domain: "F&B",
       stockQuantity: quantity,
+      lastReceiptId: receiptRef.id,
       unit: current.unit,
       unitCost: rate,
       reorderLevel: 0,
