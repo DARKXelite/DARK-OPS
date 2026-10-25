@@ -11,6 +11,7 @@ import { COST_DEFAULTS, loadCostModel as loadStoredCostModel, persistCostModel }
 import { createFleetModule } from "./modules/fleet/fleet-module.js";
 import { createTurfDomainModule } from "./modules/turf/turf-domain.js";
 import { createOverviewModule } from "./modules/views/overview-module.js";
+import { createOverviewHelpers } from "./modules/views/overview-helpers.js";
 import { createCourseMapModule } from "./modules/maps/course-map-module.js";
 import { createStoreUiModule } from "./modules/store/store-ui-module.js";
 import { createExpenseModule } from "./modules/expenses/expense-module.js";
@@ -122,13 +123,9 @@ const rangeLabel = (...args) => rangeControls.rangeLabel(...args);
 const RER = rangeControls.RER;
 
 /* ================= OVERVIEW ================= */
-function tile(act, icon, tone, label, value, unit, sub) {
-  return `<button class="kpi" data-act="${act}"><div class="top"><span class="lbl">${label}</span><span class="ic ${tone}"><span class="material-symbols-rounded">${icon}</span></span></div><div class="val">${value}${unit ? `<small>${unit}</small>` : ''}</div><div class="sub">${sub || ''}</div><span class="material-symbols-rounded go">arrow_forward</span></button>`;
-}
-function deltaTxt(a, b, goodWhenDown = false) {
-  if (!(b > 0)) return ''; const p = (a - b) / b * 100; if (Math.abs(p) < 1) return ' · same as yesterday';
-  return ` · <span class="${p > 0 ? 'up' : 'down'}">${p > 0 ? '?' : '?'} ${fmt(Math.abs(p), 0)}%</span> vs yesterday`;
-}
+const overviewHelpers = createOverviewHelpers({ fmt });
+const tile = (...args) => overviewHelpers.tile(...args);
+const deltaTxt = (...args) => overviewHelpers.deltaTxt(...args);
 const normItemName = (...args) => reorderModule.normItemName(...args);
 function resolveInventoryItem(...args) { return reorderModule.resolveInventoryItem(...args); }
 function buildReorderUsageIndex(...args) { return reorderModule.buildReorderUsageIndex(...args); }
