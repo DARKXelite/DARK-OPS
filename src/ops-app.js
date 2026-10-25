@@ -2670,7 +2670,18 @@ const TP_CATEGORIES = [
   { name: 'Pesticides', icon: 'pest_control', description: 'Pest, weed and disease control' },
   { name: 'Turf Enhancements', icon: 'eco', description: 'Turf conditioners and enhancements' }
 ];
-let tpState = { date: '', area: 'Greens', category: 'Fertilizers', lines: {}, notes: {} };
+const TP_WEEKDAYS = [
+  { label: 'Sun', long: 'Sunday', day: 0 },
+  { label: 'Mon', long: 'Monday', day: 1 },
+  { label: 'Tue', long: 'Tuesday', day: 2 },
+  { label: 'Wed', long: 'Wednesday', day: 3 },
+  { label: 'Thu', long: 'Thursday', day: 4 },
+  { label: 'Fri', long: 'Friday', day: 5 },
+  { label: 'Sat', long: 'Saturday', day: 6 }
+];
+function tpDayOfWeek(dateStr) { return new Date(dateStr + 'T12:00:00').getDay(); }
+function tpDefaultWeekdays(dateStr) { return [tpDayOfWeek(dateStr)]; }
+let tpState = { date: '', validUntil: '', weekdays: [], area: 'Greens', category: 'Fertilizers', lines: {}, notes: {} };
 
 function tpCanonicalArea(area) {
   const value = String(area || '').trim().toLowerCase();
@@ -2690,25 +2701,60 @@ function tpPlanCategory(plan) {
   const linked = S.inventory.find(item => String(item.id) === String(plan && (plan.productId || plan.itemId || plan.inventoryId) || ''));
   return turfCategoryLabel(plan && plan.category || linked && linked.category);
 }
-function tpExistingProductPlans(area, category, productId) {
+function tpIsRepeatSeries(plan) {
+  return !!(plan && plan.validFrom && plan.validUntil && Array.isArray(plan.repeatWeekdays));
+}
+function tpPlanDateInRange(plan, from, until) {
+  const date = turfRecordDate(plan);
+  return !!date && date >= from && date <= until;
+}
+function tpDateRangeOverlaps(aFrom, aUntil, bFrom, bUntil) {
+  return !!aFrom && !!aUntil && aFrom <= bUntil && aUntil >= bFrom;
+}
+function tpSelectedDates() {
+  const dates = [];
+  const from = tpState.date, until = tpState.validUntil;
+  if (!from || !until || until < from) return dates;
+  const cursor = new Date(from + 'T12:00:00');
+  const limit = new Date(until + 'T12:00:00');
+  for (let guard = 0; guard < 370 && cursor <= limit; guard++) {
+    const dateStr = ymd(cursor);
+    if (tpState.weekdays.includes(cursor.getDay())) dates.push(dateStr);
+    cursor.setDate(cursor.getDate() + 1);
+  }
+  return dates;
+}
+function tpMatchingPlanRecords(area, category) {
   return (S.plans || []).filter(plan =>
-    turfRecordDate(plan) === tpState.date &&
     tpCanonicalArea(plan.targetArea || plan.area) === tpCanonicalArea(area) &&
     tpPlanCategory(plan) === category &&
-    String(plan.productId || plan.itemId || plan.inventoryId || '') === String(productId || '') &&
     tpIsEditablePlan(plan)
   );
+}
+function tpExistingProductPlans(area, category, productId) {
+  const from = tpState.date;
+  const until = tpState.validUntil || from;
+  return tpMatchingPlanRecords(area, category).filter(plan =>
+    tpPlanDateInRange(plan, from, until) &&
+    String(plan.productId || plan.itemId || plan.inventoryId || '') === String(productId || '')
+  ).sort((a, b) => {
+    const aAnchor = a.validFrom === from ? 0 : 1;
+    const bAnchor = b.validFrom === from ? 0 : 1;
+    return aAnchor - bAnchor || turfRecordDate(a).localeCompare(turfRecordDate(b));
+  });
 }
 function tpLineForProduct(product) {
   const key = tpLineKey(tpState.area, tpState.category, product.id);
   if (Object.prototype.hasOwnProperty.call(tpState.lines, key)) return tpState.lines[key];
   const existing = tpExistingProductPlans(tpState.area, tpState.category, product.id);
   if (!existing.length) return { qty: '', perGreen: false };
-  const perGreenRecords = existing.filter(plan => num(plan.perGreenQty ?? plan.quantityPerGreen) > 0);
-  if (perGreenRecords.length === existing.length) {
-    return { qty: perGreenRecords.reduce((sum, plan) => sum + num(plan.perGreenQty ?? plan.quantityPerGreen), 0), perGreen: true };
-  }
-  return { qty: existing.reduce((sum, plan) => sum + num(plan.targetQty ?? plan.quantity ?? plan.qty), 0), perGreen: false };
+  const plan = existing[0];
+  // Read legacy planner fields when present, but write only the application's established plan fields.
+  const legacyPerGreen = num(plan.perGreenQty ?? plan.quantityPerGreen);
+  const perGreen = legacyPerGreen > 0 || String(plan.scope || '').toLowerCase() === 'per_area';
+  const total = num(plan.targetQty ?? plan.quantity ?? plan.qty);
+  const qty = legacyPerGreen > 0 ? legacyPerGreen : perGreen ? total / 18 : total;
+  return { qty, perGreen };
 }
 function tpLineTotal(line, area) {
   const qty = Math.max(0, num(line && line.qty));
@@ -2730,10 +2776,19 @@ function tpUpdateRowTotal(element) {
   if (meta) meta.textContent = perGreen ? fmt(qty, 2) + ' ' + unit + ' × 18 greens' : 'Total quantity for this area';
 }
 function openTurfPlanner() {
-  tpState = { date: today(), area: 'Greens', category: 'Fertilizers', lines: {}, notes: {} };
+  const start = today();
+  tpState = {
+    date: start,
+    validUntil: start,
+    weekdays: tpDefaultWeekdays(start),
+    area: 'Greens',
+    category: 'Fertilizers',
+    lines: {},
+    notes: {}
+  };
   openModal({
     title: 'Turf Treatment Planner',
-    sub: 'Choose an area, select a treatment category, then enter the quantities for the selected date.',
+    sub: 'Build repeatable treatment plans by course area, category, date range and weekdays.',
     size: 'turf-planner-modal',
     body: '<div id="tpContainer"></div>',
     footer: '<button type="button" class="btn" data-act="close-modal">Close planner</button>'
@@ -2771,10 +2826,10 @@ function renderTp() {
     return '<article class="tp-product-row" data-unit="' + esc(unit) + '">' +
       '<div class="tp-product-ident"><span class="tp-product-icon material-symbols-rounded">' + esc(category === 'Fertilizers' ? 'spa' : category === 'Pesticides' ? 'pest_control' : 'eco') + '</span>' +
       '<div class="tp-product-copy"><b>' + esc(itemName(product)) + '</b><span>' + esc(unit || 'Unit not set') + ' · Stock ' + fmt(stock, 2) + (num(product.unitCost) > 0 ? ' · ' + money(num(product.unitCost)) + '/' + esc(unit) : '') + '</span></div></div>' +
-      '<div class="tp-qty-control"><label>Quantity (' + esc(unit || 'unit') + ')' +
+      '<div class="tp-qty-control"><label>Qty (' + esc(unit || 'unit') + ')' +
       '<input type="number" min="0" step="any" inputmode="decimal" value="' + esc(qtyValue) + '" placeholder="0" aria-label="Quantity for ' + esc(itemName(product)) + '" data-tp-qty data-product="' + esc(product.id) + '"' + (canPlan ? '' : ' disabled') + '></label></div>' +
       '<div class="tp-scope-control">' +
-      (area === 'Greens' ? '<label class="tp-per-green"><input type="checkbox" data-tp-per-green data-product="' + esc(product.id) + '"' + (perGreen ? ' checked' : '') + (canPlan ? '' : ' disabled') + '><span><b>Per green</b><small>Multiply by 18</small></span></label>' : '<span class="tp-scope-fixed">Whole area</span>') +
+      (area === 'Greens' ? '<label class="tp-per-green"><input type="checkbox" data-tp-per-green data-product="' + esc(product.id) + '"' + (perGreen ? ' checked' : '') + (canPlan ? '' : ' disabled') + '><span><b>Per green</b><small>× 18 greens</small></span></label>' : '<span class="tp-scope-fixed">Whole area</span>') +
       '<div class="tp-total-label"><small>' + (perGreen ? '18-green total' : 'Total required') + '</small><b data-tp-total>' + (num(line.qty) > 0 ? fmt(total, 2) + ' ' + esc(unit) : '—') + '</b></div></div>' +
       '<span class="tp-rate-label" data-tp-rate-label>' + (perGreen ? fmt(num(line.qty), 2) + ' ' + esc(unit) + ' × 18 greens' : 'Total quantity for this area') + '</span>' +
       (!canPlan ? '<small class="tp-unit-warning">Set a unit of measure in Products &amp; Stock before planning this item.</small>' : '') +
@@ -2782,35 +2837,49 @@ function renderTp() {
   }).join('');
   const noteKey = area + '::' + category;
   const note = tpState.notes[noteKey] || '';
-  const existingCount = (S.plans || []).filter(plan =>
-    turfRecordDate(plan) === tpState.date &&
-    tpCanonicalArea(plan.targetArea || plan.area) === tpCanonicalArea(area) &&
-    tpPlanCategory(plan) === category &&
-    tpIsEditablePlan(plan)
+  const existingCount = tpMatchingPlanRecords(area, category).filter(plan =>
+    tpPlanDateInRange(plan, tpState.date, tpState.validUntil || tpState.date)
   ).length;
+  const weekdaysHtml = TP_WEEKDAYS.map(item =>
+    '<label class="tp-weekday-chip"><input type="checkbox" data-tp-weekday value="' + item.day + '"' +
+    (tpState.weekdays.includes(item.day) ? ' checked' : '') + '><span>' + item.label + '</span></label>'
+  ).join('');
+  const plannedDates = tpSelectedDates();
   container.innerHTML =
-    '<div class="tp-planner-toolbar"><div><span class="tp-eyebrow">APPLICATION PLAN</span><h3>Daily treatment allocation</h3><p>Select a date, then plan products for each course area.</p></div>' +
-    '<label class="tp-date-picker"><span class="material-symbols-rounded">calendar_month</span><span>Plan date</span><input type="date" value="' + esc(tpState.date) + '" data-tp-date></label></div>' +
+    '<div class="tp-planner-toolbar"><div class="tp-planner-title"><span class="tp-eyebrow">APPLICATION PLAN</span><h3>Daily treatment allocation</h3><p>Set the active dates once, then configure each area and category.</p></div>' +
+    '<div class="tp-date-range"><label><span>Plan from</span><input type="date" value="' + esc(tpState.date) + '" data-tp-date></label>' +
+    '<span class="tp-range-arrow material-symbols-rounded">arrow_forward</span>' +
+    '<label><span>Valid through</span><input type="date" min="' + esc(tpState.date) + '" value="' + esc(tpState.validUntil) + '" data-tp-until></label></div></div>' +
+    '<div class="tp-repeat-strip"><div class="tp-repeat-heading"><span class="material-symbols-rounded">event_repeat</span><div><b>Repeat on</b><small>' + plannedDates.length + ' scheduled date' + (plannedDates.length === 1 ? '' : 's') + '</small></div></div>' +
+    '<div class="tp-weekday-options">' + weekdaysHtml + '</div><span class="tp-repeat-help">Only selected weekdays between the start and end dates are scheduled.</span></div>' +
     '<div class="tp-planner-layout"><aside class="tp-area-sidebar"><div class="tp-sidebar-heading"><span>COURSE AREAS</span><small>' + TP_AREAS.length + ' areas</small></div>' + areasHtml +
     '<div class="tp-sidebar-foot"><span class="material-symbols-rounded">golf_course</span><div><b>Greens mode</b><small>Per-green quantity × 18</small></div></div></aside>' +
     '<section class="tp-workspace"><div class="tp-category-tabs">' + categoryTabs + '</div>' +
     '<div class="tp-category-heading"><div><span class="tp-eyebrow">' + esc(area.toUpperCase()) + '</span><h3>' + esc(category) + '</h3><p>' + esc((TP_CATEGORIES.find(item => item.name === category) || {}).description || 'Select products and quantities.') + '</p></div>' +
-    '<span class="tp-planned-count">' + existingCount + ' planned line' + (existingCount === 1 ? '' : 's') + ' already saved</span></div>' +
+    '<span class="tp-planned-count">' + existingCount + ' planned line' + (existingCount === 1 ? '' : 's') + ' in this range</span></div>' +
     '<div class="tp-product-list">' + (rows || '<div class="tp-empty-state"><span class="material-symbols-rounded">inventory_2</span><b>No ' + esc(category.toLowerCase()) + ' found</b><p>Add products to this category in Products &amp; Stock first.</p></div>') + '</div>' +
-    '<label class="tp-notes-field"><span>Notes for this area and category <small>(optional)</small></span><textarea rows="2" placeholder="Application purpose, rate reference, weather or operator instructions" data-tp-note data-area="' + esc(area) + '" data-category="' + esc(category) + '">' + esc(note) + '</textarea></label>' +
-    '<div class="tp-category-footer"><div class="tp-save-explainer"><span class="material-symbols-rounded">info</span><span>Saving updates the planned lines for this date, area and category. Stock is not deducted until an issue is recorded.</span></div>' +
+    '<label class="tp-notes-field"><span>Notes <small>(optional · this area and category)</small></span><textarea rows="2" placeholder="Purpose, rate reference, weather or operator instructions" data-tp-note data-area="' + esc(area) + '" data-category="' + esc(category) + '">' + esc(note) + '</textarea></label>' +
+    '<div class="tp-category-footer"><div class="tp-save-explainer"><span class="material-symbols-rounded">info</span><span>Creates one dated plan per selected weekday. Stock is not deducted until an issue is recorded.</span></div>' +
     '<button type="button" class="btn btn-primary tp-save-tab" data-act="tp-save-tab"><span class="material-symbols-rounded">save</span>Save ' + esc(category) + '</button></div></section></div>';
 }
 async function saveTpCategoryTab() {
   const saveButton = document.querySelector('[data-act="tp-save-tab"]');
   if (saveButton) saveButton.disabled = true;
-  const date = tpState.date;
+  const from = tpState.date;
+  const until = tpState.validUntil;
+  const weekdays = [...tpState.weekdays].sort((a, b) => a - b);
   const area = tpState.area;
   const category = tpState.category;
   try {
-    if (!date) { toast('Choose a plan date first.', 'err'); return; }
+    if (!from || !until || until < from) { toast('Choose a valid plan date range.', 'err'); return; }
+    if (!weekdays.length) { toast('Select at least one weekday.', 'err'); return; }
+    const spanDays = Math.floor((new Date(until + 'T12:00:00') - new Date(from + 'T12:00:00')) / 86400000) + 1;
+    if (spanDays > 366) { toast('Keep a plan validity period within 366 days.', 'err'); return; }
+    const dates = tpSelectedDates();
+    if (!dates.length) { toast('No dates in this range match the selected weekdays.', 'err'); return; }
+
     const products = S.inventory.filter(item => turfCategoryLabel(item.category) === category);
-    const desired = new Map();
+    const desiredLines = new Map();
     for (const product of products) {
       const line = tpLineForProduct(product);
       const qty = Math.max(0, num(line.qty));
@@ -2819,81 +2888,109 @@ async function saveTpCategoryTab() {
       if (!unit) { toast('Set the stock unit for ' + itemName(product) + ' in Products & Stock first.', 'err'); return; }
       const perGreen = area === 'Greens' && !!line.perGreen;
       const totalQty = qty * (perGreen ? 18 : 1);
-      desired.set(String(product.id), { product, qty, unit, perGreen, totalQty });
+      desiredLines.set(String(product.id), { product, qty, unit, perGreen, totalQty });
       if (totalQty > num(product.stockQuantity)) {
         toast('Planned quantity for ' + itemName(product) + ' exceeds current stock. The plan can still be saved, but replenishment may be needed.', 'warn');
       }
     }
-    const existing = (S.plans || []).filter(plan =>
-      turfRecordDate(plan) === date &&
-      tpCanonicalArea(plan.targetArea || plan.area) === tpCanonicalArea(area) &&
-      tpPlanCategory(plan) === category &&
-      tpIsEditablePlan(plan)
+
+    const allCategoryPlans = tpMatchingPlanRecords(area, category);
+    // The existing app already uses validFrom, validUntil and repeatWeekdays for turf schedules.
+    // Replacing an overlapping recurring series keeps this planner compatible with that same record shape.
+    const oldSeries = allCategoryPlans.filter(plan =>
+      tpIsRepeatSeries(plan) &&
+      tpDateRangeOverlaps(plan.validFrom, plan.validUntil, from, until)
     );
-    if (!desired.size && !existing.length) {
+    const oldSeriesIds = new Set(oldSeries.map(plan => plan.id));
+    const selectedDateSet = new Set(dates);
+    const selectedSingleDatePlans = allCategoryPlans.filter(plan =>
+      !tpIsRepeatSeries(plan) &&
+      selectedDateSet.has(turfRecordDate(plan))
+    );
+    const replaceRecords = [...new Map([...oldSeries, ...selectedSingleDatePlans].map(plan => [plan.id, plan])).values()];
+    if (!desiredLines.size && !replaceRecords.length) {
       toast('Enter a quantity for at least one product before saving this tab.', 'warn');
       return;
     }
-    const grouped = new Map();
-    existing.forEach(plan => {
-      const id = String(plan.productId || plan.itemId || plan.inventoryId || '');
-      if (!grouped.has(id)) grouped.set(id, []);
-      grouped.get(id).push(plan);
-    });
+
     const noteKey = area + '::' + category;
     const note = String(tpState.notes[noteKey] || '').trim();
-    const dateObj = new Date(date + 'T12:00:00');
-    const baseFields = { date, weekStart: getSunday(date), dayIndex: dateObj.getDay(), targetArea: area, area, status: 'Planned', updatedAt: Date.now() };
+    const desiredByDateProduct = new Map();
+    for (const date of dates) {
+      for (const line of desiredLines.values()) {
+        desiredByDateProduct.set(date + '::' + line.product.id, { date, ...line });
+      }
+    }
     const batch = writeBatch(db);
     let writeCount = 0;
-    for (const [productId, records] of grouped.entries()) {
-      const desiredLine = desired.get(productId);
-      if (!desiredLine) {
-        records.forEach(record => { batch.delete(doc(db, CONFIG.COL.plans, record.id)); writeCount++; });
-        continue;
+    const handled = new Set();
+    const baseDate = new Date(from + 'T12:00:00');
+    for (const record of replaceRecords) {
+      const recordDate = turfRecordDate(record);
+      const productId = String(record.productId || record.itemId || record.inventoryId || '');
+      const key = recordDate + '::' + productId;
+      const desired = desiredByDateProduct.get(key);
+      if (desired && !handled.has(key)) {
+        const line = desired;
+        const dateObj = new Date(line.date + 'T12:00:00');
+        const fields = {
+          weekStart: getSunday(line.date),
+          date: line.date,
+          dayIndex: dateObj.getDay(),
+          productId: line.product.id,
+          productName: itemName(line.product),
+          category: line.product.category || category,
+          targetQty: line.totalQty,
+          unit: line.unit,
+          targetArea: area,
+          area,
+          scope: line.perGreen ? 'per_area' : 'overall',
+          validFrom: from,
+          validUntil: until,
+          repeatWeekdays: weekdays,
+          notes: note || 'Planned via Turf Treatment Planner',
+          status: 'Planned'
+        };
+        batch.update(doc(db, CONFIG.COL.plans, record.id), fields);
+        handled.add(key);
+        writeCount++;
+      } else {
+        batch.delete(doc(db, CONFIG.COL.plans, record.id));
+        writeCount++;
       }
-      const item = desiredLine;
-      const product = item.product;
-      const fields = {
-        ...baseFields,
-        productId: product.id,
-        productName: itemName(product),
-        category: product.category || category,
-        targetQty: item.totalQty,
-        unit: item.unit,
-        scope: item.perGreen ? 'per_area' : 'overall',
-        perGreenQty: item.perGreen ? item.qty : null,
-        quantityPerGreen: item.perGreen ? item.qty : null,
-        greenCount: item.perGreen ? 18 : null,
-        notes: note || 'Planned via Turf Treatment Planner'
-      };
-      batch.update(doc(db, CONFIG.COL.plans, records[0].id), fields);
-      writeCount++;
-      records.slice(1).forEach(record => { batch.delete(doc(db, CONFIG.COL.plans, record.id)); writeCount++; });
-      desired.delete(productId);
     }
-    for (const item of desired.values()) {
+    for (const [key, line] of desiredByDateProduct.entries()) {
+      if (handled.has(key)) continue;
+      const dateObj = new Date(line.date + 'T12:00:00');
       const ref = doc(collection(db, CONFIG.COL.plans));
       batch.set(ref, {
-        ...baseFields,
-        productId: item.product.id,
-        productName: itemName(item.product),
-        category: item.product.category || category,
-        targetQty: item.totalQty,
-        unit: item.unit,
-        scope: item.perGreen ? 'per_area' : 'overall',
-        perGreenQty: item.perGreen ? item.qty : null,
-        quantityPerGreen: item.perGreen ? item.qty : null,
-        greenCount: item.perGreen ? 18 : null,
+        weekStart: getSunday(line.date),
+        date: line.date,
+        dayIndex: dateObj.getDay(),
+        productId: line.product.id,
+        productName: itemName(line.product),
+        category: line.product.category || category,
+        targetQty: line.totalQty,
+        unit: line.unit,
+        targetArea: area,
+        area,
+        scope: line.perGreen ? 'per_area' : 'overall',
+        validFrom: from,
+        validUntil: until,
+        repeatWeekdays: weekdays,
         notes: note || 'Planned via Turf Treatment Planner',
+        status: 'Planned',
         createdAt: Date.now()
       });
       writeCount++;
     }
     if (!writeCount) { toast('No changes to save for this tab.'); return; }
-    if (writeCount > 450) { toast('This save contains too many lines. Narrow the selection and try again.', 'err'); return; }
+    if (writeCount > 450) {
+      toast('This plan would update ' + writeCount + ' records. Shorten the date range or select fewer products.', 'err');
+      return;
+    }
     await batch.commit();
-    toast(category + ' saved for ' + area + ' on ' + date + '.');
+    toast(category + ' scheduled for ' + area + ' on ' + dates.length + ' date' + (dates.length === 1 ? '' : 's') + '.');
     renderTp();
   } catch (error) {
     console.error('Turf planner save failed:', error);
@@ -2926,8 +3023,27 @@ document.addEventListener('change', event => {
   if (dateInput) {
     if (!dateInput.value) return;
     tpState.date = dateInput.value;
+    if (!tpState.validUntil || tpState.validUntil < tpState.date) tpState.validUntil = tpState.date;
+    tpState.weekdays = tpDefaultWeekdays(tpState.date);
     tpState.lines = {};
     tpState.notes = {};
+    renderTp();
+    return;
+  }
+  const untilInput = target.closest('[data-tp-until]');
+  if (untilInput) {
+    if (!untilInput.value) return;
+    tpState.validUntil = untilInput.value < tpState.date ? tpState.date : untilInput.value;
+    renderTp();
+    return;
+  }
+  const weekdayInput = target.closest('[data-tp-weekday]');
+  if (weekdayInput) {
+    const day = Number(weekdayInput.value);
+    const selected = new Set(tpState.weekdays);
+    if (weekdayInput.checked) selected.add(day);
+    else selected.delete(day);
+    tpState.weekdays = [...selected].sort((a, b) => a - b);
     renderTp();
     return;
   }
