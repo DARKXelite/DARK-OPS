@@ -17,7 +17,8 @@ const featureModules = [
   ["../src/modules/maps/course-map-module.js", "createCourseMapModule"],
   ["../src/modules/store/store-ui-module.js", "createStoreUiModule"],
   ["../src/modules/expenses/expense-module.js", "createExpenseModule"],
-  ["../src/modules/views/overview-module.js", "createOverviewModule"]
+  ["../src/modules/views/overview-module.js", "createOverviewModule"],
+  ["../src/modules/actions/action-handlers.js", "createActionHandlersModule"]
 ];
 
 test("feature modules expose function-based factories and import cleanly", async () => {
@@ -40,6 +41,7 @@ test("feature modules expose function-based factories and import cleanly", async
   await import("../src/modules/store/store-ui-module.js");
   await import("../src/modules/expenses/expense-module.js");
   await import("../src/modules/views/overview-module.js");
+  await import("../src/modules/actions/action-handlers.js");
 });
 
 test("application entrypoint delegates feature implementations into modules", async () => {
@@ -57,7 +59,8 @@ test("application entrypoint delegates feature implementations into modules", as
     "maps/course-map-module.js",
     "store/store-ui-module.js",
     "expenses/expense-module.js",
-    "views/overview-module.js"
+    "views/overview-module.js",
+    "actions/action-handlers.js"
   ]) {
     assert.ok(app.includes(importPath), `entrypoint must import ${importPath}`);
   }
