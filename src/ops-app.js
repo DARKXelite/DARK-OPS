@@ -23,9 +23,11 @@ import { createLedgerViewsModule } from "./modules/views/ledger-views.js";
 import { createCommandPaletteModule } from "./modules/app/command-palette.js";
 import { createAuthControllerModule } from "./modules/app/auth-controller.js";
 import { registerAppEventDelegation } from "./modules/app/event-delegation.js";
+import { createNavigationController } from "./modules/app/navigation-controller.js";
 
 
 let uiModule = null, chartModule = null, weatherModule = null, reorderModule = null, costModule = null, fleetModule = null, turfDomainModule = null, overviewModule = null, mapModule = null, storeUiModule = null, expenseModule = null, turfModule = null, fleetDomainModule = null;
+let listenerController = null;
 function setCurModalRenderer(fn) { curModalRender = fn; }
 
 const FUEL_RATE = 92.50; // Legacy reference rate; operational costing is managed in the local cost model.
@@ -281,54 +283,26 @@ const NAV_GROUPS = {
   fnb: { label: 'F&B', icon: 'restaurant', view: 'fnb', pages: [] }
 };
 let activeNavGroup = 'insights';
-function groupForView(v) { if (v === 'overview') return 'insights'; return Object.keys(NAV_GROUPS).find(k => NAV_GROUPS[k].view === v || NAV_GROUPS[k].pages.some(p => p[0] === v) || (k === 'fleetops' && v === 'zones')) || 'insights'; }
-function renderGroupTabs() {
-  const el = $('#groupTabs'); if (!el) return;
-  activeNavGroup = groupForView(cur);
-  const g = NAV_GROUPS[activeNavGroup];
-  if (!g || !g.pages.length) { el.hidden = true; el.innerHTML = ''; return; }
-  el.hidden = false;
-  const pages = g.pages.map(([v,label]) => `<button class="group-tab ${cur === v || ((v === 'radar' || v === 'zones') && (cur === 'radar' || cur === 'zones')) ? 'active' : ''}" data-act="group-tab" data-v="${v}">${label}</button>`).join('');
-  const mapToggle = (cur === 'radar' || cur === 'zones') ? `<div class="group-tab-divider"></div><button class="group-tab map-mode-tab ${cur === 'radar' ? 'active' : ''}" data-act="map-mode" data-mode="radar">Live radar</button><button class="group-tab map-mode-tab ${cur === 'zones' ? 'active' : ''}" data-act="map-mode" data-mode="zones">Geofences</button>` : '';
-  el.innerHTML = `<div class="group-tabs-inner">${pages}${mapToggle}</div>`;
-}
-function buildNav() {
-  const entries = Object.entries(NAV_GROUPS).filter(([, g]) => RBAC.can(permissionForView(g.view)));
-  document.getElementById('nav').innerHTML = entries.map(([key,g]) => `<button class="nav-btn ${key === activeNavGroup ? 'active' : ''}" data-act="nav-group" data-group="${key}" title="${g.label}" aria-label="${g.label}"><span class="material-symbols-rounded">${g.icon}</span><span class="nl">${g.label}</span></button>`).join('');
-}
-function openNavGroup(key) {
-  const g = NAV_GROUPS[key] || NAV_GROUPS.insights;
-  activeNavGroup = key;
-  switchView(g.view);
-  qsa('#nav .nav-btn').forEach(b => b.classList.toggle('active', b.dataset.group === key));
-  if (window.innerWidth < 900) toggleDock(false);
-}
-function toggleDock(force) { const dock = $('#dockPill'); if (!dock) return; const open = typeof force === 'boolean' ? force : !dock.classList.contains('active'); dock.classList.add('active'); }
-const badgeCounts = { incidents: 0, radar: 0 };
-function updateBadges(changedCollection = null) {
-  if (changedCollection === 'logs') badgeCounts.incidents = S.logs.filter(l => (l.repairStatus || 'Pending') !== 'Resolved').length;
-  if (changedCollection === 'live') badgeCounts.radar = liveNow().length;
-  [['incidents', badgeCounts.incidents], ['radar', badgeCounts.radar]].forEach(([k, n]) => { const el = $(`[data-nb="${k}"]`); if (el) { el.hidden = !n; el.textContent = n; } });
-}
-function switchView(v) {
-  if (!VIEWS[v]) v = 'overview';
-  if (RBAC.session.authenticated && !RBAC.can(permissionForView(v))) { toast("Your role does not have access to this section.", "err"); v = "overview"; }
-  cur = v;
-  if (listenersStarted) syncListenersForView();
-  document.body.classList.toggle('turf-board-mode', v === 'turfcare'); history.replaceState(null, '', '#' + v);
-  qsa('.view').forEach(x => x.classList.toggle('active', x.id === 'v-' + v));
-  $('#pageTitle').textContent = VIEWS[v][0]; $('#pageSub').textContent = VIEWS[v][1]; $('#viewHead').style.display = (v === 'overview' || v === 'turfcare') ? 'none' : ''; window.scrollTo(0, 0);
-  const mapMode = (v === 'radar' || v === 'zones');
-  document.body.classList.toggle('map-mode', mapMode);
-  activeNavGroup = groupForView(v);
-  qsa('#nav .nav-btn').forEach(b => b.classList.toggle('active', b.dataset.group === activeNavGroup));
-  renderGroupTabs();
-  if (v === 'radar') { initRadarMap(); setTimeout(() => mapModule.resizeMap('radar'), 80); }
-  if (v === 'zones') { initZoneMap(); setTimeout(() => mapModule.resizeMap('zones'), 80); }
-  renderAll();
-}
-let raf = 0; const scheduleRender = () => { if (!raf) raf = requestAnimationFrame(() => { raf = 0; renderAll(); }); };
-function renderAll() { try { (RENDER[cur] || (() => {}))(); updateBadges(); if (curModalRender) curModalRender(); } catch (e) { console.error(e); } }
+const navigationController = createNavigationController({
+  NAV_GROUPS, VIEWS, RENDER, RBAC, permissionForView, S, liveNow,
+  $, qsa, toast, initRadarMap, initZoneMap,
+  resizeMap: view => mapModule.resizeMap(view),
+  getCurrentView: () => cur,
+  setCurrentView: view => { cur = view; },
+  getCurrentModalRenderer: () => curModalRender,
+  isListenerControllerStarted: () => Boolean(listenerController?.isStarted()),
+  syncListenersForView
+});
+const badgeCounts = navigationController.badgeCounts;
+function groupForView(...args) { return navigationController.groupForView(...args); }
+function renderGroupTabs(...args) { return navigationController.renderGroupTabs(...args); }
+function buildNav(...args) { return navigationController.buildNav(...args); }
+function openNavGroup(...args) { return navigationController.openNavGroup(...args); }
+function toggleDock(...args) { return navigationController.toggleDock(...args); }
+function updateBadges(...args) { return navigationController.updateBadges(...args); }
+function switchView(...args) { return navigationController.switchView(...args); }
+function scheduleRender(...args) { return navigationController.scheduleRender(...args); }
+function renderAll(...args) { return navigationController.renderAll(...args); }
 
 /* ================= FIRESTORE LISTENERS ================= */
 let unsubs = new Map();
@@ -530,7 +504,7 @@ const APP_CONTEXT = {
   VIEWS,
   VIEW_COLLECTIONS,
   ZCOL,
-  activeNavGroup,
+  activeNavGroup: navigationController.getActiveNavGroup(),
   addDays,
   addDoc,
   addLocateControl,
