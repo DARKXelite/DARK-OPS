@@ -2641,3 +2641,216 @@ body.auth-locked .main{visibility:hidden}
   .tp-category-footer { align-items: stretch; flex-direction: column; gap: 8px; }
   .tp-save-tab { justify-content: center; width: 100%; }
 }
+
+
+/* UNIFIED OPERATIONAL ANALYTICS — low-glare olive surfaces, shared report components */
+:root{
+  --oa-bg:#17271F;
+  --oa-panel:#20372A;
+  --oa-row:#253D2E;
+  --oa-row-alt:#2B4434;
+  --oa-row-hover:#354F3C;
+  --oa-head:#304B39;
+  --oa-line:#405747;
+  --oa-text:#E8E9DF;
+  --oa-muted:#B6C2B5;
+}
+#overlay .modal.ops-analytics-modal{
+  width:min(1580px,calc(100vw - 18px))!important;
+  max-width:calc(100vw - 18px)!important;
+  max-height:calc(100dvh - 18px)!important;
+  border-radius:13px!important;
+}
+#overlay .modal.ops-analytics-modal .m-head{
+  padding:11px 16px!important;
+  gap:10px!important;
+}
+#overlay .modal.ops-analytics-modal .m-head h2{font-size:15px;line-height:1.25}
+#overlay .modal.ops-analytics-modal .m-head p{margin-top:3px;font-size:10px;line-height:1.4}
+#overlay .modal.ops-analytics-modal .m-foot{padding:8px 14px!important;gap:8px}
+#overlay .modal.ops-analytics-modal .m-foot .btn{min-height:33px;padding:7px 11px;font-size:10px}
+#overlay .modal.ops-analytics-modal .m-body{
+  padding:0!important;
+  background:var(--oa-bg)!important;
+  color:var(--oa-text)!important;
+  overflow:auto;
+}
+#opsAnalyticsRoot{min-width:0;color:var(--oa-text);font-size:11px}
+.oa-toolbar{
+  display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;
+  padding:10px 14px;border-bottom:1px solid var(--oa-line);background:#1B3023;
+}
+.oa-date-controls{display:flex;align-items:center;gap:8px}
+.oa-date-controls label{display:grid;gap:3px;color:var(--oa-muted);font-size:9px;font-weight:800}
+#overlay .modal.ops-analytics-modal .oa-date-controls input{
+  min-width:128px;height:31px;padding:4px 7px;border:1px solid var(--oa-line)!important;border-radius:7px;
+  background:#233A2B!important;color:var(--oa-text)!important;font-size:10px;
+}
+.oa-presets{display:flex;gap:4px;flex-wrap:wrap}
+.oa-preset,.oa-domain-tab,.oa-view-tab{
+  border:1px solid var(--oa-line);background:#233A2B;color:var(--oa-muted);cursor:pointer;
+  font:inherit;font-size:9px;font-weight:750;transition:background .12s,border-color .12s;
+}
+.oa-preset{padding:7px 9px;border-radius:7px}
+.oa-preset:hover,.oa-preset.active{background:#314B36;color:var(--oa-text);border-color:#6B855F}
+.oa-domain-tabs{display:flex;gap:6px;padding:9px 14px 0;background:var(--oa-bg);border-bottom:1px solid var(--oa-line)}
+.oa-domain-tab{display:flex;align-items:center;gap:6px;padding:9px 12px;border-radius:8px 8px 0 0;border-bottom:0}
+.oa-domain-tab .material-symbols-rounded{font-size:17px}
+.oa-domain-tab.active{background:#2B4433;color:#E2C894;border-color:#657B57;box-shadow:inset 0 -2px #BBA16C}
+.oa-view-tabs{display:flex;gap:4px;overflow:auto;padding:7px 14px;background:#1B3023;border-bottom:1px solid var(--oa-line)}
+.oa-view-tab{flex:0 0 auto;padding:7px 10px;border-radius:7px}
+.oa-view-tab.active{background:#3B563D;border-color:#657C5C;color:#F1F0E6}
+.oa-report{display:grid;gap:10px;padding:12px 14px 16px;background:var(--oa-bg)}
+.oa-kpi-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}
+.oa-kpi{display:flex;flex-direction:column;gap:5px;min-width:0;padding:10px 11px;border:1px solid #3B5342;border-radius:9px;background:#203629}
+.oa-kpi small{color:#C2C9B8;font-size:8px;font-weight:850;letter-spacing:.09em;text-transform:uppercase;line-height:1.4}
+.oa-kpi b{font-size:clamp(16px,1.5vw,22px);font-weight:850;line-height:1.2;overflow-wrap:anywhere;color:#EEEFE4;font-variant-numeric:tabular-nums}
+.oa-kpi span{color:var(--oa-muted);font-size:9px;line-height:1.4}
+.oa-panel{min-width:0;padding:11px 12px;border:1px solid #3B5342;border-radius:10px;background:#1E3427}
+.oa-panel-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:9px}
+.oa-panel-head>div{min-width:0}
+.oa-panel-head small{color:#C9B686;font-size:8px;font-weight:850;letter-spacing:.12em}
+.oa-panel-head h3{margin:3px 0;font-size:14px;line-height:1.3;color:var(--oa-text)}
+.oa-panel-head p{margin:0;color:var(--oa-muted);font-size:9px;line-height:1.45}
+.oa-panel-meta{flex:0 0 auto;padding:5px 7px;border:1px solid var(--oa-line);border-radius:30px;color:var(--oa-muted);font-size:8px}
+.oa-table-wrap{width:100%;max-width:100%;overflow:auto;border:1px solid var(--oa-line);border-radius:8px;background:var(--oa-row)}
+.oa-table{width:100%;min-width:820px;border-collapse:separate!important;border-spacing:0!important;background:var(--oa-row)!important;color:var(--oa-text)!important;font-size:10px;line-height:1.4}
+.oa-table th{position:sticky;top:0;z-index:1;padding:8px 9px;background:#304B39!important;color:#E9EBDD!important;border-bottom:1px solid #526A4F!important;border-right:1px solid #405747!important;text-align:left;font-size:8px;font-weight:850;white-space:nowrap}
+.oa-table td{padding:7px 9px;background:#253D2E!important;color:#E7E9DE!important;border-bottom:1px solid #3B5342!important;border-right:1px solid #354D3B!important;vertical-align:top}
+.oa-table tbody tr:nth-child(even) td{background:#2A4332!important}
+.oa-table tbody tr:hover td{background:#354F3C!important}
+.oa-table tbody tr:last-child td{border-bottom:0!important}
+.oa-table th:last-child,.oa-table td:last-child{border-right:0!important}
+.oa-table .num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+.oa-table b{color:#F0F0E6;font-weight:800}
+.oa-dim{margin-top:2px;color:#BDCABA!important;font-size:8px;line-height:1.4}
+.oa-status{display:inline-flex;padding:3px 6px;border:1px solid #506C50;border-radius:5px;background:#304B39;color:#E4E9D8;font-size:8px;font-weight:800;white-space:nowrap}
+.oa-unpriced{display:inline-flex;padding:2px 5px;border-radius:4px;background:#4A3B25;color:#F1C779;font-size:8px;font-weight:850}
+.oa-over{color:#F3B8A2!important;font-weight:850}
+.oa-under{color:#E9D08A!important;font-weight:850}
+.oa-drill{padding:0;border:0;background:transparent;color:#D5C194;font:inherit;font-size:10px;font-weight:850;text-align:left;text-decoration:underline;text-decoration-color:#687E5E;text-underline-offset:3px;cursor:pointer}
+.oa-drill:hover{color:#F3E1B6}
+.oa-note-text,.oa-access-note{display:flex;align-items:flex-start;gap:7px;margin:0;padding:8px 10px;border:1px solid #3D5843;border-radius:8px;background:#1E3427;color:#C2CDBD;font-size:9px;line-height:1.55}
+.oa-access-note .material-symbols-rounded{flex:0 0 auto;font-size:16px;color:#E0C68E}
+.oa-loading{display:flex;align-items:center;gap:8px;min-height:180px;justify-content:center;color:var(--oa-muted);font-size:11px}
+.oa-loading .material-symbols-rounded{font-size:20px;color:#C9B686}
+.oa-chart-wrap{padding:8px 6px 2px;overflow-x:auto}
+.oa-chart-wrap svg{max-width:100%}
+.oa-analytics-launch{display:inline-flex;align-items:center;gap:5px;min-height:29px;padding:5px 9px;font-size:9px}
+.oa-analytics-launch .material-symbols-rounded{font-size:16px}
+.ops-dashboard-period{gap:8px}
+.ops-dashboard-period .ops-analytics-launch{margin-left:auto}
+#overlay .modal.ops-analytics-modal .empty{padding:19px 12px;background:#253D2E!important;color:#C6CFBF!important;text-align:center}
+#overlay .modal.ops-analytics-modal .muted{color:#B6C2B5!important}
+#overlay .modal.ops-analytics-modal .badge{background:#304B39!important;color:#E8E9DF!important;border-color:#526A4F!important}
+
+/* Consistent dark-olive tables across operational workspaces.
+   Override older table rules that introduced pale/near-white rows. */
+body .main #v-fuel table,
+body .main #v-shifts table,
+body .main #v-records table,
+body .main #v-turfcare table,
+body .main #v-registry table,
+body .main #v-users table,
+body .main #v-expenses table,
+body .main #ledgerCard table,
+body .main #usersTbl table,
+body .main #invTbl table,
+body .main #inwardTbl table,
+body #overlay .modal .table-wrap table,
+body .drawer .table-wrap table{
+  background:#253D2E!important;color:#E8E9DF!important;border-color:#405747!important;
+}
+body .main #v-fuel table th,
+body .main #v-shifts table th,
+body .main #v-records table th,
+body .main #v-turfcare table th,
+body .main #v-registry table th,
+body .main #v-users table th,
+body .main #v-expenses table th,
+body .main #ledgerCard table th,
+body .main #usersTbl table th,
+body .main #invTbl table th,
+body .main #inwardTbl table th,
+body #overlay .modal .table-wrap table th,
+body .drawer .table-wrap table th{
+  background:#304B39!important;color:#E8E9DF!important;border-color:#405747!important;
+}
+body .main #v-fuel table td,
+body .main #v-shifts table td,
+body .main #v-records table td,
+body .main #v-turfcare table td,
+body .main #v-registry table td,
+body .main #v-users table td,
+body .main #v-expenses table td,
+body .main #ledgerCard table td,
+body .main #usersTbl table td,
+body .main #invTbl table td,
+body .main #inwardTbl table td,
+body #overlay .modal .table-wrap table td,
+body .drawer .table-wrap table td{
+  background:#253D2E!important;color:#E8E9DF!important;border-color:#405747!important;
+}
+body .main #v-fuel table tbody tr:nth-child(even) td,
+body .main #v-shifts table tbody tr:nth-child(even) td,
+body .main #v-records table tbody tr:nth-child(even) td,
+body .main #v-turfcare table tbody tr:nth-child(even) td,
+body .main #v-registry table tbody tr:nth-child(even) td,
+body .main #v-users table tbody tr:nth-child(even) td,
+body .main #v-expenses table tbody tr:nth-child(even) td,
+body .main #ledgerCard table tbody tr:nth-child(even) td,
+body .main #usersTbl table tbody tr:nth-child(even) td,
+body .main #invTbl table tbody tr:nth-child(even) td,
+body .main #inwardTbl table tbody tr:nth-child(even) td,
+body #overlay .modal .table-wrap table tbody tr:nth-child(even) td,
+body .drawer .table-wrap table tbody tr:nth-child(even) td{
+  background:#2A4332!important;
+}
+body .main #v-fuel table tbody tr:hover td,
+body .main #v-shifts table tbody tr:hover td,
+body .main #v-records table tbody tr:hover td,
+body .main #v-turfcare table tbody tr:hover td,
+body .main #v-registry table tbody tr:hover td,
+body .main #v-users table tbody tr:hover td,
+body .main #v-expenses table tbody tr:hover td,
+body .main #ledgerCard table tbody tr:hover td,
+body .main #usersTbl table tbody tr:hover td,
+body .main #invTbl table tbody tr:hover td,
+body .main #inwardTbl table tbody tr:hover td,
+body #overlay .modal .table-wrap table tbody tr:hover td,
+body .drawer .table-wrap table tbody tr:hover td{background:#354F3C!important}
+@media(max-width:900px){
+  .oa-toolbar{align-items:stretch}
+  .oa-kpi-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .oa-date-controls{width:100%}
+  .oa-date-controls label{flex:1;min-width:0}
+  #overlay .modal.ops-analytics-modal .oa-date-controls input{width:100%;min-width:0}
+  .oa-presets{width:100%}
+  .oa-domain-tabs{gap:4px;padding-left:9px;padding-right:9px}
+  .oa-domain-tab{padding:8px 9px;font-size:9px}
+  .oa-report{padding:9px}
+}
+@media(max-width:600px){
+  #overlay .modal.ops-analytics-modal{width:100vw!important;max-width:100vw!important;max-height:98dvh!important;border-radius:12px 12px 0 0!important}
+  #overlay .modal.ops-analytics-modal .m-head{padding:8px 11px!important}
+  #overlay .modal.ops-analytics-modal .m-foot{padding:6px 10px!important}
+  .oa-toolbar{padding:8px}
+  .oa-date-controls{gap:5px}
+  #overlay .modal.ops-analytics-modal .oa-date-controls input{font-size:10px}
+  .oa-preset{padding:6px 7px;font-size:8px}
+  .oa-domain-tabs{overflow-x:auto}
+  .oa-domain-tab{flex:0 0 auto;padding:8px;font-size:8px}
+  .oa-view-tabs{padding:6px 8px}
+  .oa-view-tab{padding:7px 8px;font-size:8px}
+  .oa-panel{padding:8px}
+  .oa-panel-head h3{font-size:12px}
+  .oa-kpi{padding:8px}
+  .oa-kpi small{font-size:7px}
+  .oa-kpi b{font-size:16px}
+  .oa-kpi span{font-size:8px}
+  .oa-table{min-width:780px;font-size:9px}
+  .oa-table th,.oa-table td{padding:6px 7px}
+  .oa-analytics-launch{margin-left:0}
+  .ops-dashboard-period{flex-wrap:wrap}
+  .ops-dashboard-period .ops-analytics-launch{margin-left:auto}
+}
