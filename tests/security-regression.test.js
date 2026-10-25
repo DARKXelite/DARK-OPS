@@ -91,3 +91,29 @@ test("store inward records validate schemas and protect F&B-linked records", asy
   assert.match(rules, /getAfter\(receiptPath\)\.data\.inwardId == id/);
   assert.match(rules, /resource\.data\.transactionType != 'FNB_RECEIPT'[\s\S]{0,120}request\.resource\.data\.transactionType != 'FNB_RECEIPT'/);
 });
+
+test("App Check is initialized before Firestore when a site key is configured", async () => {
+  const js = await read("../src/ops-app.js");
+  const appCheckImport = js.indexOf("firebase-app-check.js");
+  const activation = js.indexOf("initializeAppCheck(app");
+  const firestore = js.indexOf("const db = getFirestore(app)");
+  assert.notEqual(appCheckImport, -1);
+  assert.notEqual(activation, -1);
+  assert.ok(activation < firestore, "App Check must initialize before Firestore is used");
+  assert.match(js, /VITE_FIREBASE_APP_CHECK_SITE_KEY/);
+  assert.match(js, /isTokenAutoRefreshEnabled:\s*true/);
+});
+
+test("realtime listeners are filtered by the current user's collection permissions", async () => {
+  const js = await read("../src/ops-app.js");
+  const rbac = await read("../src/modules/rbac.js");
+  assert.match(js, /permissionForCollection\(CONFIG\.COL\[k\], false\)/);
+  assert.match(js, /if \(!RBAC\.can\(requiredPermission\)\)/);
+  assert.match(rbac, /store_inwards:\s*"inventory\.receipts\.read"/);
+  assert.match(rbac, /operator: Object\.freeze\(\[[\s\S]*?"inventory\.read"/);
+});
+
+test("received F&B order history cannot be deleted", async () => {
+  const rules = await read("../firestore.rules");
+  assert.match(rules, /allow delete: if manager\(\) && !resource\.data\.keys\(\)\.hasAny\(\['lastReceiptId'\]\)/);
+});
