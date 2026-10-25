@@ -1,6 +1,6 @@
 /** Navigation, view rendering and scoped Firestore realtime subscriptions. */
 export function createNavigationModule(deps) {
-  const { $, CONFIG, RBAC, S, collection, db, doc, drawZones, fnbModule, initRadarMap, initZoneMap, liveNow, mapModule, normDate, onSnapshot, permissionForCollection, permissionForView, qsa, renderFleet, renderIncidents, renderLedger, renderLocalExpenseLedger, renderOverview, renderRadarPanel, renderRecords, renderRegistry, renderShifts, renderTurfCare, renderUsersMaster, renderZonePanel, setConn, toast } = deps;
+  const { $, CONFIG, RBAC, S, collection, db, doc, drawZones, fnbModule, getCurrentView, initRadarMap, initZoneMap, liveNow, normDate, onSnapshot, permissionForCollection, permissionForView, qsa, renderFleet, renderIncidents, renderLedger, renderLocalExpenseLedger, renderOverview, renderRadarPanel, renderRecords, renderRegistry, renderShifts, renderTurfCare, renderUsersMaster, renderZonePanel, resizeMap, setConn, setCurrentView, toast } = deps;
 const VIEWS = {
   overview: ["Insights", "AI-assisted operating intelligence", "query_stats", "Insights"],
   fleet: ["Fleet Directory", "Machines & cycles", "precision_manufacturing", "Fleet Ops"],
@@ -65,8 +65,8 @@ function switchView(v) {
   activeNavGroup = groupForView(v);
   qsa('#nav .nav-btn').forEach(b => b.classList.toggle('active', b.dataset.group === activeNavGroup));
   renderGroupTabs();
-  if (v === 'radar') { initRadarMap(); setTimeout(() => mapModule.resizeMap('radar'), 80); }
-  if (v === 'zones') { initZoneMap(); setTimeout(() => mapModule.resizeMap('zones'), 80); }
+  if (v === 'radar') { initRadarMap(); setTimeout(() => resizeMap('radar'), 80); }
+  if (v === 'zones') { initZoneMap(); setTimeout(() => resizeMap('zones'), 80); }
   renderAll();
 }
 let raf = 0; const scheduleRender = () => { if (!raf) raf = requestAnimationFrame(() => { raf = 0; renderAll(); }); };
