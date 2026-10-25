@@ -1772,7 +1772,9 @@ function updateBadges(changedCollection = null) {
 function switchView(v) {
   if (!VIEWS[v]) v = 'overview';
   if (RBAC.session.authenticated && !RBAC.can(permissionForView(v))) { toast("Your role does not have access to this section.", "err"); v = "overview"; }
-  cur = v; document.body.classList.toggle('turf-board-mode', v === 'turfcare'); history.replaceState(null, '', '#' + v);
+  cur = v;
+  if (listenersStarted) syncListenersForView();
+  document.body.classList.toggle('turf-board-mode', v === 'turfcare'); history.replaceState(null, '', '#' + v);
   $$('.view').forEach(x => x.classList.toggle('active', x.id === 'v-' + v));
   $('#pageTitle').textContent = VIEWS[v][0]; $('#pageSub').textContent = VIEWS[v][1]; $('#viewHead').style.display = (v === 'overview' || v === 'turfcare') ? 'none' : ''; window.scrollTo(0, 0);
   const mapMode = (v === 'radar' || v === 'zones');
@@ -1788,65 +1790,104 @@ let raf = 0; const scheduleRender = () => { if (!raf) raf = requestAnimationFram
 function renderAll() { try { (RENDER[cur] || (() => {}))(); updateBadges(); if (curModalRender) curModalRender(); } catch (e) { console.error(e); } }
 
 /* ================= FIRESTORE LISTENERS ================= */
-let unsubs = [];
+let unsubs = new Map();
+let listenersStarted = false;
+const listenerEpochs = new Map();
 const VIEW_COLLECTIONS = {
   overview: ['fuel','machines','shifts','inventory','plans','maintenance','logs'],
   fleet: ['machines','live','fuel','shifts'],
-  fuel: ['fuel','machines','expenses'],
+  fuel: ['fuel','machines','expenses','inventory'],
   shifts: ['shifts','machines'],
-  records: ['maintenance','assignments','fuel','machines','inventory'],
-  radar: ['live','zones'],
+  records: ['maintenance','assignments','fuel','machines','inventory','users'],
+  radar: ['live','zones','machines'],
   zones: ['zones'],
-  registry: ['inventory','inwards'],
-  expenses: ['expenses'],
+  registry: ['inventory','inwards','users','machines','logs','maintenance','assignments','plans','fuel','shifts'],
+  expenses: ['expenses','inventory'],
   users: ['users'],
-  incidents: ['logs'],
+  incidents: ['logs','machines'],
   turfcare: ['inventory','plans'],
-  fnb: ['fnbOrders','fnbReceipts']
+  fnb: ['fnbOrders','fnbReceipts','inventory']
 };
 function collectionAffectsCurrentView(k) {
   return (VIEW_COLLECTIONS[cur] || []).includes(k);
 }
-function startListeners() {
-  stopListeners(); setConn('');
-  const caches = Object.fromEntries(Object.keys(CONFIG.COL).map(k => [k, new Map()]));
-  Object.keys(CONFIG.COL).forEach(k => { LOADED[k] = false; S[k] = []; });
+function stopOneListener(k) {
+  listenerEpochs.set(k, (listenerEpochs.get(k) || 0) + 1);
+  const unsubscribe = unsubs.get(k);
+  if (unsubscribe) {
+    try { unsubscribe(); } catch (_) {}
+    unsubs.delete(k);
+  }
+}
+function syncListenersForView() {
+  if (!listenersStarted) return;
+  setConn('');
+  const desired = new Set(VIEW_COLLECTIONS[cur] || []);
   Object.keys(CONFIG.COL).forEach(k => {
-    const requiredPermission = permissionForCollection(CONFIG.COL[k], false);
-    if (!RBAC.can(requiredPermission)) {
-      // Avoid pointless denied listeners and reads for collections outside this role's UI scope.
-      LOADED[k] = true;
+    const permitted = RBAC.can(permissionForCollection(CONFIG.COL[k], false));
+    const shouldListen = desired.has(k) && permitted;
+    if (!shouldListen) {
+      if (unsubs.has(k)) stopOneListener(k);
+      // Clear data not active on this screen, so a role/view transition never keeps
+      // displaying a stale collection snapshot. Unauthorised collections never subscribe.
       S[k] = [];
+      LOADED[k] = !permitted;
+      if (k === 'zones') drawZones();
+      if (k === 'logs' || k === 'live') updateBadges(k);
       return;
     }
-    unsubs.push(onSnapshot(collection(db, CONFIG.COL[k]), snap => {
+    if (unsubs.has(k)) return;
+
+    const epoch = (listenerEpochs.get(k) || 0) + 1;
+    listenerEpochs.set(k, epoch);
+    const cache = new Map();
+    LOADED[k] = false;
+    S[k] = [];
+    const unsubscribe = onSnapshot(collection(db, CONFIG.COL[k]), snap => {
+      if (listenerEpochs.get(k) !== epoch) return;
       const firstSnapshot = !LOADED[k];
       const changes = snap.docChanges();
       changes.forEach(change => {
-        if (change.type === 'removed') caches[k].delete(change.doc.id);
+        if (change.type === 'removed') cache.delete(change.doc.id);
         else {
           const row = { id: change.doc.id, ...change.doc.data() };
           if (k === 'fuel') row._d = normDate(row.issueDate ?? row.issuedDate ?? row.date ?? row.transactionDate ?? row.createdDate, row.issuedAt ?? row.issueTimestamp ?? row.timestamp ?? row.createdAt ?? row.createdOn ?? row.updatedAt ?? row.recordedAt);
           if (k === 'plans') row._d = normDate(row.date ?? row.issuedDate ?? row.applicationDate ?? row.appliedDate ?? row.issueDate ?? row.transactionDate ?? row.logDate ?? row.plannedDate, row.issuedAt ?? row.issueTimestamp ?? row.timestamp ?? row.appliedAt ?? row.completedAt ?? row.createdAt ?? row.createdOn ?? row.updatedAt ?? row.recordedAt ?? row.createdTime);
           if (k === 'shifts') row._d = normDate(row.shiftDate, row.timestamp ?? row.startTime ?? row.endTime);
-          caches[k].set(change.doc.id, row);
+          cache.set(change.doc.id, row);
         }
       });
-      if (firstSnapshot || changes.length) S[k] = [...caches[k].values()];
-      LOADED[k] = true; S._v++; setConn('ok');
+      if (firstSnapshot || changes.length) S[k] = [...cache.values()];
+      LOADED[k] = true;
+      S._v++;
+      setConn('ok');
       if (k === 'zones') drawZones();
       updateBadges(k);
       if (firstSnapshot || changes.length) {
         if (collectionAffectsCurrentView(k)) scheduleRender();
       }
     }, err => {
-      console.error(k, err); LOADED[k] = true; setConn('err');
+      if (listenerEpochs.get(k) !== epoch) return;
+      console.error(k, err);
+      LOADED[k] = true;
+      setConn('err');
       toast(`Cannot read “${CONFIG.COL[k]}”: ${err.code || err.message}`, 'err');
       if (collectionAffectsCurrentView(k)) scheduleRender();
-    }));
+    });
+    unsubs.set(k, unsubscribe);
   });
 }
-function stopListeners() { unsubs.forEach(u => u()); unsubs = []; }
+function startListeners() {
+  stopListeners();
+  setConn('');
+  Object.keys(CONFIG.COL).forEach(k => { LOADED[k] = false; S[k] = []; });
+  listenersStarted = true;
+  syncListenersForView();
+}
+function stopListeners() {
+  listenersStarted = false;
+  [...unsubs.keys()].forEach(stopOneListener);
+}
 // Only the radar needs a timed refresh for stale/live age labels. The Insights dashboard is event-driven.
 setInterval(() => { if (cur === 'radar') { updateBadges('live'); scheduleRender(); } }, 10000);
 
@@ -2189,8 +2230,8 @@ onAuthStateChanged(auth, async user => {
     if ($("#signoutBtn")) $("#signoutBtn").hidden = false;
     document.body.classList.remove("auth-locked");
     buildNav();
-    startListeners();
     switchView((location.hash || "").slice(1) || "overview");
+    startListeners();
     toast("Signed in · " + (ROLE_LABELS[roleData.role] || roleData.role));
   } catch (err) {
     console.error("RBAC role lookup failed", err);
