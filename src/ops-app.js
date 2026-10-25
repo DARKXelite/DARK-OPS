@@ -1134,6 +1134,213 @@ function drawerFuel(id) {
 }
 
 /* ================= FUEL MODAL (KPI drill-down) ================= */
+
+/* UNIFIED OPERATIONAL ANALYTICS — read-only views over existing collections */
+const OA = { domain:'overview', view:'daily', from:addDays(today(),-29), to:today() };
+const OA_VIEWS = {
+  overview:[['daily','Operations by day']],
+  fuel:[['daily','Daily fuel'],['machine','By machine'],['machine-day','Machine × day'],['transactions','Fuel ledger']],
+  turf:[['daily','Daily turf'],['category','By category'],['area','By area'],['item','By item'],['variance','Planned vs actual'],['transactions','Application ledger']]
+};
+function openOpsAnalytics(domain) {
+  OA.domain=['overview','fuel','turf'].includes(domain)?domain:'overview';
+  OA.view='daily'; OA.from=addDays(today(),-29); OA.to=today();
+  curModalRender=renderOpsAnalytics;
+  openModal({title:'Operational Analytics & Ledgers',sub:'Shared date filters · machine usage · turf treatments · item-level reconciliation',size:'ops-analytics-modal',body:'<div id="opsAnalyticsRoot"></div>',footer:'<button class="btn" data-act="export-ops-analytics"><span class="material-symbols-rounded">download</span>Export report</button><button class="btn btn-primary" data-act="close-modal">Close</button>'});
+  renderOpsAnalytics();
+}
+function oaSetRange(preset) {
+  const t=today();
+  if(preset==='today'){OA.from=t;OA.to=t;}
+  else if(preset==='yesterday'){OA.from=addDays(t,-1);OA.to=OA.from;}
+  else if(preset==='7d'){OA.from=addDays(t,-6);OA.to=t;}
+  else if(preset==='30d'){OA.from=addDays(t,-29);OA.to=t;}
+  else if(preset==='last-month'){OA.to=addDays(monthStart(t),-1);OA.from=monthStart(OA.to);}
+  else {OA.from=monthStart(t);OA.to=t;}
+  renderOpsAnalytics();
+}
+function oaApplyDate(which,value) {
+  if(!value)return;
+  if(which==='from')OA.from=value;else OA.to=value;
+  if(OA.from>OA.to){if(which==='from')OA.to=OA.from;else OA.from=OA.to;}
+  const span=Math.floor((new Date(OA.to+'T12:00:00')-new Date(OA.from+'T12:00:00'))/86400000)+1;
+  if(span>366){if(which==='from')OA.to=addDays(OA.from,365);else OA.from=addDays(OA.to,-365);toast('Report ranges are limited to 366 days.','warn');}
+  renderOpsAnalytics();
+}
+function oaDates(){return daysBetween(OA.from,OA.to);}
+function oaFuelQty(f){return Math.max(0,num(f.litres??f.quantity??f.qty));}
+function oaFuelMachine(f){return f.machineId??f.machineID??f.machine??f.assetId??f.machineName??'';}
+function oaFuelTime(f){return timeOf(tsMs(f.timestamp??f.issuedAt??f.issueTimestamp??f.createdAt??f.createdTime??f.recordedAt))||'—';}
+function oaFuelRows(){return fuelIn(OA.from,OA.to).slice().sort((a,b)=>fuelRecordDate(b).localeCompare(fuelRecordDate(a))||tsMs(b.timestamp??b.issuedAt??b.createdAt)-tsMs(a.timestamp??a.issuedAt??a.createdAt));}
+function oaShiftRows(){return shiftsIn(OA.from,OA.to);}
+function oaFuelDaily(){
+  const map=new Map();
+  oaDates().forEach(date=>map.set(date,{date,entries:0,litres:0,diesel:0,petrol:0,unknown:0,cost:0,priced:0,unpriced:0,machines:new Set(),hours:0,km:0}));
+  oaFuelRows().forEach(f=>{
+    const row=map.get(fuelRecordDate(f));if(!row)return;
+    const qty=oaFuelQty(f),type=fuelTypeFromRecord(f),rate=rateForFuelLog(f);
+    row.entries++;row.litres+=qty;row.machines.add(mKey(oaFuelMachine(f)));
+    if(type==='Diesel')row.diesel+=qty;else if(type==='Petrol')row.petrol+=qty;else row.unknown+=qty;
+    if(rate>0){row.cost+=qty*rate;row.priced+=qty;}else row.unpriced+=qty;
+  });
+  oaShiftRows().forEach(s=>{const row=map.get(s._d);if(row){row.hours+=num(s.engineHoursLogged);row.km+=num(s.distanceKm);}});
+  return [...map.values()].map(r=>({...r,machineCount:r.machines.size,lph:r.hours>0?r.litres/r.hours:null}));
+}
+function oaFuelMachines(){
+  const map=new Map();
+  const ensure=id=>{
+    const key=mKey(id);
+    if(!map.has(key)){const m=mx().get(id)||mx().get(key);map.set(key,{key,id,name:mName(id)||String(id||'Unassigned'),category:m&&m.category||'—',fuelType:m&&m.fuelType||'Unspecified',entries:0,litres:0,diesel:0,petrol:0,cost:0,priced:0,unpriced:0,hours:0,km:0,days:new Set()});}
+    return map.get(key);
+  };
+  S.machines.forEach(m=>ensure(m.id));
+  oaFuelRows().forEach(f=>{
+    const id=oaFuelMachine(f),r=ensure(id),qty=oaFuelQty(f),type=fuelTypeFromRecord(f),rate=rateForFuelLog(f);
+    if(f.machineName)r.name=f.machineName;
+    r.entries++;r.litres+=qty;r.days.add(fuelRecordDate(f));
+    if(type==='Diesel')r.diesel+=qty;if(type==='Petrol')r.petrol+=qty;
+    if(rate>0){r.cost+=qty*rate;r.priced+=qty;}else r.unpriced+=qty;
+  });
+  oaShiftRows().forEach(s=>{const r=ensure(s.machineId);r.hours+=num(s.engineHoursLogged);r.km+=num(s.distanceKm);});
+  return [...map.values()].map(r=>({...r,lph:r.hours>0?r.litres/r.hours:null,l100:r.km>0?r.litres/r.km*100:null,cph:r.hours>0&&r.priced>0?r.cost/r.hours:null})).sort((a,b)=>b.litres-a.litres||a.name.localeCompare(b.name));
+}
+function oaFuelMachineDays(){
+  const map=new Map();
+  const ensure=(date,id)=>{
+    const key=date+'|'+mKey(id);
+    if(!map.has(key))map.set(key,{key,date,id,name:mName(id)||String(id||'Unassigned'),fuelType:fuelTypeOf(id),entries:0,litres:0,diesel:0,petrol:0,cost:0,priced:0,unpriced:0,hours:0,km:0});
+    return map.get(key);
+  };
+  oaFuelRows().forEach(f=>{const r=ensure(fuelRecordDate(f),oaFuelMachine(f)),q=oaFuelQty(f),type=fuelTypeFromRecord(f),rate=rateForFuelLog(f);if(f.machineName)r.name=f.machineName;r.entries++;r.litres+=q;if(type==='Diesel')r.diesel+=q;if(type==='Petrol')r.petrol+=q;if(rate>0){r.cost+=q*rate;r.priced+=q;}else r.unpriced+=q;});
+  oaShiftRows().forEach(s=>{const r=ensure(s._d,s.machineId);r.hours+=num(s.engineHoursLogged);r.km+=num(s.distanceKm);});
+  return [...map.values()].map(r=>({...r,lph:r.hours>0?r.litres/r.hours:null})).sort((a,b)=>b.date.localeCompare(a.date)||b.litres-a.litres||a.name.localeCompare(b.name));
+}
+function oaTurfLines(){
+  return (S.plans||[]).filter(p=>{const d=turfRecordDate(p);return d&&d>=OA.from&&d<=OA.to&&isTurfCategory(turfPlanCategory(p))&&turfRecordStatus(p)!=='Cancelled';}).map(p=>{
+    const line=turfCostLine(p),product=turfProductForPlan(p);
+    return {...line,record:p,area:String(p.targetArea||p.area||p.location||'Unassigned').trim()||'Unassigned',productId:String(p.productId||p.productID||p.itemId||p.inventoryId||product&&product.id||''),unit:String(p.unit||p.stockUnit||p.uom||product&&product.unit||'Unit not set'),plannedQty:Math.max(0,num(p.targetQty??p.plannedQty??p.requestedQty??p.plannedQuantity??p.targetQuantity??(line.status==='Planned'?(p.quantity??p.qty):0))),notes:String(p.notes||p.reason||'').trim()};
+  }).sort((a,b)=>b.date.localeCompare(a.date)||(tsMs(b.record.issuedAt??b.record.appliedAt??b.record.timestamp??b.record.createdAt)-tsMs(a.record.issuedAt??a.record.appliedAt??a.record.timestamp??a.record.createdAt)));
+}
+function oaUnitTotals(lines,selector){
+  const totals=new Map();lines.forEach(line=>{const unit=String(line.unit||'Unit not set');totals.set(unit,(totals.get(unit)||0)+Math.max(0,num(selector(line))));});
+  return [...totals.entries()].filter(([,v])=>Math.abs(v)>0.000001).sort((a,b)=>a[0].localeCompare(b[0])).map(([u,v])=>fmt(v,2)+' '+u).join(' · ')||'—';
+}
+function oaTurfDaily(){
+  const map=new Map();oaDates().forEach(date=>map.set(date,{date,records:0,planned:0,issued:0,applied:0,areas:new Set(),categories:new Set(),items:new Set(),cost:0,priced:0,unpriced:0,planQty:[],actualQty:[]}));
+  oaTurfLines().forEach(line=>{const r=map.get(line.date);if(!r)return;r.records++;r.areas.add(line.area);r.categories.add(line.category);r.items.add(line.productId||line.name);if(line.plannedQty>0||line.status==='Planned'){r.planned++;r.planQty.push(line);}if(line.status==='Issued'||line.status==='Applied'){r.issued++;if(line.status==='Applied')r.applied++;r.actualQty.push(line);if(line.cost!==null&&Number.isFinite(line.cost)){r.cost+=line.cost;r.priced++;}else r.unpriced++;}});
+  return [...map.values()].map(r=>({...r,plannedUnits:oaUnitTotals(r.planQty,x=>x.plannedQty),actualUnits:oaUnitTotals(r.actualQty,x=>x.qty)}));
+}
+function oaTurfGroups(kind){
+  const map=new Map(),keyOf=line=>kind==='category'?line.category:kind==='area'?line.area:line.productId||line.name;
+  oaTurfLines().forEach(line=>{
+    const key=String(keyOf(line)||'Unassigned');
+    if(!map.has(key))map.set(key,{key,name:kind==='item'?line.name:key,categorySet:new Set(),areaSet:new Set(),units:new Set(),records:0,planned:0,issued:0,applied:0,cost:0,priced:0,unpriced:0,plannedLines:[],actualLines:[],lastDate:''});
+    const r=map.get(key);r.records++;r.categorySet.add(line.category);r.areaSet.add(line.area);r.units.add(line.unit);r.lastDate=r.lastDate>line.date?r.lastDate:line.date;
+    if(line.plannedQty>0||line.status==='Planned'){r.planned++;r.plannedLines.push(line);}
+    if(line.status==='Issued'||line.status==='Applied'){r.issued++;if(line.status==='Applied')r.applied++;r.actualLines.push(line);if(line.cost!==null&&Number.isFinite(line.cost)){r.cost+=line.cost;r.priced++;}else r.unpriced++;}
+  });
+  return [...map.values()].map(r=>({...r,categoryLabel:[...r.categorySet].sort().join(', '),areaLabel:[...r.areaSet].sort().join(', '),plannedUnits:oaUnitTotals(r.plannedLines,x=>x.plannedQty),actualUnits:oaUnitTotals(r.actualLines,x=>x.qty)})).sort((a,b)=>(b.priced?b.cost:-1)-(a.priced?a.cost:-1)||a.name.localeCompare(b.name));
+}
+function oaTurfVariance(){
+  const map=new Map();
+  oaTurfLines().forEach(line=>{
+    const key=(line.productId||line.name).toLowerCase()+'|'+line.unit.toLowerCase();
+    if(!map.has(key))map.set(key,{key,name:line.name,category:line.category,unit:line.unit,planned:0,issued:0,plannedCount:0,issuedCount:0,areas:new Set(),lastDate:''});
+    const r=map.get(key);r.areas.add(line.area);r.lastDate=r.lastDate>line.date?r.lastDate:line.date;
+    if(line.plannedQty>0||line.status==='Planned'){r.planned+=line.plannedQty||line.qty;r.plannedCount++;}
+    if(line.status==='Issued'||line.status==='Applied'){r.issued+=line.qty;r.issuedCount++;}
+  });
+  return [...map.values()].sort((a,b)=>b.issued-a.issued||a.name.localeCompare(b.name));
+}
+function oaKpi(label,value,detail){return '<div class="oa-kpi"><small>'+esc(label)+'</small><b>'+value+'</b><span>'+esc(detail||'')+'</span></div>';}
+function oaTable(headers,rows,empty){return '<div class="table-wrap oa-table-wrap"><table class="oa-table"><thead><tr>'+headers.map(h=>'<th>'+h+'</th>').join('')+'</tr></thead><tbody>'+(rows||'<tr><td class="empty" colspan="'+headers.length+'">'+esc(empty)+'</td></tr>')+'</tbody></table></div>';}
+function oaFuelTransactionRows(rows){return rows.map(f=>{const q=oaFuelQty(f),rate=rateForFuelLog(f);return '<tr><td>'+esc(fuelRecordDate(f))+'</td><td>'+esc(oaFuelTime(f))+'</td><td><b>'+esc(f.machineName||mName(oaFuelMachine(f))||'Unassigned')+'</b></td><td>'+esc(fuelTypeFromRecord(f))+'</td><td class="num">'+fmt(q,2)+' L</td><td class="num">'+(rate>0?money(rate,2):'—')+'</td><td class="num">'+(rate>0?money(q*rate):'<span class="oa-unpriced">Unpriced</span>')+'</td><td>'+esc(f.issuedBy||f.recordedBy||f.operatorName||'—')+'</td><td>'+esc(f.notes||f.reason||'—')+'</td></tr>';}).join('');}
+function oaTurfTransactionRows(rows){return rows.map(line=>'<tr><td>'+esc(line.date)+'</td><td>'+esc(line.time||'—')+'</td><td>'+esc(line.category)+'</td><td><b>'+esc(line.name||'Unspecified')+'</b></td><td>'+esc(line.area)+'</td><td><span class="oa-status">'+esc(line.status)+'</span></td><td class="num">'+fmt(line.qty,2)+' '+esc(line.unit)+'</td><td class="num">'+(line.rate>0?money(line.rate,2):'—')+'</td><td class="num">'+(line.cost!==null&&Number.isFinite(line.cost)?money(line.cost):line.countable?'<span class="oa-unpriced">Unpriced</span>':'—')+'</td><td>'+esc(line.notes||'—')+'</td></tr>').join('');}
+function oaRenderOverview(){
+  const fuels=oaFuelRows(),turf=oaTurfLines(),days=oaDates(),fuelCost=fuelCostSummary(fuels),actual=turf.filter(x=>x.status==='Issued'||x.status==='Applied'),priced=actual.filter(x=>x.cost!==null),turfValue=priced.reduce((s,x)=>s+x.cost,0);
+  const rows=days.map(date=>{const f=fuels.filter(x=>fuelRecordDate(x)===date),t=turf.filter(x=>x.date===date),fa=f.reduce((s,x)=>s+oaFuelQty(x),0),fc=f.reduce((s,x)=>s+(rateForFuelLog(x)>0?fuelLogCost(x):0),0),ta=t.filter(x=>x.status==='Issued'||x.status==='Applied'),tc=ta.reduce((s,x)=>s+(x.cost!==null?x.cost:0),0);return '<tr><td><b>'+esc(date)+'</b></td><td class="num">'+f.length+'</td><td class="num">'+fmt(fa,2)+' L</td><td class="num">'+(f.length?money(fc):'—')+'</td><td class="num">'+t.length+'</td><td class="num">'+ta.length+'</td><td class="num">'+(ta.length?money(tc):'—')+'</td><td class="num"><b>'+(f.length||ta.length?money(fc+tc):'—')+'</b></td></tr>';}).join('');
+  return '<div class="oa-kpi-grid">'+oaKpi('Fuel issued',fmt(fuels.reduce((s,x)=>s+oaFuelQty(x),0),2)+' L',fuels.length+' transactions')+oaKpi('Priced fuel cost',money(fuelCost.cost),fmt(fuelCost.coverage,0)+'% volume priced')+oaKpi('Turf issues / applications',actual.length,priced.length+' priced · '+(actual.length-priced.length)+' unpriced')+oaKpi('Priced turf value',priced.length?money(turfValue):'₹—','Issued/applied records only')+'</div><p class="oa-note-text">Costs are recorded or modelled values only. Unpriced entries, labour, overheads and non-recorded costs are excluded. Different units are not combined.</p><section class="oa-panel"><div class="oa-panel-head"><div><small>DAILY OPERATIONS</small><h3>Fleet fuel and turf activity</h3><p>Shared daily ledger across the selected period.</p></div></div>'+oaTable(['Date','Fuel entries','Fuel litres','Fuel cost*','Turf records','Issued / applied','Turf cost*','Priced total*'],rows,'No activity in this period.')+'</section>';
+}
+function oaRenderFuelDaily(){
+  const days=oaFuelDaily(),rows=oaFuelRows(),cost=fuelCostSummary(rows),litres=rows.reduce((s,f)=>s+oaFuelQty(f),0);
+  const body=days.map(r=>'<tr><td><b>'+esc(r.date)+'</b></td><td class="num">'+r.entries+'</td><td class="num">'+r.machineCount+'</td><td class="num">'+fmt(r.diesel,2)+'</td><td class="num">'+fmt(r.petrol,2)+'</td><td class="num">'+fmt(r.unknown,2)+'</td><td class="num"><b>'+fmt(r.litres,2)+' L</b></td><td class="num">'+(r.hours?fmt(r.hours,2):'—')+'</td><td class="num">'+(r.lph!==null?fmt(r.lph,2):'—')+'</td><td class="num">'+(r.entries?money(r.cost):'—')+'</td><td class="num">'+(r.unpriced?fmt(r.unpriced,2):'—')+'</td></tr>').join('');
+  return '<div class="oa-kpi-grid">'+oaKpi('Fuel issued',fmt(litres,2)+' L',rows.length+' transactions')+oaKpi('Diesel',fmt(rows.filter(f=>fuelTypeFromRecord(f)==='Diesel').reduce((s,f)=>s+oaFuelQty(f),0),2)+' L','Recorded fuel type')+oaKpi('Petrol',fmt(rows.filter(f=>fuelTypeFromRecord(f)==='Petrol').reduce((s,f)=>s+oaFuelQty(f),0),2)+' L','Recorded fuel type')+oaKpi('Priced fuel cost',money(cost.cost),fmt(cost.coverage,0)+'% of volume priced')+'</div><section class="oa-panel"><div class="oa-panel-head"><div><small>FUEL CONSUMPTION</small><h3>Day-wise fuel analytics</h3><p>Volume, fuel split, engine hours and pricing coverage by date.</p></div></div>'+(rows.length?'<div class="oa-chart-wrap">'+barChart(days.filter(r=>r.litres>0).map(r=>({label:dShort(r.date),value:r.litres})),{unit:'L',h:165})+'</div>':'')+oaTable(['Date','Entries','Machines','Diesel L','Petrol L','Other L','Total litres','Run hrs','L / hr','Priced cost*','Unpriced L'],body,'No fuel issues in this range.')+'</section>';
+}
+function oaRenderFuelMachine(){
+  const rows=oaFuelMachines(),active=rows.filter(r=>r.entries>0),all=oaFuelRows(),cost=fuelCostSummary(all);
+  const body=rows.map(r=>'<tr><td><b>'+esc(r.name)+'</b></td><td>'+esc(r.category)+'</td><td>'+esc(r.fuelType)+'</td><td class="num">'+r.entries+'</td><td class="num">'+r.days.size+'</td><td class="num"><b>'+fmt(r.litres,2)+' L</b></td><td class="num">'+(r.hours?fmt(r.hours,2):'—')+'</td><td class="num">'+(r.lph!==null?fmt(r.lph,2):'—')+'</td><td class="num">'+(r.km?fmt(r.km,2)+' km':'—')+'</td><td class="num">'+(r.l100!==null?fmt(r.l100,2):'—')+'</td><td class="num">'+(r.priced?money(r.cost):'—')+(r.unpriced?'<div class="oa-dim">'+fmt(r.unpriced,2)+' L unpriced</div>':'')+'</td><td class="num">'+(r.cph!==null?money(r.cph):'—')+'</td></tr>').join('');
+  return '<div class="oa-kpi-grid">'+oaKpi('Machines with issues',active.length,S.machines.length+' registered')+oaKpi('Fuel issued',fmt(all.reduce((s,f)=>s+oaFuelQty(f),0),2)+' L',all.length+' transactions')+oaKpi('Running hours',fmt(oaShiftRows().reduce((s,x)=>s+num(x.engineHoursLogged),0),2),'Recorded shift hours')+oaKpi('Priced fuel value',money(cost.cost),fmt(cost.coverage,0)+'% priced volume')+'</div><section class="oa-panel"><div class="oa-panel-head"><div><small>MACHINE COMPARISON</small><h3>Machine-wise fuel performance</h3><p>Consumption paired with recorded engine hours and distance for the same dates.</p></div></div>'+oaTable(['Machine','Category','Fuel type','Entries','Active days','Litres','Run hrs','L / hr','Distance','L / 100 km','Priced cost*','₹ / hr'],body,'No machine records.')+'</section><p class="oa-note-text">Efficiency ratios are indicators, not proof of misuse. Workload, idling, towing and different equipment types affect consumption.</p>';
+}
+function oaRenderFuelMachineDay(){
+  const rows=oaFuelMachineDays(),body=rows.map(r=>'<tr><td><b>'+esc(r.date)+'</b></td><td><b>'+esc(r.name)+'</b></td><td>'+esc(r.fuelType||'Unspecified')+'</td><td class="num">'+r.entries+'</td><td class="num"><b>'+fmt(r.litres,2)+' L</b></td><td class="num">'+fmt(r.diesel,2)+'</td><td class="num">'+fmt(r.petrol,2)+'</td><td class="num">'+(r.hours?fmt(r.hours,2):'—')+'</td><td class="num">'+(r.lph!==null?fmt(r.lph,2):'—')+'</td><td class="num">'+(r.km?fmt(r.km,2)+' km':'—')+'</td><td class="num">'+(r.priced?money(r.cost):'—')+'</td><td class="num">'+(r.unpriced?fmt(r.unpriced,2):'—')+'</td></tr>').join('');
+  return '<div class="oa-kpi-grid">'+oaKpi('Machine-day rows',rows.length,'Fuel issue and/or shift activity')+oaKpi('Fuel issued',fmt(rows.reduce((s,r)=>s+r.litres,0),2)+' L','Selected range')+oaKpi('Running hours',fmt(rows.reduce((s,r)=>s+r.hours,0),2),'Recorded shifts')+oaKpi('Priced fuel value',money(rows.reduce((s,r)=>s+r.cost,0)),'Unpriced fuel excluded')+'</div><section class="oa-panel"><div class="oa-panel-head"><div><small>DAILY MACHINE LEDGER</small><h3>Fuel usage by machine and day</h3><p>Includes shift-only days so missing fuel entries are easier to notice.</p></div></div>'+oaTable(['Date','Machine','Fuel type','Entries','Litres','Diesel','Petrol','Run hrs','L / hr','Distance','Priced cost*','Unpriced L'],body,'No machine-day activity.')+'</section>';
+}
+function oaRenderFuelTransactions(){
+  const rows=oaFuelRows(),cost=fuelCostSummary(rows);
+  return '<div class="oa-kpi-grid">'+oaKpi('Transactions',rows.length,'Selected period')+oaKpi('Fuel issued',fmt(rows.reduce((s,f)=>s+oaFuelQty(f),0),2)+' L','Volume')+oaKpi('Priced / modeled value',money(cost.cost),fmt(cost.coverage,0)+'% volume priced')+oaKpi('Unpriced entries',rows.filter(f=>rateForFuelLog(f)<=0).length,'No usable price')+'</div><section class="oa-panel"><div class="oa-panel-head"><div><small>SOURCE TRANSACTIONS</small><h3>Fuel issue ledger</h3><p>Recorded transaction details and price provenance.</p></div></div>'+oaTable(['Date','Time','Machine','Fuel type','Litres','Rate / L','Cost*','Issued by','Notes'],oaFuelTransactionRows(rows),'No fuel transactions.')+'</section>';
+}
+function oaRenderTurfDaily(){
+  const daily=oaTurfDaily(),lines=oaTurfLines(),actual=lines.filter(x=>x.status==='Issued'||x.status==='Applied'),priced=actual.filter(x=>x.cost!==null),value=priced.reduce((s,x)=>s+x.cost,0);
+  const body=daily.map(r=>'<tr><td><b>'+esc(r.date)+'</b></td><td class="num">'+r.records+'</td><td class="num">'+r.planned+'</td><td class="num">'+r.issued+' / '+r.applied+' applied</td><td class="num">'+r.categories.size+'</td><td class="num">'+r.areas.size+'</td><td>'+esc(oaUnitTotals(r.planQty,x=>x.plannedQty))+'</td><td>'+esc(oaUnitTotals(r.actualQty,x=>x.qty))+'</td><td class="num">'+(r.issued?money(r.cost):'—')+'</td><td class="num">'+(r.unpriced||'—')+'</td></tr>').join('');
+  return '<div class="oa-kpi-grid">'+oaKpi('Turf records',lines.length,'Plans and actual records')+oaKpi('Issued / applied',actual.length,actual.filter(x=>x.status==='Applied').length+' marked Applied')+oaKpi('Priced value',priced.length?money(value):'₹—',(actual.length-priced.length)+' unpriced actuals')+oaKpi('Areas active',new Set(lines.map(x=>x.area)).size,'Selected period')+'</div><section class="oa-panel"><div class="oa-panel-head"><div><small>TURF OPERATIONS</small><h3>Day-wise treatment ledger</h3><p>Daily activity and quantities grouped by stock unit.</p></div></div>'+oaTable(['Date','Records','Planned','Issued / applied','Categories','Areas','Planned qty by unit','Actual qty by unit','Priced cost*','Unpriced actuals'],body,'No turf records in this period.')+'</section><p class="oa-note-text">Costs use issued/applied records with a linked inventory item, matching unit and usable unit cost. Quantities in unlike units are kept separate.</p>';
+}
+function oaRenderTurfDimension(kind){
+  const groups=oaTurfGroups(kind);
+  const body=groups.map(r=>{const label=kind==='category'?r.name:kind==='area'?r.name:r.name;const key=kind==='item'?r.key:r.name;
+    return '<tr><td><button type="button" class="oa-drill" data-act="oa-drill" data-kind="'+kind+'" data-key="'+esc(key)+'">'+esc(label)+'</button>'+(kind==='item'?'<div class="oa-dim">'+esc(r.categoryLabel)+'</div>':'')+'</td><td class="num">'+r.records+'</td><td class="num">'+r.planned+'</td><td class="num">'+r.issued+' / '+r.applied+' applied</td><td>'+esc(r.plannedUnits)+'</td><td>'+esc(r.actualUnits)+'</td><td class="num">'+(r.priced?money(r.cost):'—')+'</td><td class="num">'+(r.unpriced||'—')+'</td><td>'+esc(r.lastDate)+'</td></tr>';
+  }).join('');
+  const title=kind==='category'?'Category analysis':kind==='area'?'Course-area analytics':'Item-wise ledger';
+  let detail='';
+  if(OA.drill.kind===kind){
+    const selected=OA.drill.key,rows=oaTurfLines().filter(line=>(kind==='category'?line.category:kind==='area'?line.area:line.productId||line.name)===selected);
+    detail='<section class="oa-panel"><div class="oa-panel-head"><div><small>DRILL-DOWN LEDGER</small><h3>'+esc(selected)+'</h3><p>'+rows.length+' source records</p></div><button type="button" class="btn btn-sm" data-act="oa-clear-drill">Clear</button></div>'+oaTable(['Date','Time','Category','Product','Area','Status','Quantity','Rate','Cost*','Notes'],oaTurfTransactionRows(rows),'No detail records.')+'</section>';
+  } else detail='<p class="oa-note-text">Select a '+(kind==='category'?'category':kind==='area'?'course area':'product')+' to open its dated ledger.</p>';
+  return '<section class="oa-panel"><div class="oa-panel-head"><div><small>'+kind.toUpperCase()+' ROLL-UP</small><h3>'+title+'</h3><p>Summary groups can be drilled down to the underlying dated records.</p></div><span class="oa-panel-meta">'+groups.length+' groups</span></div>'+oaTable([kind==='category'?'Category':kind==='area'?'Course area':'Product','Records','Planned','Issued / applied','Planned quantity by unit','Actual quantity by unit','Priced value*','Unpriced actuals','Last activity'],body,'No matching records.')+'</section>'+detail;
+}
+function oaRenderTurfVariance(){
+  const rows=oaTurfVariance(),body=rows.map(r=>{const diff=r.issued-r.planned;return '<tr><td><b>'+esc(r.name)+'</b><div class="oa-dim">'+esc(r.category)+'</div></td><td>'+esc(r.unit)+'</td><td class="num">'+fmt(r.planned,2)+'</td><td class="num">'+fmt(r.issued,2)+'</td><td class="num '+(diff>0?'oa-over':diff<0?'oa-under':'')+'">'+(diff>0?'+':'')+fmt(diff,2)+'</td><td class="num">'+r.plannedCount+' / '+r.issuedCount+'</td><td>'+esc([...r.areas].join(', '))+'</td><td>'+esc(r.lastDate)+'</td></tr>';}).join('');
+  return '<div class="oa-kpi-grid">'+oaKpi('Product / unit groups',rows.length,'Units remain separate')+oaKpi('Over-plan groups',rows.filter(r=>r.issued-r.planned>0.00001).length,'Review underlying records')+oaKpi('Under-plan groups',rows.filter(r=>r.issued-r.planned< -0.00001).length,'Review outstanding work')+oaKpi('Actual lines',rows.reduce((s,r)=>s+r.issuedCount,0),'Issued/applied status records')+'</div><section class="oa-panel"><div class="oa-panel-head"><div><small>CONTROL CHECK</small><h3>Planned vs issued / applied</h3><p>Quantity variance by product and stock unit.</p></div></div>'+oaTable(['Product','Unit','Planned','Issued / applied','Variance','Planned / actual lines','Areas','Last activity'],body,'No planned or actual records.')+'</section><p class="oa-note-text">Positive variance means recorded issue exceeded plan; negative variance means less was recorded. Inspect source records before drawing conclusions.</p>';
+}
+function renderOpsAnalytics(){
+  const root=$('#opsAnalyticsRoot');if(!root)return;
+  const domains=[['overview','Overall Ops','query_stats'],['fuel','Fuel Ops','local_gas_station'],['turf','Turf Ops','grass']];
+  const domainTabs=domains.map(d=>'<button type="button" class="oa-domain-tab '+(OA.domain===d[0]?'active':'')+'" data-act="oa-domain" data-domain="'+d[0]+'"><span class="material-symbols-rounded">'+d[2]+'</span>'+d[1]+'</button>').join('');
+  const views=(OA_VIEWS[OA.domain]||OA_VIEWS.overview),viewTabs=views.map(v=>'<button type="button" class="oa-view-tab '+(OA.view===v[0]?'active':'')+'" data-act="oa-view" data-view="'+v[0]+'">'+v[1]+'</button>').join('');
+  const presetDefs=[['today','Today'],['yesterday','Yesterday'],['7d','7 days'],['30d','30 days'],['mtd','Month to date'],['last-month','Last month']];
+  const presets=presetDefs.map(p=>'<button type="button" class="oa-preset" data-act="oa-preset" data-range="'+p[0]+'">'+p[1]+'</button>').join('');
+  const required=OA.domain==='overview'?['fuel','machines','shifts','inventory','plans','maintenance']:OA.domain==='fuel'?['fuel','machines','shifts']:['plans','inventory'];
+  const denied=required.filter(k=>!RBAC.can(permissionForCollection(CONFIG.COL[k],false)));
+  const loading=required.filter(k=>!LOADED[k]&&RBAC.can(permissionForCollection(CONFIG.COL[k],false)));
+  let report='';
+  if(loading.length)report='<div class="oa-loading"><span class="material-symbols-rounded">sync</span>Loading '+esc(loading.map(k=>CONFIG.COL[k]).join(', '))+'…</div>';
+  else if(OA.domain==='overview')report=oaRenderOverview();
+  else if(OA.domain==='fuel')report=OA.view==='daily'?oaRenderFuelDaily():OA.view==='machine'?oaRenderFuelMachine():OA.view==='machine-day'?oaRenderFuelMachineDay():oaRenderFuelTransactions();
+  else if(OA.view==='daily')report=oaRenderTurfDaily();
+  else if(OA.view==='category')report=oaRenderTurfDimension('category');
+  else if(OA.view==='area')report=oaRenderTurfDimension('area');
+  else if(OA.view==='item')report=oaRenderTurfDimension('item');
+  else if(OA.view==='variance')report=oaRenderTurfVariance();
+  else {const lines=oaTurfLines(),actual=lines.filter(x=>x.status==='Issued'||x.status==='Applied'),priced=actual.filter(x=>x.cost!==null);report='<div class="oa-kpi-grid">'+oaKpi('Application records',lines.length,'Selected period')+oaKpi('Issued / applied',actual.length,'Existing status records')+oaKpi('Priced actuals',priced.length,'Records with usable price')+oaKpi('Unpriced actuals',actual.length-priced.length,'Missing rate, product or unit match')+'</div><section class="oa-panel"><div class="oa-panel-head"><div><small>SOURCE TRANSACTIONS</small><h3>Application ledger</h3><p>All non-cancelled treatment records for the date range.</p></div></div>'+oaTable(['Date','Time','Category','Product','Area','Status','Quantity','Rate','Cost*','Notes'],oaTurfTransactionRows(lines),'No turf records.')+'</section>';}
+  root.innerHTML='<div class="oa-toolbar"><div class="oa-date-controls"><label>From<input type="date" value="'+esc(OA.from)+'" data-chg="oa-from"></label><label>To<input type="date" value="'+esc(OA.to)+'" data-chg="oa-to"></label></div><div class="oa-presets">'+presets+'</div></div><div class="oa-domain-tabs">'+domainTabs+'</div><div class="oa-view-tabs">'+viewTabs+'</div>'+(denied.length?'<p class="oa-access-note"><span class="material-symbols-rounded">lock</span>Some source records are hidden by your current role, so totals may be partial.</p>':'')+'<div class="oa-report">'+report+'</div>';
+}
+function exportOpsAnalytics(){
+  const range=OA.from+'_to_'+OA.to;
+  if(OA.domain==='overview'){
+    const rows=oaDates().map(date=>{const f=oaFuelRows().filter(x=>fuelRecordDate(x)===date),t=oaTurfLines().filter(x=>x.date===date),a=t.filter(x=>x.status==='Issued'||x.status==='Applied'),fq=f.reduce((s,x)=>s+oaFuelQty(x),0),fc=f.reduce((s,x)=>s+(rateForFuelLog(x)>0?fuelLogCost(x):0),0),tc=a.reduce((s,x)=>s+(x.cost!==null?x.cost:0),0);return[date,f.length,fq,fc,t.length,a.length,tc,fc+tc];});
+    return downloadCSV('ops_daily_overview_'+range+'.csv',[['Date','Fuel entries','Fuel litres','Priced fuel cost','Turf records','Issued/applied lines','Priced turf cost','Combined priced value'],...rows]);
+  }
+  if(OA.domain==='fuel'){
+    if(OA.view==='daily')return downloadCSV('fuel_daily_'+range+'.csv',[['Date','Entries','Machines','Diesel L','Petrol L','Other L','Litres','Run hours','L/hr','Priced cost','Unpriced litres'],...oaFuelDaily().map(r=>[r.date,r.entries,r.machineCount,r.diesel,r.petrol,r.unknown,r.litres,r.hours,r.lph??'',r.cost,r.unpriced])]);
+    if(OA.view==='machine')return downloadCSV('fuel_machine_'+range+'.csv',[['Machine','Category','Fuel type','Entries','Active days','Litres','Run hours','L/hr','Distance km','L/100km','Priced cost','Unpriced L','Cost/hr'],...oaFuelMachines().map(r=>[r.name,r.category,r.fuelType,r.entries,r.days.size,r.litres,r.hours,r.lph??'',r.km,r.l100??'',r.priced?r.cost:'',r.unpriced,r.cph??''])]);
+    if(OA.view==='machine-day')return downloadCSV('fuel_machine_day_'+range+'.csv',[['Date','Machine','Fuel type','Entries','Litres','Diesel','Petrol','Run hours','L/hr','Distance km','Priced cost','Unpriced L'],...oaFuelMachineDays().map(r=>[r.date,r.name,r.fuelType,r.entries,r.litres,r.diesel,r.petrol,r.hours,r.lph??'',r.km,r.priced?r.cost:'',r.unpriced])]);
+    return downloadCSV('fuel_ledger_'+range+'.csv',[['Date','Time','Machine','Fuel type','Litres','Rate','Cost','Rate source','Issuer','Notes'],...oaFuelRows().map(f=>[fuelRecordDate(f),oaFuelTime(f),f.machineName||mName(oaFuelMachine(f)),fuelTypeFromRecord(f),oaFuelQty(f),rateForFuelLog(f)||'',rateForFuelLog(f)>0?fuelLogCost(f):'',rateForFuelLog(f)>0?(num(f.ratePerLitre??f.fuelRate??f.unitPrice??f.pricePerLitre)>0?'Transaction rate':'Inventory Master rate'):'Unpriced',f.issuedBy||f.recordedBy||'',f.notes||f.reason||''])]);
+  }
+  if(OA.view==='daily')return downloadCSV('turf_daily_'+range+'.csv',[['Date','Records','Planned','Issued','Applied','Categories','Areas','Planned quantities','Actual quantities','Priced cost','Unpriced actuals'],...oaTurfDaily().map(r=>[r.date,r.records,r.planned,r.issued,r.applied,r.categories.size,r.areas.size,oaUnitTotals(r.planQty,x=>x.plannedQty),oaUnitTotals(r.actualQty,x=>x.qty),r.cost,r.unpriced])]);
+  if(OA.view==='category'||OA.view==='area'||OA.view==='item')return downloadCSV('turf_'+OA.view+'_analytics_'+range+'.csv',[['Name','Categories','Areas','Records','Planned','Issued','Applied','Planned quantity by unit','Actual quantity by unit','Priced value','Priced lines','Unpriced actuals','Last activity'],...oaTurfGroups(OA.view).map(r=>[r.name,r.categoryLabel,r.areaLabel,r.records,r.planned,r.issued,r.applied,r.plannedUnits,r.actualUnits,r.priced?r.cost:'',r.priced,r.unpriced,r.lastDate])]);
+  if(OA.view==='variance')return downloadCSV('turf_variance_'+range+'.csv',[['Product','Category','Unit','Planned','Issued/applied','Variance','Plan lines','Actual lines','Areas','Last activity'],...oaTurfVariance().map(r=>[r.name,r.category,r.unit,r.planned,r.issued,r.issued-r.planned,r.plannedCount,r.issuedCount,[...r.areas].join(', '),r.lastDate])]);
+  return downloadCSV('turf_application_ledger_'+range+'.csv',[['Date','Time','Category','Product','Area','Status','Quantity','Unit','Rate','Cost','Source','Notes'],...oaTurfLines().map(x=>[x.date,x.time,x.category,x.name,x.area,x.status,x.qty,x.unit,x.rate||'',x.cost===null?'':x.cost,x.source,x.notes])]);
+}
+
 function openFuelModal() {
   curModalRender = renderFuelModal;
   openModal({ title: 'Fuel consumption', sub: 'Issued litres from the storekeeper ledger', body: '', footer: '<button class="btn" data-act="export-fuel"><span class="material-symbols-rounded">download</span>Export CSV</button><button class="btn btn-primary" data-act="close-modal">Close</button>' });
@@ -1796,7 +2003,7 @@ const listenerEpochs = new Map();
 const VIEW_COLLECTIONS = {
   overview: ['fuel','machines','shifts','inventory','plans','maintenance','logs'],
   fleet: ['machines','live','fuel','shifts'],
-  fuel: ['fuel','machines','expenses','inventory'],
+  fuel: ['fuel','machines','shifts','plans','maintenance','expenses','inventory'],
   shifts: ['shifts','machines'],
   records: ['maintenance','assignments','fuel','machines','inventory','users'],
   radar: ['live','zones','machines'],
@@ -1805,7 +2012,7 @@ const VIEW_COLLECTIONS = {
   expenses: ['expenses','inventory'],
   users: ['users'],
   incidents: ['logs','machines'],
-  turfcare: ['inventory','plans'],
+  turfcare: ['inventory','plans','fuel','machines','shifts','maintenance'],
   fnb: ['fnbOrders','fnbReceipts','inventory']
 };
 function collectionAffectsCurrentView(k) {
@@ -1897,7 +2104,14 @@ setInterval(() => { if (cur === 'radar') { updateBadges('live'); scheduleRender(
 /* ================= EVENTS ================= */
 const H = {
   'cost-model': () => openCostModel(),
-  'open-day-cost': d => d.domain === 'turf' ? openTurfCostAnalytics() : openDayCostLedger(d.domain),
+  'open-ops-analytics': d => openOpsAnalytics(d.domain || 'overview'),
+  'oa-domain': d => { OA.domain = ['overview','fuel','turf'].includes(d.domain) ? d.domain : 'overview'; OA.view = 'daily'; renderOpsAnalytics(); },
+  'oa-view': d => { OA.view = (OA_VIEWS[OA.domain] || OA_VIEWS.overview).some(v => v[0] === d.view) ? d.view : 'daily'; renderOpsAnalytics(); },
+  'oa-preset': d => oaSetRange(d.range || '30d'),
+  'oa-drill': d => { OA.drill = { kind:d.kind || '', key:d.key || '' }; renderOpsAnalytics(); },
+  'oa-clear-drill': () => { OA.drill = { kind:'', key:'' }; renderOpsAnalytics(); },
+  'export-ops-analytics': () => exportOpsAnalytics(),
+  'open-day-cost': d => openOpsAnalytics(d.domain === 'turf' ? 'turf' : 'fuel'),
   'export-day-cost': d => exportDayCostLedger(d.domain),
   'turf-cost-apply': () => renderTurfCostAnalytics($('#turfCostFrom')?.value, $('#turfCostTo')?.value),
   'turf-cost-preset': d => applyTurfCostPreset(d.range),
@@ -2098,6 +2312,8 @@ const H = {
   'inc-toggle': async d => { const l = S.logs.find(x => x.id === d.id); if (!l) return; try { await updateDoc(doc(db, CONFIG.COL.logs, d.id), { repairStatus: l.repairStatus === 'Resolved' ? 'Pending' : 'Resolved' }); } catch (e) { toast('Could not update incident', 'err'); } }
 };
 const C = {
+  'oa-from': v => oaApplyDate('from',v),
+  'oa-to': v => oaApplyDate('to',v),
   'users-search': v => { usersSearchText = v || ''; renderUsersMaster(); },
   'users-role-filter': v => { usersRoleFilter = v || 'all'; renderUsersMaster(); },
   rfrom: (v, d) => { const st = R[d.k]; if (!v) return; st.from = v; st.preset = 'custom'; if (st.to < v) st.to = v; RER[d.k](); },
