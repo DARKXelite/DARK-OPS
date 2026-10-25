@@ -74,6 +74,17 @@ const auth = getAuth(app);
 /* ================= HELPERS ================= */
 /* ================= STATE ================= */
 const S = { users: [], machines: [], fuel: [], shifts: [], zones: [], live: [], inventory: [], logs: [], maintenance: [], assignments: [], plans: [], inwards: [], expenses: [], fnbOrders: [], fnbReceipts: [], _v: 0 };
+
+const LOADED = {};
+const F = { q: '', cat: 'All', fuel: 'All', sort: 'service' };
+const R = {
+  fuel:   { preset: 'today', from: today(), to: today() },
+  run:    { preset: 'today', from: today(), to: today() },
+  ledger: { preset: 'today', from: today(), to: today(), machine: '', type: '' },
+  shifts: { preset: 'last7', from: addDays(today(), -6), to: today(), machine: '', op: '' }
+};
+let cur = 'overview', curModalRender = null;
+
 const COST_DEFAULTS = { dieselRate: 92.50, petrolRate: 0, labourPerHour: 0, downtimePerHour: 0, savingsPct: 10, improvementCost: 0 };
 function loadCostModel() {
   try { const saved = JSON.parse(localStorage.getItem('cloverOpsCostModel') || '{}'); return { ...COST_DEFAULTS, ...Object.fromEntries(Object.keys(COST_DEFAULTS).map(k => [k, Number.isFinite(+saved[k]) && +saved[k] >= 0 ? +saved[k] : COST_DEFAULTS[k]])) }; }
