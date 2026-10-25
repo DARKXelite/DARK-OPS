@@ -1,6 +1,6 @@
 /** Shared fleet, fuel, machine status and cost-domain calculations. */
 export function createFleetDomainModule(deps) {
-  const { CONFIG, COST, H, S, addDays, effectiveReorderLevel, fuelMasterRate, fuelTypeForCost, monthStart, normDate, num, sum, today, tsMs } = deps;
+  const { CONFIG, COST, S, addDays, effectiveReorderLevel, fuelMasterRate, fuelTypeForCost, monthStart, normDate, num, sum, today, tsMs } = deps;
 function rateForFuelLog(f) {
   const recorded = num(f.ratePerLitre ?? f.fuelRate ?? f.unitPrice ?? f.pricePerLitre);
   if (recorded > 0) return recorded;
