@@ -1,6 +1,6 @@
 /** Dashboard / executive overview feature module. */
 export function createOverviewModule(deps) {
-  const { LOADED, MON, S, addDays, app, autoReorderDetails, barChart, collection, cur, dLong, dShort, daysBetween, effectiveReorderLevel, esc, fmt, fuelIn, fuelRecordDate, fuelTypeFromRecord, itemName, mKey, mName, monthStart, normDate, num, renderTurfAreaPlanDashboard, setHTML, sortFuel, timeOf, today, tsMs, turfCategoryClass, turfCategoryLabel, turfPlanCategory, turfProductForPlan, turfRecordDate, turfRecordProductName, turfRecordQuantity, turfRecordStatus, updateDayCostCards } = deps;
+  const { LOADED, MON, S, addDays, app, autoReorderDetails, barChart, collection, dLong, dShort, daysBetween, effectiveReorderLevel, esc, fmt, fuelIn, fuelRecordDate, fuelTypeFromRecord, itemName, mKey, mName, monthStart, normDate, num, renderTurfAreaPlanDashboard, setHTML, sortFuel, timeOf, today, tsMs, turfCategoryClass, turfCategoryLabel, turfPlanCategory, turfProductForPlan, turfRecordDate, turfRecordProductName, turfRecordQuantity, turfRecordStatus, updateDayCostCards } = deps;
 function renderOperationalIntelligence(t=today()) {
   const days=daysBetween(addDays(t,-29),t), fromWeek=addDays(t,-6), priorStart=addDays(t,-13), priorEnd=addDays(t,-7);
   const perMachineDay=new Map(), machineWeek=new Map(), hoursByMachineDay=new Map(), weekdayTotals=Array.from({length:7},()=>({litres:0,days:0}));
