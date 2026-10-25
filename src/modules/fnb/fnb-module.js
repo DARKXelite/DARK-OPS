@@ -212,13 +212,13 @@ export function createFnbModule({
         const receivedQty = num(current.receivedQty) + quantity;
         const inventoryQty = Math.max(0, num(existingInventory?.stockQuantity)) + quantity;
         if (existingInventory) {
-          const stockUpdate = { stockQuantity: +inventoryQty.toFixed(4), lastReceiptId: receiptRef.id, updatedAt: serverTimestamp() };
+          const stockUpdate = { stockQuantity: inventoryQty, lastReceiptId: receiptRef.id, updatedAt: serverTimestamp() };
           if (rate > 0) stockUpdate.unitCost = rate;
           tx.update(inventoryRef, stockUpdate);
         } else {
           tx.set(inventoryRef, {
             partName: current.itemName, category: "F&B", domain: "F&B",
-            stockQuantity: +inventoryQty.toFixed(4), unit: current.unit || "Nos",
+            stockQuantity: inventoryQty, unit: current.unit || "Nos",
             unitCost: rate, reorderLevel: 0, lastReceiptId: receiptRef.id, createdAt: serverTimestamp(), updatedAt: serverTimestamp()
           });
         }
