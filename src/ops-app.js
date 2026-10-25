@@ -1671,7 +1671,7 @@ function openInward() {
         if(!snap.exists())throw new Error('Item no longer exists');
         const current=snap.data();if(current.category!==item.category)throw new Error('Item category changed. Refresh and retry');
         const oldQty=Math.max(0,num(current.stockQuantity)),newQty=oldQty+qty;
-        tx.update(itemRef,{stockQuantity:newQty,unitCost:rate,updatedAt:serverTimestamp()});
+        tx.update(itemRef,{stockQuantity:newQty,unitCost:rate,lastInwardId:receiptRef.id,updatedAt:serverTimestamp()});
         tx.set(receiptRef,{itemId,itemName:itemName(item),category:item.category,unit:item.unit||'Nos',quantity:qty,rate,gstPercent:gst,taxableAmount:taxable,gstAmount:tax,total,supplier,invoiceNumber:ref,receiptDate,notes:$('#inNotes').value.trim(),createdAt:serverTimestamp(),transactionType:'INWARD'});
       });toast('Goods inward posted and stock updated');
     }
