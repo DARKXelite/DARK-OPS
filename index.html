@@ -139,7 +139,7 @@
           <section class="ops-mini-panel ops-fuel-stock-panel">
             <div class="ops-mini-head"><h4>Petrol &amp; diesel stock</h4><button class="text-action" data-act="nav-inventory-master">Open Inventory</button></div>
             <div id="opsFuelInventory"></div>
-            <div class="muted sm ops-fuel-stock-note">Inventory balance comes from the item master. Issued litres come from fuel logs; they are shown separately until fuel issues are connected to stock deduction.</div>
+            <div class="muted sm ops-fuel-stock-note">Fuel issues deduct the selected Diesel/Petrol inventory item and create the fuel log atomically.</div>
           </section>
           <div class="ops-fuel-detail-grid">
             <section class="ops-mini-panel"><div class="ops-mini-head"><h4>Daily litres</h4><span>Last 7 days</span></div><div id="opsFuelTrend"></div></section>
@@ -206,6 +206,7 @@
       <div class="toolbar"><div class="grow"></div>
         <button class="btn" data-act="group-tab" data-v="expenses" title="Open the local expenses table"><span class="material-symbols-rounded">receipt_long</span>Local Expenses</button>
         <button class="btn btn-primary" data-act="add-local-expense" title="Add a local expense bill"><span class="material-symbols-rounded">add</span>Add Local Bill</button>
+        <button class="btn btn-primary" data-act="add-fuel-issue"><span class="material-symbols-rounded">local_gas_station</span>Issue Fuel</button>
         <button class="btn" data-act="open-fuel"><span class="material-symbols-rounded">insights</span>Consumption analysis</button>
         <button class="btn" data-act="export-ledger"><span class="material-symbols-rounded">download</span>Export CSV</button>
       </div>

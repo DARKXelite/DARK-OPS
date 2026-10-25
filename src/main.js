@@ -14,7 +14,7 @@ import { createNavigation } from "./ui/navigation.js";
 import { createFleetModule } from "./modules/fleet/fleet-module.js";
 import { createTurfOpsModule } from "./modules/turf/turf-ops-module.js";
 import { createTurfPlannerService } from "./modules/turf/planner-service.js";
-import { createInventoryService } from "./modules/store/inventory-service.js";
+import { createInventoryService, postFuelIssue } from "./modules/store/inventory-service.js";
 
 const firestoreData = createFirestoreRepository({
   db, CONFIG, collection, doc, addDoc, updateDoc, deleteDoc, increment
@@ -1222,6 +1222,39 @@ function openInward() {
   updateInwardItems();
 }
 function updateInwardItems(){const c=$('#inCat')?.value,el=$('#inItem');if(!el)return;el.innerHTML='<option value="">Select item</option>'+S.inventory.filter(i=>i.category===c).sort((a,b)=>itemName(a).localeCompare(itemName(b))).map(i=>`<option value="${esc(i.id)}">${esc(itemName(i))} (${esc(i.unit||'Nos')})</option>`).join('');}
+function openFuelIssueForm() {
+  const products = S.inventory.filter(i =>
+    String(i.category || '').trim().toLowerCase() === 'fuel' &&
+    ['diesel','petrol'].includes(itemName(i).trim().toLowerCase()) &&
+    ['litre','litres','liter','liters','l'].includes(String(i.unit || i.uom || i.stockUnit || '').trim().toLowerCase())
+  );
+  openForm({
+    title: 'Issue fuel from inventory',
+    sub: 'The fuel log and inventory deduction are committed together.',
+    submit: 'Record issue',
+    html: fld('Fuel item', `<select id="fuelIssueItem"><option value="">Select diesel or petrol</option>${products.map(i => `<option value="${esc(i.id)}">${esc(itemName(i))} · Available ${fmt(num(i.stockQuantity),3)} L</option>`).join('')}</select>`) +
+      fld('Machine', `<select id="fuelIssueMachine">${machineOptions('', 'Bulk / unassigned issue')}</select>`) +
+      `<div class="row2">${fld('Issue date', `<input id="fuelIssueDate" type="date" value="${today()}" required>`)}${fld('Quantity (litres)', '<input id="fuelIssueQty" type="number" min="0.001" step="0.001" placeholder="0.000" required>')}</div>` +
+      fld('Issued by', '<input id="fuelIssueBy" placeholder="Storekeeper name">') +
+      fld('Notes', '<input id="fuelIssueNotes" placeholder="Optional issue reference or notes">') +
+      (products.length ? '' : '<div class="hint">No valid Diesel/Petrol inventory item found. Create one under category Fuel with unit Litre before issuing.</div>'),
+    onSubmit: async () => {
+      const itemId = $('#fuelIssueItem').value;
+      const product = products.find(i => i.id === itemId);
+      const machineId = $('#fuelIssueMachine').value;
+      const litres = Number($('#fuelIssueQty').value);
+      if (!product) { toast('Select a valid Diesel/Petrol inventory item', 'err'); return false; }
+      if (!Number.isFinite(litres) || litres <= 0) { toast('Enter litres greater than zero', 'err'); return false; }
+      await postFuelIssue({ db, CONFIG, doc, collection, runTransaction, serverTimestamp, num }, {
+        itemId, machineId, machineName: machineId ? mName(machineId) : '',
+        fuelType: itemName(product).trim().toLowerCase() === 'diesel' ? 'Diesel' : 'Petrol',
+        litres, issueDate: $('#fuelIssueDate').value,
+        issuedBy: $('#fuelIssueBy').value.trim(), notes: $('#fuelIssueNotes').value.trim()
+      });
+      toast(`${itemName(product)} ${fmt(litres,3)} L issued and inventory deducted`);
+    }
+  });
+}
 function previewInward(){const el=$('#inPreview');if(!el)return;const q=Math.max(0,num($('#inQty')?.value)),r=Math.max(0,num($('#inRate')?.value)),g=$('#inCustomGst')?.value.trim()!==''?num($('#inCustomGst').value):num($('#inGst')?.value);el.textContent=`Taxable ${money(q*r,2)} · GST ${money(q*r*g/100,2)} · Invoice total ${money(q*r*(1+g/100),2)}`;}
 function renderIncidents() {
   if (!LOADED.logs) { setHTML($('#incList'), '<div class="skeleton" style="height:90px"></div>'); return; }
@@ -1304,7 +1337,7 @@ const H = {
   },
   dock: () => toggleDock(),
   signout: () => signOut(auth),
-  'open-fuel': openFuelModal, 'open-run': openRunModal,
+  'open-fuel': openFuelModal, 'open-run': openRunModal, 'add-fuel-issue': openFuelIssueForm,
   'kpi-live': () => switchView('radar'), 'kpi-svc': () => { F.sort = 'service'; switchView('fleet'); }, 'kpi-inc': () => switchView('fleet'), 'kpi-stock': () => switchView('registry'),
   rpreset: d => { if (d.p === 'custom') R[d.k].preset = 'custom'; else setPreset(R[d.k], d.p); RER[d.k](); },
   'close-modal': closeModal, 'close-drawer': closeDrawer,
