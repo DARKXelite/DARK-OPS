@@ -2,7 +2,7 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebas
 import { getFirestore, collection, addDoc, deleteDoc, doc, updateDoc, setDoc, getDoc, increment, onSnapshot, getDocs, writeBatch, runTransaction, serverTimestamp, query, where, orderBy } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 import { getAuth, onAuthStateChanged, signInWithPhoneNumber, RecaptchaVerifier, signOut } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
 import { createFnbModule } from "./modules/fnb/fnb-module.js";
-import { ROLE_PERMISSIONS, ROLE_LABELS, canRole, permissionForAction, permissionForView } from "./modules/rbac.js";
+import { ROLE_PERMISSIONS, ROLE_LABELS, canRole, permissionForAction, permissionForView, permissionForCollection } from "./modules/rbac.js";
 
 
 const FUEL_RATE = 92.50; // Legacy reference rate; operational costing is managed in the local cost model.
@@ -1797,6 +1797,13 @@ function startListeners() {
   const caches = Object.fromEntries(Object.keys(CONFIG.COL).map(k => [k, new Map()]));
   Object.keys(CONFIG.COL).forEach(k => { LOADED[k] = false; S[k] = []; });
   Object.keys(CONFIG.COL).forEach(k => {
+    const requiredPermission = permissionForCollection(CONFIG.COL[k], false);
+    if (!RBAC.can(requiredPermission)) {
+      // Avoid pointless denied listeners and reads for collections outside this role's UI scope.
+      LOADED[k] = true;
+      S[k] = [];
+      return;
+    }
     unsubs.push(onSnapshot(collection(db, CONFIG.COL[k]), snap => {
       const firstSnapshot = !LOADED[k];
       const changes = snap.docChanges();
