@@ -3,13 +3,13 @@ export const ROLE_PERMISSIONS = Object.freeze({
   manager: Object.freeze([
     "dashboard.read", "fleet.read", "fleet.write", "fuel.read", "fuel.write",
     "shifts.read", "shifts.write", "turf.read", "turf.write", "turf.issue",
-    "inventory.read", "inventory.write", "expenses.read", "expenses.write",
+    "inventory.read", "inventory.write", "inventory.receipts.read", "expenses.read", "expenses.write",
     "reports.read", "users.read", "users.manage", "fnb.read", "fnb.write", "fnb.receive", "fnb.delete", "fuel.delete", "shifts.delete", "incidents.write", "incidents.delete",
     "maintenance.read", "maintenance.write", "assignments.read", "assignments.write"
   ]),
   storekeeper: Object.freeze([
     "dashboard.read", "fuel.read", "fuel.write", "turf.read", "turf.issue",
-    "inventory.read", "inventory.write", "expenses.read", "reports.read",
+    "inventory.read", "inventory.write", "inventory.receipts.read", "expenses.read", "reports.read",
     "fnb.read", "fnb.write", "fnb.receive"
   ]),
   operator: Object.freeze([
@@ -49,7 +49,7 @@ export function permissionForCollection(collectionName, write = false) {
     shifts: "shifts.read", CourseZones: "fleet.read", live_telemetry: "fleet.read",
     inventory: "inventory.read", logs: "fleet.read", maintenance_logs: "maintenance.read",
     assignment_logs: "assignments.read", turf_plans: "turf.read",
-    store_inwards: "inventory.read", local_expenses: "expenses.read",
+    store_inwards: "inventory.receipts.read", local_expenses: "expenses.read",
     fnb_orders: "fnb.read", fnb_receipts: "fnb.read", app_roles: "access.manage"
   };
   const writeMap = {
