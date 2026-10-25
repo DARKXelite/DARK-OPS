@@ -193,7 +193,7 @@ function applyTurfCostPreset(range) {
   const from=range==='7d'?addDays(to,-6):range==='30d'?addDays(to,-29):monthStart(to);
   const fromInput=$('#turfCostFrom'),toInput=$('#turfCostTo');
   if(fromInput)fromInput.value=from;if(toInput)toInput.value=to;
-  $$('.turf-cost-presets .chip').forEach(btn=>btn.classList.toggle('on',btn.dataset.range===range));
+  qsa('.turf-cost-presets .chip').forEach(btn=>btn.classList.toggle('on',btn.dataset.range===range));
   renderTurfCostAnalytics(from,to);
 }
 function exportTurfCostRange() {
