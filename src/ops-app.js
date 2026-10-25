@@ -1881,8 +1881,11 @@ function startListeners() {
   stopListeners();
   setConn('');
   Object.keys(CONFIG.COL).forEach(k => { LOADED[k] = false; S[k] = []; });
+  S._v++;
   listenersStarted = true;
   syncListenersForView();
+  // Clear the previous session's rendered data immediately, before the new snapshots arrive.
+  renderAll();
 }
 function stopListeners() {
   listenersStarted = false;
@@ -2198,10 +2201,13 @@ onAuthStateChanged(auth, async user => {
   const login = $("#login"), gate = $("#pinGate"), error = $("#loginErr");
   if (gate) gate.hidden = true;
   if (!user) {
+    Object.keys(CONFIG.COL).forEach(k => { LOADED[k] = false; S[k] = []; });
+    S._v++;
     if (login) login.hidden = false;
     if ($("#signoutBtn")) $("#signoutBtn").hidden = true;
     document.body.classList.add("auth-locked");
     buildNav();
+    renderAll();
     return;
   }
   try {
