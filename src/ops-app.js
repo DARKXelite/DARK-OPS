@@ -1,7 +1,4 @@
-import { initializeApp } from "https://www.gstatic.com/firebasejs/12.19.0/firebase-app.js";
-import { getFirestore, collection, addDoc, deleteDoc, doc, updateDoc, setDoc, getDoc, increment, onSnapshot, getDocs, writeBatch, runTransaction, serverTimestamp, query, where, orderBy } from "https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore.js";
-import { getAuth } from "https://www.gstatic.com/firebasejs/12.19.0/firebase-auth.js";
-import { initializeAppCheck, ReCaptchaEnterpriseProvider } from "https://www.gstatic.com/firebasejs/12.19.0/firebase-app-check.js";
+import { collection, addDoc, deleteDoc, doc, updateDoc, setDoc, getDoc, increment, onSnapshot, getDocs, writeBatch, runTransaction, serverTimestamp, query, where, orderBy } from "https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore.js";
 import { createFnbModule } from "./modules/fnb/fnb-module.js";
 import { ROLE_PERMISSIONS, ROLE_LABELS, canRole, permissionForAction, permissionForView, permissionForCollection } from "./modules/rbac.js";
 import { $, $$ as qsa, esc, num, fmt, money, pad, ymd, today, addDays, monthStart, MON, dShort, dLong, fmtHrs, sum, tsMs, timeOf, ago, normDate, daysBetween, setHTML } from "./modules/core/formatters.js";
@@ -25,6 +22,7 @@ import { createAuthControllerModule } from "./modules/app/auth-controller.js";
 import { registerAppEventDelegation } from "./modules/app/event-delegation.js";
 import { createNavigationController } from "./modules/app/navigation-controller.js";
 import { createFirestoreListenerController } from "./modules/app/firestore-listener-controller.js";
+import { app, auth, db, firebaseConfig, appCheckSiteKey } from "./modules/firebase/client.js";
 
 
 let uiModule = null, chartModule = null, weatherModule = null, reorderModule = null, costModule = null, fleetModule = null, turfDomainModule = null, overviewModule = null, mapModule = null, storeUiModule = null, expenseModule = null, turfModule = null, fleetDomainModule = null;
@@ -33,16 +31,6 @@ function setCurModalRenderer(fn) { curModalRender = fn; }
 
 const FUEL_RATE = 92.50; // Legacy reference rate; operational costing is managed in the local cost model.
 /* ================= CONFIG ================= */
-const firebaseConfig = {
-  apiKey: "AIzaSyA0snhaIuA47xB0Ay-5nAgzBstDO5koi-M",
-  authDomain: "clover-greens-ops.firebaseapp.com",
-  databaseURL: "https://clover-greens-ops-default-rtdb.asia-southeast1.firebasedatabase.app",
-  projectId: "clover-greens-ops",
-  storageBucket: "clover-greens-ops.firebasestorage.app",
-  messagingSenderId: "48049661517",
-  appId: "1:48049661517:web:8075879055223c9cd61e04",
-  measurementId: "G-N96JJT9QRL"
-};
 const CONFIG = {
   REQUIRE_LOGIN: true,         // Phone OTP authentication and app_roles/{uid} authorization required
   SERVICE_INTERVAL: 250,       // engine hours between services
@@ -55,24 +43,6 @@ const CONFIG = {
   WIND_LIMIT: 25,              // km/h, spraying advisory
   COL: { users:'users', machines:'machines', fuel:'fuel_logs', shifts:'shifts', zones:'CourseZones', live:'live_telemetry', inventory:'inventory', logs:'logs', maintenance:'maintenance_logs', assignments:'assignment_logs', plans:'turf_plans', inwards:'store_inwards', expenses:'local_expenses', fnbOrders:'fnb_orders', fnbReceipts:'fnb_receipts' }
 };
-
-const app = initializeApp(firebaseConfig);
-// App Check activates only when a public reCAPTCHA Enterprise site key is configured in Vercel.
-// Do not enable Firebase App Check enforcement until this has been verified on production traffic.
-const appCheckSiteKey = import.meta.env.VITE_FIREBASE_APP_CHECK_SITE_KEY || "";
-if (appCheckSiteKey) {
-  try {
-    initializeAppCheck(app, {
-      provider: new ReCaptchaEnterpriseProvider(appCheckSiteKey),
-      isTokenAutoRefreshEnabled: true
-    });
-  } catch (error) {
-    console.error("Firebase App Check initialization failed; refusing to continue with a broken security configuration.", error);
-    throw error;
-  }
-}
-const db = getFirestore(app);
-const auth = getAuth(app);
 
 /* ================= HELPERS ================= */
 /* ================= STATE ================= */
@@ -423,7 +393,6 @@ const APP_CONTEXT = {
   RER,
   ROLE_LABELS,
   ROLE_PERMISSIONS,
-  ReCaptchaEnterpriseProvider,
   S,
   STORE_CATS,
   TILE,
@@ -515,11 +484,9 @@ const APP_CONTEXT = {
   fuelTypeForCost,
   fuelTypeFromRecord,
   fuelTypeOf,
-  getAuth,
   getCurrentView,
   getDoc,
   getDocs,
-  getFirestore,
   getSunday,
   groupForView,
   guessCategory,
@@ -527,8 +494,6 @@ const APP_CONTEXT = {
   increment,
   initRadarMap,
   initZoneMap,
-  initializeApp,
-  initializeAppCheck,
   inventoryCostSummary,
   inventoryRowsMarkup,
   isTurfCategory,
