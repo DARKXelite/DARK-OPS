@@ -20,22 +20,24 @@ test("command palette uses data attributes, not executable inline handlers", asy
 test("the active app fails closed and uses phone OTP authentication", async () => {
   const html = await read("../index.html");
   const js = await read("../src/ops-app.js");
+  const auth = await read("../src/modules/app/auth-controller.js");
   assert.match(html, /<script type="module" src="\/src\/ops-app\.js"><\/script>/);
   assert.doesNotMatch(html, /<script type="module" src="\/src\/main\.js"><\/script>/);
   assert.match(js, /REQUIRE_LOGIN:\s*true/);
-  assert.match(js, /signInWithPhoneNumber/);
-  assert.match(js, /new RecaptchaVerifier/);
-  assert.match(js, /roleData\.active !== true/, "missing active flag must not count as active access");
+  assert.match(js, /createAuthControllerModule/);
+  assert.match(auth, /signInWithPhoneNumber/);
+  assert.match(auth, /new RecaptchaVerifier/);
+  assert.match(auth, /roleData\.active !== true/, "missing active flag must not count as active access");
 });
 
 test("owner bootstrap is restricted to the exact UID and admin role", async () => {
-  const js = await read("../src/ops-app.js");
+  const auth = await read("../src/modules/app/auth-controller.js");
   const rules = await read("../firestore.rules");
   const ownerUid = "C1l8ArB3GlSaAQr6iw4O9RKGGik1";
-  assert.ok(js.includes(ownerUid), "app bootstrap must use the documented owner UID");
+  assert.ok(auth.includes(ownerUid), "app bootstrap must use the documented owner UID");
   assert.ok(rules.includes(ownerUid), "Firestore bootstrap must use the same owner UID");
   assert.doesNotMatch(rules, /request\.auth\.token\.email/, "alternate email bootstrap must not grant administrator access");
-  assert.match(js, /if \(!roleSnap\.exists\(\) && user\.uid === bootstrapAdminUid\)/);
+  assert.match(auth, /if \(!roleSnap\.exists\(\) && user\.uid === bootstrapAdminUid\)/);
   assert.match(rules, /request\.auth\.uid == uid[\s\S]{0,160}request\.auth\.uid == 'C1l8ArB3GlSaAQr6iw4O9RKGGik1'[\s\S]{0,300}request\.resource\.data\.role == 'admin'[\s\S]{0,100}request\.resource\.data\.active == true/);
 });
 
