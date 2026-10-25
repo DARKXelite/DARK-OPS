@@ -1,6 +1,6 @@
 /** Function-based CostAnalytics module. Dependencies are injected from the application context. */
 export function createCostAnalyticsModule(deps) {
-  const { CONFIG, COST, LOADED, S, addDays, autoReorderDetails, barChart, dLong, dShort, db, doc, downloadCSV, effectiveReorderLevel, esc, fld, fmt, fuelIn, fuelRecordDate, fuelTypeFromRecord, isTurfCategory, itemName, mName, money, monthStart, monthlyCostSnapshot, normDate, num, openForm, openModal, renderOverview, saveCostModel, sum, timeOf, toast, today, tsMs, turfCategoryClass, turfPlanCategory, turfProductForPlan, turfRecordDate, turfRecordProductName, turfRecordQuantity, turfRecordStatus, updateDoc, where } = deps;
+  const { $, $$, addDays, autoReorderDetails, barChart, COST, db, dLong, doc, downloadCSV, dShort, effectiveReorderLevel, esc, fld, fmt, fuelIn, fuelRecordDate, fuelTypeFromRecord, isTurfCategory, itemName, LOADED, mName, money, monthlyCostSnapshot, monthStart, normDate, num, ONFIG, openForm, openModal, renderOverview, S, saveCostModel, sum, timeOf, toast, today, tsMs, turfCategoryClass, turfPlanCategory, turfProductForPlan, turfRecordDate, turfRecordProductName, turfRecordQuantity, turfRecordStatus, updateDoc, where } = deps;
 const sortFuel = (a, b) => fuelRecordDate(b).localeCompare(fuelRecordDate(a)) || tsMs(b.timestamp ?? b.createdAt) - tsMs(a.timestamp ?? a.createdAt);
 
 /* Daily costs use transaction rates or Inventory Master unit costs only.
