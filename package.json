@@ -13,6 +13,6 @@
   "devDependencies": {
     "vite": "6.4.5",
     "@firebase/rules-unit-testing": "6.0.0",
-    "firebase": "12.19.0"
+    "firebase": "13.1.0"
   }
 }
