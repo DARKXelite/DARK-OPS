@@ -16,7 +16,7 @@ export function createInventoryService({ db, CONFIG, doc, collection, runTransac
       if (current.category !== expectedCategory) throw new Error("Item category changed. Refresh and retry");
       const oldQty = Math.max(0, num(current.stockQuantity));
       const newQty = oldQty + quantity;
-      tx.update(itemRef, { stockQuantity:newQty, unitCost:rate, updatedAt:serverTimestamp() });
+      tx.update(itemRef, { stockQuantity:newQty, unitCost:rate, lastInwardId:receiptRef.id, updatedAt:serverTimestamp() });
       tx.set(receiptRef, {
         itemId, itemName, category:expectedCategory, unit, quantity, rate, gstPercent,
         taxableAmount, gstAmount, total, supplier, invoiceNumber, receiptDate, notes,
