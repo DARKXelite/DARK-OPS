@@ -568,7 +568,7 @@ $("#loginForm").addEventListener("submit", async e => {
         throw new Error("Enter your phone number in international format, including country code (for example, +91XXXXXXXXXX).");
       }
       if (!recaptchaVerifier) {
-        recaptchaVerifier = new RecaptchaVerifier(auth, "recaptcha-container", { size: "normal" });
+        recaptchaVerifier = new RecaptchaVerifier(auth, "recaptcha-container", { size: "invisible" });
       }
       confirmationResult = await signInWithPhoneNumber(auth, phone, recaptchaVerifier);
       $("#loginPhoneStep").hidden = true;
