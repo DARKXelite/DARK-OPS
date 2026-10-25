@@ -238,7 +238,7 @@ export function createFnbModule({
           transactionType: "FNB_RECEIPT", fnbOrderId: orderId, fnbReceiptId: receiptRef.id,
           createdAt: serverTimestamp()
         });
-        tx.update(orderRef, { receivedQty, status: receivedQty >= num(current.orderedQty) ? "Received" : "Partial", updatedAt: serverTimestamp() });
+        tx.update(orderRef, { receivedQty, status: receivedQty >= num(current.orderedQty) ? "Received" : "Partial", lastReceiptId: receiptRef.id, updatedAt: serverTimestamp() });
       });
       toast("Receipt saved · F&B inventory stock updated");
     } catch (error) {
