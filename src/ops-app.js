@@ -8,12 +8,14 @@ import { ROLE_PERMISSIONS, ROLE_LABELS, canRole, permissionForAction, permission
 const FUEL_RATE = 92.50; // Legacy reference rate; operational costing is managed in the local cost model.
 /* ================= CONFIG ================= */
 const firebaseConfig = {
-  apiKey: "AIzaSyB5jXD6snQsRahIL7rr-gHIwvZZFSgzBes",
+  apiKey: "AIzaSyA0snhaIuA47xB0Ay-5nAgzBstDO5koi-M",
   authDomain: "clover-greens-ops.firebaseapp.com",
+  databaseURL: "https://clover-greens-ops-default-rtdb.asia-southeast1.firebasedatabase.app",
   projectId: "clover-greens-ops",
   storageBucket: "clover-greens-ops.firebasestorage.app",
   messagingSenderId: "48049661517",
-  appId: "1:48049661517:android:98bb300b59755541d61e04"   // TODO: replace with the WEB app id from Firebase console
+  appId: "1:48049661517:web:8075879055223c9cd61e04",
+  measurementId: "G-N96JJT9QRL"
 };
 const CONFIG = {
   REQUIRE_LOGIN: true,         // RBAC requires Firebase Authentication plus an app_roles/{uid} document
