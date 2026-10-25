@@ -2647,6 +2647,99 @@ function turfPlanCategory(plan) {
   const nameLabel = turfCategoryLabel(name);
   return nameLabel !== 'Other' ? nameLabel : 'Other';
 }
+function turfStatusPriority(record) {
+  const status = turfRecordStatus(record);
+  return status === 'Applied' ? 3 : status === 'Issued' ? 2 : status === 'Planned' ? 1 : 0;
+}
+function turfRecordTimestamp(record) {
+  return tsMs(record && (record.issuedAt ?? record.issueTimestamp ?? record.appliedAt ?? record.completedAt ?? record.timestamp ?? record.createdAt ?? record.createdTime));
+}
+function turfRecordIdentity(record) {
+  const id = String(record && (record.planId ?? record.id) || '').trim();
+  return id ? 'plan:' + id : [
+    turfRecordDate(record),
+    String(record && (record.partId ?? record.productId ?? record.itemId) || '').trim(),
+    normItemName(turfRecordProductName(record)),
+    String(turfRecordQuantity(record)),
+    String(record && (record.targetZoneOrMachine ?? record.targetArea ?? record.area) || '').trim().toLowerCase()
+  ].join('|');
+}
+function turfPlanSourcesLoaded() {
+  return !!LOADED.plans && !!LOADED.dailyPlans;
+}
+function allTurfPlanRecords() {
+  const unique = new Map();
+  for (const entry of [['turf_plans', S.plans || []], ['daily_application_plans', S.dailyPlans || []]]) {
+    const source = entry[0], records = entry[1];
+    records.forEach(record => {
+      const key = turfRecordIdentity(record);
+      const incoming = { ...record, _sourceCollection: source };
+      const old = unique.get(key);
+      if (!old) { unique.set(key, incoming); return; }
+      const oldRank = turfStatusPriority(old), newRank = turfStatusPriority(incoming);
+      const oldTime = turfRecordTimestamp(old), newTime = turfRecordTimestamp(incoming);
+      const winner = newRank > oldRank || (newRank === oldRank && newTime > oldTime) ? incoming : old;
+      const loser = winner === incoming ? old : incoming;
+      unique.set(key, { ...loser, ...winner, _sourceCollection: winner._sourceCollection });
+    });
+  }
+  const plans = [...unique.values()];
+  const maintenanceIssues = [];
+  (S.maintenance || []).forEach(log => {
+    const type = String(log.type || log.logType || '').trim().toLowerCase().replace(/[_-]+/g, ' ');
+    if (!/chemical\s+issue|fertiliz\w*\s+issue|pesticid\w*\s+issue|turf\s+issue/.test(type)) return;
+    const date = normDate(log.date ?? log.maintenanceDate ?? log.serviceDate, log.timestamp ?? log.issuedAt ?? log.createdAt);
+    if (!date) return;
+    const parts = Array.isArray(log.partsUsed) ? log.partsUsed : [];
+    parts.forEach((part, index) => {
+      const partId = part.partId ?? part.itemId ?? part.productId ?? part.inventoryId ?? '';
+      const partName = part.partName ?? part.itemName ?? part.productName ?? part.name ?? '';
+      const product = resolveInventoryItem(partId, partName, part.category || part.itemCategory || '');
+      const category = part.category ?? part.itemCategory ?? product?.category ?? log.category ?? log.materialCategory ?? '';
+      if (!isTurfCategory(category)) return;
+      const quantity = Math.max(0, num(part.qty ?? part.quantity ?? part.usedQty ?? part.issuedQty));
+      if (!(quantity > 0)) return;
+      const zone = String(log.machineName ?? log.machineId ?? log.targetZoneOrMachine ?? log.area ?? '').trim();
+      const synthetic = {
+        id: 'maintenance::partsUsed::' + String(log.id || log.logId || 'log') + '::' + index,
+        _sourceCollection: 'maintenance_logs',
+        _syntheticMaintenanceIssue: true,
+        _d: date,
+        date,
+        timestamp: log.timestamp ?? log.issuedAt ?? log.createdAt ?? null,
+        issuedAt: log.timestamp ?? log.issuedAt ?? null,
+        logId: log.logId ?? log.id ?? '',
+        partId: partId || product?.partId || product?.id || '',
+        itemName: partName || (product ? itemName(product) : ''),
+        category: category || 'Pesticides',
+        actualQty: quantity,
+        qty: quantity,
+        unit: part.unit ?? part.uom ?? product?.unit ?? product?.stockUnit ?? product?.uom ?? '',
+        targetZoneOrMachine: zone,
+        targetArea: zone,
+        status: 'ISSUED',
+        performedBy: log.performedBy || '',
+        notes: log.notes || log.reason || 'From maintenance_logs partsUsed'
+      };
+      const productKey = product ? String(product.id) : String(partId || normItemName(partName));
+      const syntheticTs = turfRecordTimestamp(synthetic);
+      const duplicate = plans.some(plan => {
+        if (!['Issued','Applied'].includes(turfRecordStatus(plan))) return false;
+        if (turfRecordDate(plan) !== date || Math.abs(turfRecordQuantity(plan) - quantity) > 0.000001) return false;
+        const linkedProduct = turfProductForPlan(plan);
+        const linkedKey = linkedProduct ? String(linkedProduct.id) : String(plan.partId ?? plan.productId ?? plan.itemId ?? normItemName(turfRecordProductName(plan)));
+        if (linkedKey !== productKey && normItemName(turfRecordProductName(plan)) !== normItemName(partName)) return false;
+        const planZone = String(plan.targetZoneOrMachine ?? plan.targetArea ?? plan.area ?? '').trim().toLowerCase();
+        if (zone && planZone && zone.toLowerCase() !== planZone) return false;
+        const planTs = turfRecordTimestamp(plan);
+        return !!(syntheticTs && planTs && Math.abs(syntheticTs - planTs) <= 5 * 60 * 1000);
+      });
+      if (!duplicate) maintenanceIssues.push(synthetic);
+    });
+  });
+  return [...plans, ...maintenanceIssues];
+}
+
 function turfCategoryClass(category) {
   const c = String(category || '').toLowerCase();
   if (c.includes('pesticide')) return 'pesticide';
