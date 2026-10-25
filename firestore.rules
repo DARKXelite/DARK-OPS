@@ -67,8 +67,9 @@ service cloud.firestore {
           || (d.receivedQty >= d.orderedQty && d.receivedQty <= d.orderedQty + 0.000001 && d.status == 'Received'));
     }
 
-    function validNormalInwardCreate() {
+    function validNormalInwardCreate(id) {
       let d = request.resource.data;
+      let itemPath = /databases/$(database)/documents/inventory/$(d.itemId);
       return d.keys().hasOnly([
           'itemId', 'itemName', 'category', 'unit', 'quantity', 'rate', 'gstPercent',
           'taxableAmount', 'gstAmount', 'total', 'supplier', 'invoiceNumber',
@@ -94,7 +95,15 @@ service cloud.firestore {
         && d.invoiceNumber is string && d.invoiceNumber.size() <= 100
         && d.receiptDate is string && d.receiptDate.size() == 10
         && d.notes is string && d.notes.size() <= 1000
-        && d.createdAt == request.time;
+        && d.createdAt == request.time
+        // The GRN and the balance increase must be committed atomically.
+        && exists(itemPath)
+        && existsAfter(itemPath)
+        && getAfter(itemPath).data.lastInwardId == id
+        && get(itemPath).data.stockQuantity is number
+        && getAfter(itemPath).data.stockQuantity is number
+        && getAfter(itemPath).data.stockQuantity - get(itemPath).data.stockQuantity > d.quantity - 0.000001
+        && getAfter(itemPath).data.stockQuantity - get(itemPath).data.stockQuantity < d.quantity + 0.000001;
     }
 
     function validFnbInwardCreate(id) {
@@ -275,7 +284,7 @@ service cloud.firestore {
     }
     match /store_inwards/{id} {
       allow read: if storeTeam();
-      allow create: if storeTeam() && (validNormalInwardCreate() || validFnbInwardCreate(id));
+      allow create: if storeTeam() && (validNormalInwardCreate(id) || validFnbInwardCreate(id));
       // F&B receipts are linked ledger records and cannot be altered/deleted independently.
       allow update: if storeTeam()
         && resource.data.transactionType != 'FNB_RECEIPT'
