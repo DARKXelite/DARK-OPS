@@ -1,6 +1,6 @@
 /** Function-based ReorderIntelligence module. Dependencies are injected from the application context. */
 export function createReorderIntelligenceModule(deps) {
-  const { , addDays, daysBetween, fuelRecordDate, fuelTypeFromRecord, isTurfCategory, itemName, mName, normDate, num, today, turfCategoryLabel, turfProductForPlan, turfRecordDate, turfRecordProductName, turfRecordQuantity, turfRecordStatus } = deps;
+  const { S, addDays, daysBetween, fuelRecordDate, fuelTypeFromRecord, isTurfCategory, itemName, mName, normDate, num, today, turfCategoryLabel, turfProductForPlan, turfRecordDate, turfRecordProductName, turfRecordQuantity, turfRecordStatus } = deps;
 const AUTO_REORDER_POLICY = {
   Fuel: { leadDays: 3, floor: 10 },
   Fertilizers: { leadDays: 7, floor: 1 },
