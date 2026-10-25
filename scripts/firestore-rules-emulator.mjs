@@ -240,3 +240,38 @@ test("an order balance cannot be changed without a matching receipt document", a
     updatedAt: serverTimestamp()
   }));
 });
+
+test("a receipt cannot be posted without its stock inward and inventory balance", async () => {
+  await seed(
+    ["app_roles/storekeeper-1", role("storekeeper")],
+    ["fnb_orders/order-no-stock", orderData()]
+  );
+  const db = testEnv.authenticatedContext("storekeeper-1").firestore();
+  const orderRef = doc(db, "fnb_orders", "order-no-stock");
+  const receiptRef = doc(collection(db, "fnb_receipts"));
+  await assertFails(runTransaction(db, async tx => {
+    const snapshot = await tx.get(orderRef);
+    assert.ok(snapshot.exists());
+    const order = snapshot.data();
+    tx.set(receiptRef, {
+      orderId: orderRef.id,
+      itemId: "missing-inventory",
+      itemName: order.itemName,
+      category: order.category,
+      supplier: order.supplier,
+      unit: order.unit,
+      quantity: 2,
+      rate: 5,
+      receiptDate: "2026-10-25",
+      createdAt: serverTimestamp(),
+      transactionType: "FNB_RECEIPT",
+      inwardId: "missing-inward"
+    });
+    tx.update(orderRef, {
+      receivedQty: 2,
+      status: "Partial",
+      lastReceiptId: receiptRef.id,
+      updatedAt: serverTimestamp()
+    });
+  }));
+});
