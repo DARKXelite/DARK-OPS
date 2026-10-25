@@ -50,6 +50,16 @@ test("Firestore requires explicit active roles and denies unspecified collection
   assert.match(rolesBlock, /allow delete: if admin\(\)/);
 });
 
+
+test("composition root initializes mutable state before injecting feature modules", async () => {
+  const js = await read("../src/ops-app.js");
+  assert.match(js, /const LOADED = \{\}/);
+  assert.match(js, /const F = \{ q: '', cat: 'All', fuel: 'All', sort: 'service' \}/);
+  assert.match(js, /const R = \{/);
+  assert.match(js, /let cur = 'overview', curModalRender = null/);
+  assert.match(js, /function getCurrentView\(\) \{ return cur; \}/);
+});
+
 test("Vercel config retains baseline browser security headers", async () => {
   const config = JSON.parse(await read("../vercel.json"));
   const headers = config.headers.flatMap(entry => entry.headers || []);
@@ -135,7 +145,7 @@ test("F&B receipt rules require matching inward and stock records", async () => 
 });
 
 test("OTP send failures reset expired reCAPTCHA state without discarding a pending OTP on wrong-code errors", async () => {
-  const js = await read("../src/ops-app.js");
+  const js = await read("../src/modules/app/auth-controller.js");
   assert.match(js, /const sendingOtp = !confirmationResult/);
   assert.match(js, /if \(sendingOtp\) \{[\s\S]{0,240}confirmationResult = null/);
   assert.match(js, /recaptchaVerifier\?\.clear\(\)/);
@@ -144,10 +154,12 @@ test("OTP send failures reset expired reCAPTCHA state without discarding a pendi
 
 test("Firestore realtime listeners are scoped to the selected view", async () => {
   const js = await read("../src/ops-app.js");
-  assert.match(js, /const desired = new Set\(VIEW_COLLECTIONS\[cur\] \|\| \[\]\)/);
-  assert.match(js, /if \(listenersStarted\) syncListenersForView\(\)/);
-  assert.match(js, /function stopOneListener\(k\)/);
-  assert.match(js, /listenerEpochs\.get\(k\) !== epoch/);
+  const listeners = await read("../src/modules/app/firestore-listener-controller.js");
+  assert.match(listeners, /const desired = new Set\(VIEW_COLLECTIONS\[getCurrentView\(\)\] \|\| \[\]\)/);
+  assert.match(listeners, /if \(!listenersStarted\) return/);
+  assert.match(js, /function syncListenersForView\(\.\.\.args\)/);
+  assert.match(listeners, /function stopOneListener\(k\)/);
+  assert.match(listeners, /listenerEpochs\.get\(k\) !== epoch/);
   assert.match(js, /registry: \['inventory','inwards','expenses'\]/);
   assert.match(js, /expenses: \['expenses','inventory'\]/);
 });
