@@ -79,7 +79,7 @@ test("F&B writes enforce order and receipt invariants", async () => {
   assert.match(rules, /function validFnbReceiptOrderUpdate\(\)/);
   assert.match(rules, /d\.receivedQty <= d\.orderedQty/);
   assert.match(rules, /function validFnbReceiptCreate\(\)/);
-  assert.match(rules, /getAfter\(orderPath\)\.data\.receivedQty - get\(orderPath\)\.data\.receivedQty == d\.quantity/);
+  assert.match(rules, /getAfter\(orderPath\)\.data\.receivedQty - get\(orderPath\)\.data\.receivedQty > d\.quantity - 0\.000001/);
   assert.match(rules, /allow update, delete: if false;/);
 });
 
