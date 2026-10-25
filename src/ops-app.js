@@ -28,7 +28,7 @@ const CONFIG = {
   WEATHER_PROXY_URL: '',
   STALE_SEC: 180,              // radar pin turns grey after this many seconds without an update
   WIND_LIMIT: 25,              // km/h, spraying advisory
-  COL: { users:'users', machines:'machines', fuel:'fuel_logs', shifts:'shifts', zones:'CourseZones', live:'live_telemetry', inventory:'inventory', logs:'logs', maintenance:'maintenance_logs', assignments:'assignment_logs', plans:'turf_plans', inwards:'store_inwards', expenses:'local_expenses', fnbOrders:'fnb_orders', fnbReceipts:'fnb_receipts' }
+  COL: { users:'users', machines:'machines', fuel:'fuel_logs', shifts:'shifts', zones:'CourseZones', live:'live_telemetry', inventory:'inventory', logs:'logs', maintenance:'maintenance_logs', assignments:'assignment_logs', plans:'turf_plans', dailyPlans:'daily_application_plans', inwards:'store_inwards', expenses:'local_expenses', fnbOrders:'fnb_orders', fnbReceipts:'fnb_receipts' }
 };
 
 const app = initializeApp(firebaseConfig);
@@ -81,7 +81,7 @@ function daysBetween(a, b) { const out = []; let d = a, n = 0; while (d <= b && 
 function setHTML(el, html) { if (el && el._h !== html) { el.innerHTML = html; el._h = html; } }
 
 /* ================= STATE ================= */
-const S = { users: [], machines: [], fuel: [], shifts: [], zones: [], live: [], inventory: [], logs: [], maintenance: [], assignments: [], plans: [], inwards: [], expenses: [], fnbOrders: [], fnbReceipts: [], _v: 0 };
+const S = { users: [], machines: [], fuel: [], shifts: [], zones: [], live: [], inventory: [], logs: [], maintenance: [], assignments: [], plans: [], dailyPlans: [], inwards: [], expenses: [], fnbOrders: [], fnbReceipts: [], _v: 0 };
 const COST_DEFAULTS = { dieselRate: 92.50, petrolRate: 0, labourPerHour: 0, downtimePerHour: 0, savingsPct: 10, improvementCost: 0 };
 function loadCostModel() {
   try { const saved = JSON.parse(localStorage.getItem('cloverOpsCostModel') || '{}'); return { ...COST_DEFAULTS, ...Object.fromEntries(Object.keys(COST_DEFAULTS).map(k => [k, Number.isFinite(+saved[k]) && +saved[k] >= 0 ? +saved[k] : COST_DEFAULTS[k]])) }; }
@@ -447,12 +447,21 @@ const AUTO_REORDER_POLICY = {
 let _reorderIndexVersion = -1, _reorderUsageIndex = new Map(), _reorderDetailCache = new Map();
 const normItemName = value => String(value || '').trim().toLowerCase().replace(/\s+/g,' ');
 function resolveInventoryItem(id, name, preferredCategory='') {
-  if (id) { const byId=S.inventory.find(i=>i.id===String(id)); if(byId) return byId; }
-  const n=normItemName(name); if(!n) return null;
-  const candidates=S.inventory.filter(i=>normItemName(itemName(i))===n);
-  if(preferredCategory){ const preferred=candidates.find(i=>String(i.category||'').toLowerCase()===preferredCategory.toLowerCase()); if(preferred) return preferred; }
-  return candidates.length===1 ? candidates[0] : null;
+  if (id) {
+    const key = String(id);
+    const byId = S.inventory.find(i => String(i.id) === key || String(i.partId || '') === key);
+    if (byId) return byId;
+  }
+  const n = normItemName(name);
+  if (!n) return null;
+  const candidates = S.inventory.filter(i => normItemName(itemName(i)) === n || normItemName(i.partName) === n || normItemName(i.name) === n);
+  if (preferredCategory) {
+    const preferred = candidates.find(i => String(i.category || '').toLowerCase() === preferredCategory.toLowerCase());
+    if (preferred) return preferred;
+  }
+  return candidates.length === 1 ? candidates[0] : null;
 }
+
 function buildReorderUsageIndex() {
   if (_reorderIndexVersion === S._v) return;
   _reorderIndexVersion = S._v; _reorderUsageIndex = new Map(); _reorderDetailCache = new Map();
@@ -1750,7 +1759,7 @@ function renderUsersMaster() {
   const search = $('#usersSearch'); if (search && document.activeElement?.id === 'usersSearch') { search.focus(); search.setSelectionRange(search.value.length, search.value.length); }
 }
 const STORE_CATS = ['Fuel','Fertilizers','Pesticides','Turf Enhancements','Spare Parts','Tools','F&B','Other'];
-const itemName = i => i.partName || i.itemName || 'Unnamed item';
+const itemName = i => i.partName || i.itemName || i.name || i.productName || 'Unnamed item';
 const inventoryCategoryOpen = new Set();
 function inventoryRowsMarkup(items) {
   return `<div class="table-wrap inv-category-table"><table><thead><tr><th>Item name</th><th>Unit</th><th class="num">On hand</th><th class="num">Auto reorder at</th><th class="num">Last unit rate</th><th class="num">Stock value</th><th>Status</th><th></th></tr></thead><tbody>${items.length ? items.map(i=>{
@@ -2030,9 +2039,9 @@ let unsubs = new Map();
 let listenersStarted = false;
 const listenerEpochs = new Map();
 const VIEW_COLLECTIONS = {
-  overview: ['fuel','machines','shifts','inventory','plans','maintenance','logs'],
+  overview: ['fuel','machines','shifts','inventory','plans','dailyPlans','maintenance','logs'],
   fleet: ['machines','live','fuel','shifts'],
-  fuel: ['fuel','machines','shifts','plans','maintenance','expenses','inventory'],
+  fuel: ['fuel','machines','shifts','plans','dailyPlans','maintenance','expenses','inventory'],
   shifts: ['shifts','machines'],
   records: ['maintenance','assignments','fuel','machines','inventory','users'],
   radar: ['live','zones','machines'],
@@ -2041,7 +2050,7 @@ const VIEW_COLLECTIONS = {
   expenses: ['expenses','inventory'],
   users: ['users'],
   incidents: ['logs','machines'],
-  turfcare: ['inventory','plans','fuel','machines','shifts','maintenance'],
+  turfcare: ['inventory','plans','dailyPlans','fuel','machines','shifts','maintenance'],
   fnb: ['fnbOrders','fnbReceipts','inventory']
 };
 function collectionAffectsCurrentView(k) {
@@ -2088,7 +2097,7 @@ function syncListenersForView() {
         else {
           const row = { id: change.doc.id, ...change.doc.data() };
           if (k === 'fuel') row._d = normDate(row.issueDate ?? row.issuedDate ?? row.date ?? row.transactionDate ?? row.createdDate, row.issuedAt ?? row.issueTimestamp ?? row.timestamp ?? row.createdAt ?? row.createdOn ?? row.updatedAt ?? row.recordedAt);
-          if (k === 'plans') row._d = normDate(row.date ?? row.issuedDate ?? row.applicationDate ?? row.appliedDate ?? row.issueDate ?? row.transactionDate ?? row.logDate ?? row.plannedDate, row.issuedAt ?? row.issueTimestamp ?? row.timestamp ?? row.appliedAt ?? row.completedAt ?? row.createdAt ?? row.createdOn ?? row.updatedAt ?? row.recordedAt ?? row.createdTime);
+          if (k === 'plans' || k === 'dailyPlans') row._d = normDate(row.date ?? row.issuedDate ?? row.applicationDate ?? row.appliedDate ?? row.issueDate ?? row.transactionDate ?? row.logDate ?? row.plannedDate, row.issuedAt ?? row.issueTimestamp ?? row.timestamp ?? row.appliedAt ?? row.completedAt ?? row.createdAt ?? row.createdOn ?? row.updatedAt ?? row.recordedAt ?? row.createdTime);
           if (k === 'shifts') row._d = normDate(row.shiftDate, row.timestamp ?? row.startTime ?? row.endTime);
           cache.set(change.doc.id, row);
         }
@@ -2615,13 +2624,17 @@ function turfRecordStatus(plan) {
 }
 function turfProductForPlan(plan) {
   if (!plan) return null;
-  const productId = plan.productId ?? plan.productID ?? plan.itemId ?? plan.inventoryId ?? plan.inventoryItemId ?? plan.inventoryItemDocId ?? plan.productDocId ?? plan.stockItemId ?? plan.skuId ?? (plan.product && typeof plan.product === 'object' ? (plan.product.id ?? plan.product.productId ?? plan.product.itemId) : null);
-  const name = turfRecordProductName(plan).toLowerCase();
-  return S.inventory.find(i => productId && i.id === productId)
-    || S.inventory.find(i => name && itemName(i).trim().toLowerCase() === name)
-    || S.inventory.find(i => name && String(i.name || i.productName || '').trim().toLowerCase() === name)
+  const productId = plan.partId ?? plan.productId ?? plan.productID ?? plan.itemId ?? plan.inventoryId ?? plan.inventoryItemId ?? plan.inventoryItemDocId ?? plan.productDocId ?? plan.stockItemId ?? plan.skuId ?? (plan.product && typeof plan.product === 'object' ? (plan.product.id ?? plan.product.partId ?? plan.product.productId ?? plan.product.itemId) : null);
+  const id = productId == null ? '' : String(productId).trim();
+  const name = normItemName(turfRecordProductName(plan));
+  return S.inventory.find(i => id && (String(i.id) === id || String(i.partId || '') === id))
+    || S.inventory.find(i => name && normItemName(itemName(i)) === name)
+    || S.inventory.find(i => name && normItemName(i.partName) === name)
+    || S.inventory.find(i => name && normItemName(i.name) === name)
+    || S.inventory.find(i => name && normItemName(i.itemName) === name)
     || null;
 }
+
 function turfPlanCategory(plan) {
   const product = turfProductForPlan(plan);
   const fromPlan = plan && (plan.category ?? plan.productCategory ?? plan.itemCategory ?? plan.materialCategory ?? plan.productType ?? plan.itemType ?? plan.fertilizerType ?? plan.product?.category ?? plan.type);
