@@ -561,7 +561,9 @@ $("#loginForm").addEventListener("submit", async e => {
   sendBtn.disabled = true;
   try {
     if (sendingOtp) {
-      const phone = $("#loginPhone").value.trim().replace(/[\s()-]/g, "");
+      let phone = $("#loginPhone").value.trim().replace(/[\s()-]/g, "");
+      if (/^\d{10}$/.test(phone)) phone = "+91" + phone;
+      else if (/^91\d{10}$/.test(phone)) phone = "+" + phone;
       if (!/^\+[1-9]\d{7,14}$/.test(phone)) {
         throw new Error("Enter your phone number in international format, including country code (for example, +91XXXXXXXXXX).");
       }
@@ -613,6 +615,9 @@ $("#loginOtp").addEventListener("input", () => {
 });
 $("#changePhone").addEventListener("click", () => {
   confirmationResult = null;
+  try { recaptchaVerifier?.clear(); } catch (_) {}
+  recaptchaVerifier = null;
+  $("#recaptcha-container").replaceChildren();
   $("#loginOtp").value = "";
   $("#loginPhone").readOnly = false;
   $("#loginPhoneStep").hidden = false;
