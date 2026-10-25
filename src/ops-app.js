@@ -4,7 +4,7 @@ import { getAuth, onAuthStateChanged, signInWithPhoneNumber, RecaptchaVerifier, 
 import { initializeAppCheck, ReCaptchaEnterpriseProvider } from "https://www.gstatic.com/firebasejs/12.19.0/firebase-app-check.js";
 import { createFnbModule } from "./modules/fnb/fnb-module.js";
 import { ROLE_PERMISSIONS, ROLE_LABELS, canRole, permissionForAction, permissionForView, permissionForCollection } from "./modules/rbac.js";
-import { $, $ as qsa, esc, num, fmt, money, pad, ymd, today, addDays, monthStart, MON, dShort, dLong, fmtHrs, sum, tsMs, timeOf, ago, normDate, daysBetween, setHTML } from "./modules/core/formatters.js";
+import { $, $$ as qsa, esc, num, fmt, money, pad, ymd, today, addDays, monthStart, MON, dShort, dLong, fmtHrs, sum, tsMs, timeOf, ago, normDate, daysBetween, setHTML } from "./modules/core/formatters.js";
 import { createUIPrimitivesModule } from "./modules/ui/ui-primitives.js";
 import { createChartModule } from "./modules/ui/charts.js";
 import { createWeatherModule } from "./modules/weather/weather-module.js";
