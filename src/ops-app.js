@@ -2202,12 +2202,13 @@ $("#loginForm").addEventListener("submit", async e => {
   e.preventDefault();
   const error = $("#loginErr");
   const sendBtn = $("#loginSubmit");
+  const sendingOtp = !confirmationResult;
   error.textContent = "";
   sendBtn.disabled = true;
   try {
-    if (!confirmationResult) {
-      const phone = $("#loginPhone").value.trim().replace(/[\s()-]/g, "");
-      if (!/^\+[1-9]\d{7,14}$/.test(phone)) {
+    if (sendingOtp) {
+      const phone = $("#loginPhone").value.trim().replace(/[\\s()-]/g, "");
+      if (!/^\\+[1-9]\\d{7,14}$/.test(phone)) {
         throw new Error("Enter your phone number in international format, including country code (for example, +91XXXXXXXXXX).");
       }
       if (!recaptchaVerifier) {
@@ -2221,11 +2222,22 @@ $("#loginForm").addEventListener("submit", async e => {
       error.textContent = "OTP sent. Check your phone and enter the code.";
     } else {
       const code = $("#loginOtp").value.trim();
-      if (!/^\d{6}$/.test(code)) throw new Error("Enter the 6-digit OTP.");
+      if (!/^\\d{6}$/.test(code)) throw new Error("Enter the 6-digit OTP.");
       await confirmationResult.confirm(code);
     }
   } catch (err) {
     console.error("Phone OTP sign-in failed", err);
+    // Preserve the pending confirmation after a wrong OTP, but reset expired/failed
+    // reCAPTCHA state after an SMS-send failure so the user can retry cleanly.
+    if (sendingOtp) {
+      confirmationResult = null;
+      try { recaptchaVerifier?.clear(); } catch (_) {}
+      recaptchaVerifier = null;
+      $("#loginPhone").readOnly = false;
+      $("#otpField").hidden = true;
+      $("#loginOtp").value = "";
+      $("#loginSubmit").textContent = "Send OTP";
+    }
     error.textContent = err.message || "Could not complete phone verification. Check Firebase Phone sign-in and authorized domains.";
   } finally {
     sendBtn.disabled = false;
