@@ -1136,7 +1136,7 @@ function drawerFuel(id) {
 /* ================= FUEL MODAL (KPI drill-down) ================= */
 
 /* UNIFIED OPERATIONAL ANALYTICS — read-only views over existing collections */
-const OA = { domain:'overview', view:'daily', from:addDays(today(),-29), to:today() };
+const OA = { domain:'overview', view:'daily', from:addDays(today(),-29), to:today(), drill:{kind:'',key:''} };
 const OA_VIEWS = {
   overview:[['daily','Operations by day']],
   fuel:[['daily','Daily fuel'],['machine','By machine'],['machine-day','Machine × day'],['transactions','Fuel ledger']],
@@ -1144,7 +1144,7 @@ const OA_VIEWS = {
 };
 function openOpsAnalytics(domain) {
   OA.domain=['overview','fuel','turf'].includes(domain)?domain:'overview';
-  OA.view='daily'; OA.from=addDays(today(),-29); OA.to=today();
+  OA.view='daily'; OA.from=addDays(today(),-29); OA.to=today(); OA.drill={kind:'',key:''};
   curModalRender=renderOpsAnalytics;
   openModal({title:'Operational Analytics & Ledgers',sub:'Shared date filters · machine usage · turf treatments · item-level reconciliation',size:'ops-analytics-modal',body:'<div id="opsAnalyticsRoot"></div>',footer:'<button class="btn" data-act="export-ops-analytics"><span class="material-symbols-rounded">download</span>Export report</button><button class="btn btn-primary" data-act="close-modal">Close</button>'});
   renderOpsAnalytics();
@@ -1161,6 +1161,7 @@ function oaSetRange(preset) {
 }
 function oaApplyDate(which,value) {
   if(!value)return;
+  OA.drill={kind:'',key:''};
   if(which==='from')OA.from=value;else OA.to=value;
   if(OA.from>OA.to){if(which==='from')OA.to=OA.from;else OA.from=OA.to;}
   const span=Math.floor((new Date(OA.to+'T12:00:00')-new Date(OA.from+'T12:00:00'))/86400000)+1;
