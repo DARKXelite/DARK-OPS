@@ -2281,6 +2281,7 @@ const APP_CONTEXT = {
   permissionForView,
   previewInward,
   query,
+  qsa,
   radarFitted,
   radarMap,
   raf,
