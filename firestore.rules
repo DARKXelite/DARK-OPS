@@ -269,7 +269,8 @@ service cloud.firestore {
       allow create: if fnbTeam() && validFnbOrderCreate();
       // Receipt updates may change only receipt balance, status, and server timestamp.
       allow update: if fnbTeam() && validFnbReceiptOrderUpdate(id);
-      allow delete: if manager();
+      // Preserve order history once any receipt has been posted.
+      allow delete: if manager() && !resource.data.keys().hasAny(['lastReceiptId']);
     }
     match /fnb_receipts/{id} {
       allow read: if fnbTeam();
