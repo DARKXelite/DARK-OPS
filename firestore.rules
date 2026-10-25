@@ -7,7 +7,7 @@ service cloud.firestore {
     function hasRole(allowed) {
       return signedIn()
         && exists(/databases/$(database)/documents/app_roles/$(request.auth.uid))
-        && get(/databases/$(database)/documents/app_roles/$(request.auth.uid)).data.active != false
+        && get(/databases/$(database)/documents/app_roles/$(request.auth.uid)).data.active == true
         && get(/databases/$(database)/documents/app_roles/$(request.auth.uid)).data.role in allowed;
     }
     function admin() { return hasRole(['admin']); }
