@@ -6,9 +6,11 @@ const read = path => readFile(new URL(path, import.meta.url), "utf8");
 
 test("command palette uses data attributes, not executable inline handlers", async () => {
   const js = await read("../src/ops-app.js");
-  const start = js.indexOf("function renderCmd(q) {");
-  assert.notEqual(start, -1, "active command-palette renderer must exist");
-  const renderer = js.slice(start);
+  const palette = await read("../src/modules/app/command-palette.js");
+  assert.match(js, /createCommandPaletteModule/);
+  const start = palette.indexOf("function renderCmd(q) {");
+  assert.notEqual(start, -1, "command-palette renderer must exist in its module");
+  const renderer = palette.slice(start);
   assert.doesNotMatch(renderer, /onclick\s*=/i, "generated result buttons must not compile record data as JavaScript");
   assert.match(renderer, /data-cmd-view=/, "results should describe actions as data");
   assert.match(renderer, /addEventListener\("click"/, "actions should be handled through a registered event listener");
