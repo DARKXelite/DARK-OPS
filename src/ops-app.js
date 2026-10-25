@@ -2112,7 +2112,7 @@ const H = {
   'oa-drill': d => { OA.drill = { kind:d.kind || '', key:d.key || '' }; renderOpsAnalytics(); },
   'oa-clear-drill': () => { OA.drill = { kind:'', key:'' }; renderOpsAnalytics(); },
   'export-ops-analytics': () => exportOpsAnalytics(),
-  'open-day-cost': d => openOpsAnalytics(d.domain === 'turf' ? 'turf' : 'fuel'),
+  'open-day-cost': d => d.domain === 'turf' ? openTurfCostAnalytics() : openDayCostLedger(d.domain),
   'export-day-cost': d => exportDayCostLedger(d.domain),
   'turf-cost-apply': () => renderTurfCostAnalytics($('#turfCostFrom')?.value, $('#turfCostTo')?.value),
   'turf-cost-preset': d => applyTurfCostPreset(d.range),
