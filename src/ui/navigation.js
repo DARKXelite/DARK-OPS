@@ -7,13 +7,15 @@ const VIEWS = {
   fuel: ["Fuel Ledger", "Fuel issues & cost control", "local_gas_station", "Store & Masters"],
   registry: ["Inventory Master", "Item master, receipts & stock", "database", "Store & Masters"],
   users: ["Users Master", "Workforce directory", "group", "Store & Masters"],
+  expenses: ["Local Expenses", "Out-of-pocket purchases & office reimbursement", "payments", "Store & Masters"],
+  incidents: ["Incident Tickets", "Open issues & repair status", "report", "Fleet Ops"],
   records: ["Maintenance & Records", "Service, assignments & history", "folder_managed", "Fleet Ops"],
   radar: ["Course Map", "Live fleet tracking & geofences", "my_location", "Fleet Ops"]
 };
 const NAV_GROUPS = {
-  fleetops: { label: "Fleet Ops", icon: "precision_manufacturing", view: "fleet", pages: [["fleet","Fleet"],["shifts","Run logs"],["records","Maintenance & records"],["radar","Course map"]] },
+  fleetops: { label: "Fleet Ops", icon: "precision_manufacturing", view: "fleet", pages: [["fleet","Fleet"],["shifts","Run logs"],["records","Maintenance & records"],["incidents","Incidents"],["radar","Course map"]] },
   turfops: { label: "Turf Ops", icon: "eco", view: "turfcare", pages: [] },
-  masters: { label: "Store & Masters", icon: "inventory_2", view: "fuel", pages: [["fuel","Fuel ledger"],["registry","Inventory"],["users","Users"]] }
+  masters: { label: "Store & Masters", icon: "inventory_2", view: "fuel", pages: [["fuel","Fuel ledger"],["registry","Inventory"],["expenses","Local expenses"],["users","Users"]] }
 };
 export function createNavigation({
   $, $$, state, liveNow, getCurrentView, setCurrentView, getModalRenderer,
