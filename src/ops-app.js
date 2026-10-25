@@ -2254,19 +2254,24 @@ $("#loginForm").addEventListener("submit", async e => {
   sendBtn.disabled = true;
   try {
     if (sendingOtp) {
-      const phone = $("#loginPhone").value.trim().replace(/[\s()-]/g, "");
+      let phone = $("#loginPhone").value.trim().replace(/[\s()-]/g, "");
+      if (/^\d{10}$/.test(phone)) phone = "+91" + phone;
+      else if (/^91\d{10}$/.test(phone)) phone = "+" + phone;
       if (!/^\+[1-9]\d{7,14}$/.test(phone)) {
         throw new Error("Enter your phone number in international format, including country code (for example, +91XXXXXXXXXX).");
       }
       if (!recaptchaVerifier) {
-        recaptchaVerifier = new RecaptchaVerifier(auth, "recaptcha-container", { size: "normal" });
+        recaptchaVerifier = new RecaptchaVerifier(auth, "recaptcha-container", { size: "invisible" });
       }
       confirmationResult = await signInWithPhoneNumber(auth, phone, recaptchaVerifier);
-      $("#otpField").hidden = false;
+      $("#loginPhoneStep").hidden = true;
+      $("#loginOtpStep").hidden = false;
+      $("#otpPhoneLabel").textContent = phone;
       $("#loginPhone").readOnly = true;
-      $("#loginSubmit").textContent = "Verify OTP";
+      $("#loginSubmit").querySelector("span:first-child").textContent = "Verify & continue";
+      $("#loginOtp").value = "";
       $("#loginOtp").focus();
-      error.textContent = "OTP sent. Check your phone and enter the code.";
+      error.textContent = "Code sent. Enter the six digits to verify automatically.";
     } else {
       const code = $("#loginOtp").value.trim();
       if (!/^\d{6}$/.test(code)) throw new Error("Enter the 6-digit OTP.");
@@ -2281,15 +2286,40 @@ $("#loginForm").addEventListener("submit", async e => {
       try { recaptchaVerifier?.clear(); } catch (_) {}
       recaptchaVerifier = null;
       $("#loginPhone").readOnly = false;
-      $("#otpField").hidden = true;
+      $("#loginPhoneStep").hidden = false;
+      $("#loginOtpStep").hidden = true;
       $("#loginOtp").value = "";
-      $("#loginSubmit").textContent = "Send OTP";
+      $("#loginSubmit").querySelector("span:first-child").textContent = "Send verification code";
     }
     error.textContent = err.message || "Could not complete phone verification. Check Firebase Phone sign-in and authorized domains.";
   } finally {
     sendBtn.disabled = false;
   }
 });
+
+// OTP autofill: submit verification as soon as the sixth digit arrives.
+$("#loginOtp").addEventListener("input", () => {
+  const input = $("#loginOtp");
+  const digits = input.value.replace(/\D/g, "").slice(0, 6);
+  if (input.value !== digits) input.value = digits;
+  if (digits.length === 6 && confirmationResult && !$("#loginSubmit").disabled) {
+    $("#loginForm").requestSubmit();
+  }
+});
+$("#changePhone").addEventListener("click", () => {
+  confirmationResult = null;
+  try { recaptchaVerifier?.clear(); } catch (_) {}
+  recaptchaVerifier = null;
+  $("#recaptcha-container").replaceChildren();
+  $("#loginOtp").value = "";
+  $("#loginPhone").readOnly = false;
+  $("#loginPhoneStep").hidden = false;
+  $("#loginOtpStep").hidden = true;
+  $("#loginSubmit").querySelector("span:first-child").textContent = "Send verification code";
+  $("#loginErr").textContent = "";
+  $("#loginPhone").focus();
+});
+
 $("#signoutBtn").addEventListener("click", async () => {
   try { await signOut(auth); } catch (err) { toast("Sign-out failed. Retry.", "err"); }
 });
