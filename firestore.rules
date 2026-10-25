@@ -59,6 +59,76 @@ service cloud.firestore {
           || (d.receivedQty == d.orderedQty && d.status == 'Received'));
     }
 
+    function validNormalInwardCreate() {
+      let d = request.resource.data;
+      return d.keys().hasOnly([
+          'itemId', 'itemName', 'category', 'unit', 'quantity', 'rate', 'gstPercent',
+          'taxableAmount', 'gstAmount', 'total', 'supplier', 'invoiceNumber',
+          'receiptDate', 'notes', 'createdAt', 'transactionType'
+        ])
+        && d.keys().hasAll([
+          'itemId', 'itemName', 'category', 'unit', 'quantity', 'rate', 'gstPercent',
+          'taxableAmount', 'gstAmount', 'total', 'supplier', 'invoiceNumber',
+          'receiptDate', 'notes', 'createdAt', 'transactionType'
+        ])
+        && d.transactionType == 'INWARD'
+        && d.itemId is string && d.itemId.size() > 0
+        && d.itemName is string && d.itemName.size() > 0 && d.itemName.size() <= 200
+        && d.category is string && d.category.size() <= 100
+        && d.unit is string && d.unit.size() > 0 && d.unit.size() <= 30
+        && d.quantity is number && d.quantity > 0
+        && d.rate is number && d.rate >= 0
+        && d.gstPercent is number && d.gstPercent >= 0 && d.gstPercent <= 100
+        && d.taxableAmount is number && d.taxableAmount >= 0
+        && d.gstAmount is number && d.gstAmount >= 0
+        && d.total is number && d.total >= 0
+        && d.supplier is string && d.supplier.size() <= 200
+        && d.invoiceNumber is string && d.invoiceNumber.size() <= 100
+        && d.receiptDate is string && d.receiptDate.size() == 10
+        && d.notes is string && d.notes.size() <= 1000
+        && d.createdAt == request.time;
+    }
+
+    function validFnbInwardCreate(id) {
+      let d = request.resource.data;
+      let receiptPath = /databases/$(database)/documents/fnb_receipts/$(d.fnbReceiptId);
+      return d.transactionType == 'FNB_RECEIPT'
+        && d.keys().hasOnly([
+          'itemId', 'itemName', 'category', 'fnbCategory', 'unit', 'quantity', 'rate',
+          'gstPercent', 'taxableAmount', 'gstAmount', 'total', 'supplier', 'invoiceNumber',
+          'receiptDate', 'notes', 'transactionType', 'fnbOrderId', 'fnbReceiptId', 'createdAt'
+        ])
+        && d.keys().hasAll([
+          'itemId', 'itemName', 'category', 'fnbCategory', 'unit', 'quantity', 'rate',
+          'gstPercent', 'taxableAmount', 'gstAmount', 'total', 'supplier', 'invoiceNumber',
+          'receiptDate', 'notes', 'transactionType', 'fnbOrderId', 'fnbReceiptId', 'createdAt'
+        ])
+        && d.itemId is string && d.itemId.size() > 0
+        && d.itemName is string && d.itemName.size() > 0 && d.itemName.size() <= 200
+        && d.category == 'F&B'
+        && d.fnbCategory is string && d.fnbCategory.size() <= 100
+        && d.unit is string && d.unit.size() > 0 && d.unit.size() <= 30
+        && d.quantity is number && d.quantity > 0
+        && d.rate is number && d.rate >= 0
+        && d.gstPercent == 0
+        && d.taxableAmount is number && d.taxableAmount >= 0
+        && d.gstAmount == 0
+        && d.total is number && d.total >= 0
+        && d.supplier is string && d.supplier.size() <= 200
+        && d.invoiceNumber is string && d.invoiceNumber.size() <= 150
+        && d.receiptDate is string && d.receiptDate.size() == 10
+        && d.notes is string && d.notes.size() <= 1000
+        && d.fnbOrderId is string && d.fnbOrderId.size() > 0
+        && d.fnbReceiptId is string && d.fnbReceiptId.size() > 0
+        && d.createdAt == request.time
+        && existsAfter(receiptPath)
+        && getAfter(receiptPath).data.inwardId == id
+        && getAfter(receiptPath).data.orderId == d.fnbOrderId
+        && getAfter(receiptPath).data.itemId == d.itemId
+        && getAfter(receiptPath).data.quantity == d.quantity
+        && getAfter(receiptPath).data.rate == d.rate;
+    }
+
     function validFnbReceiptCreate() {
       let d = request.resource.data;
       let orderPath = /databases/$(database)/documents/fnb_orders/$(d.orderId);
@@ -172,7 +242,13 @@ service cloud.firestore {
       allow delete: if manager();
     }
     match /store_inwards/{id} {
-      allow read, write: if storeTeam();
+      allow read: if storeTeam();
+      allow create: if storeTeam() && (validNormalInwardCreate() || validFnbInwardCreate(id));
+      // F&B receipts are linked ledger records and cannot be altered/deleted independently.
+      allow update: if storeTeam()
+        && resource.data.transactionType != 'FNB_RECEIPT'
+        && request.resource.data.transactionType != 'FNB_RECEIPT';
+      allow delete: if storeTeam() && resource.data.transactionType != 'FNB_RECEIPT';
     }
     match /local_expenses/{id} {
       allow read: if storeTeam();
