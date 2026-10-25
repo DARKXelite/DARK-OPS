@@ -38,7 +38,7 @@
 
 
 </head>
-<body>
+<body class="auth-locked">
 
 <!-- Full-screen PIN access gate -->
 <section id="pinGate" aria-label="Clover Greens Ops PIN login" hidden>
@@ -50,7 +50,7 @@
 </section>
 
 <!-- PHONE OTP LOGIN -->
-<div id="login" hidden>
+<div id="login">
   <form class="login-card" id="loginForm">
     <div class="brand" style="padding:0 0 18px"><div class="brand-mark"><span class="material-symbols-rounded">golf_course</span></div><div><b style="color:var(--text)">Clover Greens Ops</b><span class="s" style="color:var(--muted)">Secure phone verification</span></div></div>
     <div class="field"><label class="f" for="loginPhone">Phone number</label><input type="tel" id="loginPhone" required autocomplete="tel" inputmode="tel" placeholder="+91XXXXXXXXXX"></div>
