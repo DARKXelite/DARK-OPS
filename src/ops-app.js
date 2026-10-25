@@ -765,7 +765,7 @@ let tpState = { start: '', weeks: 1, days: [[],[],[],[],[],[],[]], activeDay: -1
 
 /* ================= AUTH + RBAC BOOT ================= */
 $('#dateChip').textContent = new Date().toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' });
-toggleDock(false); renderWeather(); loadWeather(); setInterval(loadWeather, 30 * 60 * 1000);
+toggleDock(false);
 
 const RBAC = {
   roles: ROLE_PERMISSIONS,
@@ -1288,16 +1288,20 @@ const APP_CONTEXT = {
   ymd,
   zoneForm,
 };
-expenseModule = createExpenseModule(APP_CONTEXT);
-storeUiModule = createStoreUiModule(APP_CONTEXT);
 uiModule = createUIPrimitivesModule(APP_CONTEXT);
 chartModule = createChartModule(APP_CONTEXT);
+turfDomainModule = createTurfDomainModule(APP_CONTEXT);
+storeUiModule = createStoreUiModule(APP_CONTEXT);
+expenseModule = createExpenseModule(APP_CONTEXT);
 weatherModule = createWeatherModule(APP_CONTEXT);
 reorderModule = createReorderIntelligenceModule(APP_CONTEXT);
 costModule = createCostAnalyticsModule(APP_CONTEXT);
 fleetModule = createFleetModule(APP_CONTEXT);
-
-turfDomainModule = createTurfDomainModule(APP_CONTEXT);
 overviewModule = createOverviewModule(APP_CONTEXT);
 mapModule = createCourseMapModule(APP_CONTEXT);
 turfModule = createTurfOperationsModule(APP_CONTEXT);
+
+// Start weather only after every injected module is initialized.
+renderWeather();
+loadWeather();
+setInterval(loadWeather, 30 * 60 * 1000);
