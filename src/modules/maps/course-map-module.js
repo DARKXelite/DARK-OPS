@@ -1,6 +1,6 @@
 /** Leaflet course boundary and live equipment radar module. */
 export function createCourseMapModule(deps) {
-  const { ATTR, CONFIG, S, TILE, ZCOL, addDoc, ago, collection, db, esc, fld, fmt, liveList, openForm, pad, setHTML, toast } = deps;
+  const { $, ATTR, CONFIG, S, TILE, ZCOL, addDoc, ago, collection, db, esc, fld, fmt, liveList, openForm, pad, setHTML, toast } = deps;
 let zoneMap = null, radarMap = null, drawn = null, drawCoords = [], zoneLayers = { zone: null, radar: null }, markers = {}, radarFitted = false;
 function courseZone() {
   return S.zones.find(z => (z.zoneType || '').toLowerCase() === 'course')
