@@ -4,7 +4,17 @@ import { getAuth, onAuthStateChanged, signInWithPhoneNumber, RecaptchaVerifier, 
 import { initializeAppCheck, ReCaptchaEnterpriseProvider } from "https://www.gstatic.com/firebasejs/12.19.0/firebase-app-check.js";
 import { createFnbModule } from "./modules/fnb/fnb-module.js";
 import { ROLE_PERMISSIONS, ROLE_LABELS, canRole, permissionForAction, permissionForView, permissionForCollection } from "./modules/rbac.js";
+import { $, $, esc, num, fmt, money, pad, ymd, today, addDays, monthStart, MON, dShort, dLong, fmtHrs, sum, tsMs, timeOf, ago, normDate, daysBetween, setHTML } from "./modules/core/formatters.js";
+import { createUIPrimitivesModule } from "./modules/ui/ui-primitives.js";
+import { createChartModule } from "./modules/ui/charts.js";
+import { createWeatherModule } from "./modules/weather/weather-module.js";
+import { createReorderIntelligenceModule } from "./modules/inventory/reorder-intelligence.js";
+import { createCostAnalyticsModule } from "./modules/cost/cost-analytics.js";
+import { createFleetModule } from "./modules/fleet/fleet-module.js";
 
+
+let uiModule = null, chartModule = null, weatherModule = null, reorderModule = null, costModule = null, fleetModule = null;
+function setCurModalRenderer(fn) { curModalRender = fn; }
 
 const FUEL_RATE = 92.50; // Legacy reference rate; operational costing is managed in the local cost model.
 /* ================= CONFIG ================= */
@@ -50,36 +60,6 @@ const db = getFirestore(app);
 const auth = getAuth(app);
 
 /* ================= HELPERS ================= */
-const $ = (s, r=document) => r.querySelector(s);
-const $$ = (s, r=document) => [...r.querySelectorAll(s)];
-const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-const num = v => { const n = parseFloat(v); return isFinite(n) ? n : 0; };
-const fmt = (n, d=1) => Number(n || 0).toLocaleString('en-IN', { maximumFractionDigits: d });
-const money = (n, d=0) => '₹' + Number(n || 0).toLocaleString('en-IN', { minimumFractionDigits: d, maximumFractionDigits: d === 0 ? 0 : 2 });
-const pad = n => String(n).padStart(2, '0');
-const ymd = d => `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
-const today = () => ymd(new Date());
-const addDays = (s, n) => { const d = new Date(s + 'T00:00:00'); d.setDate(d.getDate() + n); return ymd(d); };
-const monthStart = s => s.slice(0, 8) + '01';
-const MON = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-const dShort = s => s ? `${+s.slice(8,10)} ${MON[+s.slice(5,7)-1]}` : '';
-const dLong = s => s ? `${+s.slice(8,10)} ${MON[+s.slice(5,7)-1]} ${s.slice(0,4)}` : '—';
-const fmtHrs = h => { h = num(h); return `${Math.floor(h)}h ${pad(Math.round((h % 1) * 60) % 60)}m`; };
-const sum = (a, k) => a.reduce((t, x) => t + num(x[k]), 0);
-const tsMs = v => !v ? 0 : typeof v === 'number' ? (v < 1e12 ? v * 1000 : v) : v.toMillis ? v.toMillis() : (Date.parse(v) || 0);
-const timeOf = ms => ms ? new Date(ms).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }) : '';
-const ago = ms => { if (!ms) return 'just now'; const s = Math.max(0, (Date.now() - ms) / 1000); return s < 60 ? `${Math.round(s)}s ago` : s < 3600 ? `${Math.round(s/60)}m ago` : `${Math.round(s/3600)}h ago`; };
-function normDate(v, ts) {
-  if (typeof v === 'string') {
-    let m = v.match(/^(\d{4})-(\d{2})-(\d{2})/); if (m) return `${m[1]}-${m[2]}-${m[3]}`;
-    m = v.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})/); if (m) return `${m[3]}-${pad(m[2])}-${pad(m[1])}`;
-  } else if (v && v.toDate) return ymd(v.toDate());
-  else if (typeof v === 'number') return ymd(new Date(v < 1e12 ? v * 1000 : v));
-  const t = tsMs(ts); return t ? ymd(new Date(t)) : '';
-}
-function daysBetween(a, b) { const out = []; let d = a, n = 0; while (d <= b && n++ < 400) { out.push(d); d = addDays(d, 1); } return out; }
-function setHTML(el, html) { if (el && el._h !== html) { el.innerHTML = html; el._h = html; } }
-
 /* ================= STATE ================= */
 const S = { users: [], machines: [], fuel: [], shifts: [], zones: [], live: [], inventory: [], logs: [], maintenance: [], assignments: [], plans: [], inwards: [], expenses: [], fnbOrders: [], fnbReceipts: [], _v: 0 };
 const COST_DEFAULTS = { dieselRate: 92.50, petrolRate: 0, labourPerHour: 0, downtimePerHour: 0, savingsPct: 10, improvementCost: 0 };
@@ -139,7 +119,7 @@ function monthlyCostSnapshot() {
 }
 
 const LOADED = {};
-let cur = 'overview', curModalRender = null, W = null, Wfail = false;
+let cur = 'overview', curModalRender = null;
 const F = { q: '', cat: 'All', fuel: 'All', sort: 'service' };
 const R = {
   fuel:   { preset: 'today', from: today(), to: today() },
@@ -198,223 +178,24 @@ const liveNow = () => liveList().filter(l => !l._stale);
 function liveKeys() { const s = new Set(); liveNow().forEach(l => { s.add(l._name); s.add(l.id); if (l.machineId) s.add(l.machineId); }); return s; }
 
 /* ================= UI PRIMITIVES ================= */
-function toast(msg, type = 'ok') {
-  const t = document.createElement('div'); t.className = 'toast' + (type === 'err' ? ' err' : type === 'warn' ? ' warn' : '');
-  t.innerHTML = `<span class="material-symbols-rounded">${type === 'err' ? 'error' : type === 'warn' ? 'warning' : 'check_circle'}</span><span>${esc(msg)}</span>`;
-  $('#toasts').appendChild(t); setTimeout(() => { t.style.opacity = '0'; setTimeout(() => t.remove(), 250); }, type === 'err' ? 6000 : 3500);
-}
-function setConn(state) { document.documentElement.dataset.firebaseState = state || 'connecting'; const dot=$('#connDot'); if(dot) dot.className='dot '+state; const label=$('#connText'); if(label) label.textContent=state==='ok'?'Connected':state==='err'?'Connection error':'Connecting'; }
-function openModal({ title, sub = '', body = '', footer = '', size = '' }) {
-  $('#modal').className = 'modal ' + size; $('#modal').setAttribute('aria-label', title || 'Dialog'); $('#mTitle').textContent = title; $('#mSub').textContent = sub;
-  $('#mBody').innerHTML = body; $('#mBody')._h = null; $('#mFoot').innerHTML = footer; $('#mFoot').style.display = footer ? 'flex' : 'none';
-  $('#overlay').classList.add('open');
-}
-function closeModal() { $('#overlay').classList.remove('open'); curModalRender = null; }
-function openForm({ title, html, submit = 'Save', danger = false, onSubmit }) {
-  curModalRender = null;
-  openModal({ title, size: 'sm', body: html, footer: `<button class="btn" data-act="close-modal">Cancel</button><button class="btn ${danger ? 'btn-danger fill' : 'btn-primary'}" id="mSubmit">${esc(submit)}</button>` });
-  const btn = $('#mSubmit');
-  btn.onclick = async () => { btn.disabled = true; try { const ok = await onSubmit(); if (ok !== false) closeModal(); } catch (e) { console.error(e); toast(e.message || 'Something went wrong', 'err'); } btn.disabled = false; };
-  const first = $('#mBody input,#mBody select'); if (first) setTimeout(() => first.focus(), 30);
-}
-function confirmDelete(col, id, label) {
-  openForm({ title: 'Delete record', html: `<p style="margin:0">Permanently delete <b>${esc(label)}</b>? This cannot be undone.</p>`, submit: 'Delete', danger: true,
-    onSubmit: async () => { await deleteDoc(doc(db, CONFIG.COL[col] || col, id)); toast(`${label} deleted`); } });
-}
-function openDrawer(title, sub, body) { $('#dTitle').textContent = title; $('#dSub').textContent = sub; $('#dBody').innerHTML = body; $('#drawerOv').classList.add('open'); }
-function closeDrawer() { $('#drawerOv').classList.remove('open'); }
-function downloadCSV(name, rows) {
-  const csv = rows.map(r => r.map(c => `"${String(c ?? '').replace(/"/g, '""')}"`).join(',')).join('\n');
-  const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8' })); a.download = name;
-  document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 1500);
-}
+function toast(...args) { return uiModule.toast(...args); }
+function setConn(...args) { return uiModule.setConn(...args); }
+function openModal(...args) { return uiModule.openModal(...args); }
+function closeModal(...args) { return uiModule.closeModal(...args); }
+function openForm(...args) { return uiModule.openForm(...args); }
+function confirmDelete(...args) { return uiModule.confirmDelete(...args); }
+function openDrawer(...args) { return uiModule.openDrawer(...args); }
+function closeDrawer(...args) { return uiModule.closeDrawer(...args); }
+function downloadCSV(...args) { return uiModule.downloadCSV(...args); }
 const fld = (label, inner, hint = '') => `<div class="field"><label class="f">${label}</label>${inner}${hint ? `<div class="hint">${hint}</div>` : ''}</div>`;
 const machineOptions = (sel = '', blank = 'All machines') => `<option value="">${blank}</option>` + [...S.machines].sort((a, b) => (a.assetName || '').localeCompare(b.assetName || '')).map(m => `<option value="${esc(m.id)}" ${sel === m.id ? 'selected' : ''}>${esc(m.assetName)}</option>`).join('');
 
 /* ---- charts ---- */
-function barChart(items, { unit = '', h = 190 } = {}) {
-  if (!items.length) return '<div class="empty">No data in this range</div>';
-  const W_ = 640, pl = 38, pb = 26, pt = 16, pr = 8, max = Math.max(1, ...items.map(i => i.value)), n = items.length;
-  const bw = (W_ - pl - pr) / n, bar = Math.min(38, bw * 0.62), ph = h - pt - pb, step = Math.ceil(n / 12);
-  let g = '';
-  [0, .5, 1].forEach(f => { const y = h - pb - f * ph; g += `<line x1="${pl}" x2="${W_ - pr}" y1="${y}" y2="${y}" stroke="var(--border)" stroke-width="1"/><text x="${pl - 6}" y="${y + 4}" text-anchor="end" font-size="10.5" fill="var(--muted)">${fmt(max * f, max < 10 ? 1 : 0)}</text>`; });
-  items.forEach((it, i) => {
-    const x = pl + i * bw + (bw - bar) / 2, bh = it.value / max * ph, y = h - pb - bh;
-    g += `<rect x="${x}" y="${y}" width="${bar}" height="${Math.max(bh, it.value > 0 ? 2 : 0)}" rx="4" fill="var(--brand-2)" opacity=".92"><title>${esc(it.label)}: ${fmt(it.value, 1)} ${unit}</title></rect>`;
-    if (n <= 14 && it.value > 0) g += `<text x="${x + bar / 2}" y="${y - 4}" text-anchor="middle" font-size="10.5" font-weight="700" fill="var(--text)">${fmt(it.value, 1)}</text>`;
-    if (i % step === 0) g += `<text x="${x + bar / 2}" y="${h - 8}" text-anchor="middle" font-size="10.5" fill="var(--muted)">${esc(it.label)}</text>`;
-  });
-  return `<svg viewBox="0 0 ${W_} ${h}" width="100%" role="img" aria-label="Bar chart">${g}</svg>`;
-}
-function sparkline(vals) {
-  if (!vals.length) return '';
-  const w = 400, h = 56, max = Math.max(1, ...vals), st = w / Math.max(1, vals.length - 1);
-  const pts = vals.map((v, i) => `${(i * st).toFixed(1)},${(h - 4 - v / max * (h - 10)).toFixed(1)}`).join(' ');
-  return `<svg viewBox="0 0 ${w} ${h}" width="100%" height="56" preserveAspectRatio="none"><polyline points="${pts}" fill="none" stroke="var(--brand-2)" stroke-width="2.2" stroke-linejoin="round"/></svg>`;
-}
-
-/* ================= WEATHER ================= */
-function wxKind(c) {
-  if (c === 0) return 'clear'; if (c === 1 || c === 2) return 'partly'; if (c === 3) return 'cloud';
-  if (c === 45 || c === 48) return 'fog'; if (c >= 51 && c <= 57) return 'drizzle';
-  if ((c >= 61 && c <= 67) || (c >= 80 && c <= 82)) return 'rain'; if ((c >= 71 && c <= 77) || c === 85 || c === 86) return 'snow';
-  if (c >= 95) return 'storm'; return 'cloud';
-}
-const WX_LABEL = { clear: 'Clear sky', partly: 'Partly cloudy', cloud: 'Overcast', fog: 'Foggy', drizzle: 'Drizzle', rain: 'Rain', snow: 'Snow', storm: 'Thunderstorm' };
-function wxScene(kind, day, wind, temp, label) {
-  let h = '';
-  const stars = [[8,12],[22,40],[35,18],[48,52],[60,10],[72,34],[84,16],[92,48],[14,70],[66,66]].map(([l, t], i) => `<i style="left:${l}%;top:${t}px;animation-delay:${i * .4}s"></i>`).join('');
-  if (!day && (kind === 'clear' || kind === 'partly' || kind === 'cloud')) h += `<div class="stars">${stars}</div>`;
-  if (kind === 'clear' || kind === 'partly') h += day ? '<div class="sun"><i></i></div>' : '<div class="moon"></div>';
-  const nc = { clear: 0, partly: 2, cloud: 3, fog: 0, drizzle: 3, rain: 3, storm: 3, snow: 3 }[kind];
-  for (let i = 0; i < nc; i++) h += `<div class="cl" style="top:${22 + i * 20}px;left:${8 + i * 28}%;--d:${16 + i * 5}s;transform:scale(${1 - i * .12})"></div>`;
-  const nd = { drizzle: 14, rain: 34, storm: 46 }[kind] || 0;
-  for (let i = 0; i < nd; i++) h += `<div class="drop" style="left:${(i * 37 + 5) % 100}%;animation-delay:${(i * 0.17) % 0.9}s;animation-duration:${(0.55 + (i % 4) * .08)}s"></div>`;
-  if (kind === 'snow') for (let i = 0; i < 26; i++) h += `<div class="flake" style="left:${(i * 41 + 7) % 100}%;animation-delay:${(i * .31) % 4}s;animation-duration:${3 + (i % 4)}s"></div>`;
-  if (kind === 'storm') h += '<svg class="bolt" viewBox="0 0 34 70"><polygon points="20,0 2,40 15,40 8,70 32,26 18,26" fill="#FFE27A"/></svg>';
-  if (kind === 'fog') for (let i = 0; i < 4; i++) h += `<div class="fogbar" style="top:${30 + i * 28}px;animation-delay:${i * 1.3}s"></div>`;
-  if (wind >= 18) for (let i = 0; i < 4; i++) h += `<div class="wl" style="top:${24 + i * 30}px;animation-delay:${i * .6}s;animation-duration:${2.4 - Math.min(1.2, wind / 40)}s"></div>`;
-  return `<div class="wx-scene ${day ? 'day' : 'night'} k-${kind}">${h}<div class="wx-over"><div class="t">${temp}</div><div class="c">${esc(label)}</div></div></div>`;
-}
-function wxIcon(kind, day) {
-  const cloud = (fill = '#C5CED8') => `<g class="ico-drift"><path d="M9 24h13a5 5 0 0 0 .6-9.96A7 7 0 0 0 9.2 15.2 4.4 4.4 0 0 0 9 24z" fill="${fill}"/></g>`;
-  const sun = '<circle cx="16" cy="16" r="5.5" fill="#F7B500"/><g class="ico-rot" stroke="#F7B500" stroke-width="2" stroke-linecap="round"><path d="M16 3v3M16 26v3M3 16h3M26 16h3M6.8 6.8l2.1 2.1M23.1 23.1l2.1 2.1M6.8 25.2l2.1-2.1M23.1 8.9l2.1-2.1"/></g>';
-  const moon = '<path d="M21 6a10 10 0 1 0 5 17 8.5 8.5 0 0 1-5-17z" fill="#EFE8BE"/>';
-  let b = '';
-  if (kind === 'clear') b = day ? sun : moon;
-  else if (kind === 'partly') b = (day ? '<circle cx="12" cy="11" r="4.5" fill="#F7B500"/>' : '<path d="M14 4a7 7 0 1 0 4 12 6 6 0 0 1-4-12z" fill="#EFE8BE"/>') + cloud();
-  else if (kind === 'fog') b = '<g stroke="#AEB9C5" stroke-width="2.4" stroke-linecap="round"><path class="ico-drift" d="M6 11h20M4 17h22M8 23h18"/></g>';
-  else if (kind === 'snow') b = cloud() + '<g fill="#fff" stroke="#9db0c4" stroke-width=".6"><circle class="ico-drop" cx="11" cy="27" r="1.6"/><circle class="ico-drop" style="animation-delay:.4s" cx="17" cy="27" r="1.6"/><circle class="ico-drop" style="animation-delay:.7s" cx="23" cy="27" r="1.6"/></g>';
-  else if (kind === 'drizzle' || kind === 'rain') b = cloud('#9AA7B6') + `<g stroke="#4A90D9" stroke-width="2" stroke-linecap="round"><path class="ico-drop" d="M11 26v2"/><path class="ico-drop" style="animation-delay:.35s" d="M16 26v2"/><path class="ico-drop" style="animation-delay:.7s" d="M21 26v2"/></g>`;
-  else if (kind === 'storm') b = cloud('#6D7488') + '<polygon class="ico-flash" points="17,18 11,27 16,27 14,32 22,22 17,22" fill="#F7C531"/>';
-  else b = cloud();
-  return `<svg class="ico" viewBox="0 0 32 32" aria-hidden="true">${b}</svg>`;
-}
-function advisory(w) {
-  const k = wxKind(w.code);
-  if (k === 'storm') return { t: 'bad', m: 'Thunderstorm — pull machines and staff off the course', i: 'thunderstorm' };
-  if (k === 'rain' || k === 'drizzle' || w.precip > 0.4) return { t: 'warn', m: 'Rain — hold mowing and spraying', i: 'umbrella' };
-  if (w.wind >= CONFIG.WIND_LIMIT) return { t: 'warn', m: `Wind ${Math.round(w.wind)} km/h — avoid spraying`, i: 'air' };
-  if (w.temp >= 36) return { t: 'warn', m: 'High heat — schedule operators early morning', i: 'device_thermostat' };
-  return { t: 'ok', m: 'Conditions suitable for normal operations', i: 'check_circle' };
-}
-let wxSig = '', wxForecastNotificationSignature = '';
-const WX_RAIN_NOTIFIED_KEY = 'clover-greens-rain-notified-date-v1';
-let wxLastNotifiedDateMemory = '';
-function updateRainNotificationButton(){
-  const b=$('#wxEnableNotify'); if(!b)return;
-  const granted=typeof Notification!=='undefined'&&Notification.permission==='granted';
-  b.classList.toggle('enabled',granted);
-  b.innerHTML=`<span class="material-symbols-rounded">${granted?'notifications_active':'notifications'}</span><span>${granted?'Rain alerts enabled':'Enable rain alerts'}</span>`;
-  b.title=granted?'Rain alerts can appear while this dashboard is open.':'Allow browser notifications for rain signals in the next seven days.';
-}
-function maybeNotifyRainForecast(){
-  if(typeof Notification==='undefined'||Notification.permission!=='granted'||!W?.forecast)return;
-  const risk=wxRainDays().sort((a,b)=>a.index-b.index)[0]; if(!risk)return;
-  let last=''; try{last=localStorage.getItem(WX_RAIN_NOTIFIED_KEY)||'';}catch(_){/* storage may be blocked */}
-  if(last===risk.date||wxLastNotifiedDateMemory===risk.date)return;
-  const chance=Number.isFinite(risk.probability)?`${Math.round(risk.probability)}% chance of rain`:'rain is forecast';
-  const body=`${wxDayLabel(risk.date,risk.index)} (${dLong(risk.date)}): ${chance}, ${fmt(risk.precipitation,1)} mm expected. Check spraying and mowing plans.`;
-  try{
-    new Notification('Clover Greens · rain outlook',{body,tag:`clover-greens-rain-${risk.date}`,renotify:false});
-    wxLastNotifiedDateMemory=risk.date;
-    try{localStorage.setItem(WX_RAIN_NOTIFIED_KEY,risk.date);}catch(_){/* session notification still delivered */}
-  }catch(e){console.warn('Could not display rain notification:',e);}
-}
-async function enableRainNotifications(){
-  if(typeof Notification==='undefined'){toast('This browser does not support system notifications. The on-page rain alert remains available.','warn');return;}
-  if(!window.isSecureContext){toast('Browser rain notifications require the dashboard to be served over HTTPS. The on-page rain alert remains available.','warn');return;}
-  try{
-    const permission=Notification.permission==='granted'?'granted':await Notification.requestPermission();
-    updateRainNotificationButton();
-    if(permission!=='granted'){toast('Rain notifications were not enabled. The seven-day alert line will still update.','warn');return;}
-    toast('Rain notifications enabled while this dashboard is open.','ok');
-    maybeNotifyRainForecast();
-  }catch(e){toast('Could not enable rain notifications: '+(e.message||'permission unavailable'),'err');}
-}
-function wxDayLabel(date, idx) {
-  if (idx===0) return 'Today'; if (idx===1) return 'Tomorrow';
-  return new Date(date+'T12:00:00').toLocaleDateString('en-IN',{weekday:'short'});
-}
-function wxRainDays() {
-  const days=W && W.forecast && Array.isArray(W.forecast.days)?W.forecast.days:[];
-  return days.map((d,i)=>({...d,index:i})).filter(d=>(Number.isFinite(d.probability)&&d.probability>=45)||num(d.precipitation)>=1||['rain','drizzle','storm'].includes(wxKind(d.code)));
-}
-function renderRainNotice() {
-  const btn=$('#wxRainNotice'); if(!btn)return;
-  if(!W || !W.forecast){btn.className='wx-rain-notice calm';btn.innerHTML=`<span class="material-symbols-rounded">${Wfail?'cloud_off':'cloud_sync'}</span><span class="wx-rain-label">${Wfail?'Rain forecast unavailable':'Checking rain forecast…'}</span>`;return;}
-  const risk=wxRainDays().sort((a,b)=>a.index-b.index)[0];
-  if(risk){
-    const chance=Number.isFinite(risk.probability)?`${Math.round(risk.probability)}%`:`${fmt(risk.precipitation,1)} mm`;
-    btn.className='wx-rain-notice rain-risk';btn.title=`Rain signal ${risk.date}: probability ${Number.isFinite(risk.probability)?Math.round(risk.probability)+'%':'not available'}, expected precipitation ${fmt(risk.precipitation,1)} mm. Forecast model, not a rain gauge.`;
-    btn.innerHTML=`<span class="material-symbols-rounded">notifications_active</span><span class="wx-rain-label">Rain · ${esc(wxDayLabel(risk.date,risk.index))} · ${esc(chance)}</span>`;
-  } else {
-    btn.className='wx-rain-notice calm';btn.title='No significant rainfall signal in the current seven-day forecast.';
-    btn.innerHTML='<span class="material-symbols-rounded">notifications_none</span><span class="wx-rain-label">Low rain signal · 7 days</span>';
-  }
-}
-function renderWeather() {
-  renderRainNotice(); updateRainNotificationButton();
-  const widget=$('#wxWidget');
-  if (!W) {
-    $('#wxChip').innerHTML = `<span class="wx-text">${Wfail?'Weather unavailable':'Syncing weather…'}</span>`;
-    if(widget) widget.innerHTML=`<div class="wx-loading">${Wfail?'Weather service could not be reached. No conditions are fabricated.':'Fetching the course weather model…'}</div>`;
-    const strip=$('#wxForecastStrip'); if(strip)strip.innerHTML=`<div class="wx-loading">${Wfail?'Seven-day rain forecast unavailable.':'Forecast loading…'}</div>`;
-    const alert=$('#wxForecastAlert'); if(alert){alert.className='wx-forecast-alert clear';alert.innerHTML='<span class="material-symbols-rounded">cloud_off</span><span>Rain alerts are unavailable until a fresh forecast loads.</span>';}
-    return;
-  }
-  const forecastDays=W.forecast?.days||[];
-  const stamp=$('#wxSourceStamp');
-  if(stamp){const fetched=W.forecast?.fetchedAt;const when=fetched?new Date(fetched).toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'}):'time unknown';stamp.textContent=W.forecast?.stale?`Forecast stale · last successful update ${when}`:`Open-Meteo model · updated ${when}`;}
-  const sig=JSON.stringify([W.temp,W.hum,W.wind,W.code,W.day,W.precip,forecastDays.map(d=>[d.date,d.code,d.probability,d.precipitation])]);
-  const kind=wxKind(W.code), label=WX_LABEL[kind], a=advisory(W);
-  $('#wxChip').innerHTML=`${wxIcon(kind,W.day)}<span class="vdiv"></span><span class="wx-text">${Math.round(W.temp)}°C · ${esc(label)}</span><span class="wx-text wx-hum">${Math.round(W.hum)}% RH</span><span class="wx-text wx-wind">${Math.round(W.wind)} km/h</span>`;
-  if(sig!==wxSig){
-    wxSig=sig;
-    if(widget) widget.innerHTML=wxScene(kind,W.day,W.wind,Math.round(W.temp)+'°C',label)+
-      `<div class="wx-stats"><div><div class="k">Humidity</div><div class="v">${Math.round(W.hum)}%</div></div><div><div class="k">Wind</div><div class="v">${Math.round(W.wind)} km/h</div></div><div><div class="k">Precip now</div><div class="v">${fmt(W.precip,1)} mm</div></div></div>`+
-      `<div class="advice ${a.t}"><span class="material-symbols-rounded">${a.i}</span>${esc(a.m)}</div>`;
-    const strip=$('#wxForecastStrip');
-    if(strip) strip.innerHTML=forecastDays.length?forecastDays.slice(0,7).map((d,i)=>{
-      const k=wxKind(d.code), prob=Number.isFinite(d.probability)?Math.round(d.probability):null, rain=num(d.precipitation), risk=(prob!==null&&prob>=45)||rain>=1||['rain','drizzle','storm'].includes(k);
-      return `<article class="wx-day ${risk?'rain':''} ${i===0?'today':''}"><div class="wx-day-name">${esc(wxDayLabel(d.date,i))}</div><div class="wx-day-date">${esc(dShort(d.date))}</div>${wxIcon(k,true)}<div class="wx-day-temps">${Math.round(num(d.high))}° / ${Math.round(num(d.low))}°</div><div class="wx-day-rain"><span class="material-symbols-rounded">water_drop</span>${prob===null?'—':prob+'%'}</div><div class="wx-day-mm">${fmt(rain,1)} mm</div><div class="wx-rain-meter"><i style="width:${prob===null?0:Math.max(0,Math.min(100,prob))}%"></i></div></article>`;
-    }).join(''):'<div class="wx-loading">No daily forecast was returned.</div>';
-    const nearest=wxRainDays().sort((x,y)=>x.index-y.index)[0], alert=$('#wxForecastAlert');
-    if(alert){
-      if(nearest){const riskText=Number.isFinite(nearest.probability)?`${Math.round(nearest.probability)}% rain chance`:'rain is forecast';alert.className='wx-forecast-alert';alert.innerHTML=`<span class="material-symbols-rounded">notifications_active</span><span><b>Rain signal · ${esc(wxDayLabel(nearest.date,nearest.index))}, ${esc(dLong(nearest.date))}</b><br>${riskText}; expected precipitation ${fmt(nearest.precipitation,1)} mm. Consider rescheduling spraying and checking ground conditions before mowing.</span>`;}
-      else {alert.className='wx-forecast-alert clear';alert.innerHTML='<span class="material-symbols-rounded">notifications_none</span><span>No significant rain signal in this seven-day model forecast. Check again before time-sensitive spraying or course work.</span>';}
-    }
-  }
-  // Keep the notice current even if the current conditions stay the same.
-  renderRainNotice();
-  const nearest=wxRainDays().sort((a,b)=>a.index-b.index)[0];
-  const notifySig=nearest?nearest.date:'none';
-  if(nearest && wxForecastNotificationSignature && notifySig!==wxForecastNotificationSignature){
-    toast(`Updated rain forecast: ${wxDayLabel(nearest.date,nearest.index)} · ${Number.isFinite(nearest.probability)?Math.round(nearest.probability)+'% chance':fmt(nearest.precipitation,1)+' mm forecast'}`,'warn');
-  }
-  wxForecastNotificationSignature=notifySig;
-  maybeNotifyRainForecast();
-}
-async function loadWeather() {
-  try {
-    const endpoint=String(CONFIG.WEATHER_PROXY_URL||'').trim() || 'https://api.open-meteo.com/v1/forecast';
-    const q=`latitude=${CONFIG.LAT}&longitude=${CONFIG.LNG}&current=temperature_2m,relative_humidity_2m,wind_speed_10m,weather_code,is_day,precipitation&hourly=precipitation_probability,precipitation&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max,precipitation_sum,wind_speed_10m_max&forecast_days=7&wind_speed_unit=kmh&timezone=auto`;
-    const url=`${endpoint}${endpoint.includes('?')?'&':'?'}${q}`;
-    const controller=new AbortController(), timeout=setTimeout(()=>controller.abort(),12000);
-    let r; try { r=await fetch(url,{cache:'no-store',signal:controller.signal}); } finally { clearTimeout(timeout); }
-    if(!r.ok)throw new Error(`weather ${r.status}`);
-    const data=await r.json(); if(!data.current || !data.daily)throw new Error('incomplete forecast payload');
-    const c=data.current, d=data.daily;
-    const days=(d.time||[]).slice(0,7).map((date,i)=>({date,code:num(d.weather_code?.[i]),high:num(d.temperature_2m_max?.[i]),low:num(d.temperature_2m_min?.[i]),prob:Number.isFinite(d.precipitation_probability_max?.[i])?d.precipitation_probability_max[i]:null,precipitation:num(d.precipitation_sum?.[i]),windMax:num(d.wind_speed_10m_max?.[i])}));
-    W={temp:c.temperature_2m,hum:c.relative_humidity_2m,wind:c.wind_speed_10m,code:c.weather_code,day:c.is_day===1,precip:c.precipitation||0,forecast:{days,timezone:data.timezone||'auto',fetchedAt:Date.now(),stale:false}}; Wfail=false;
-  } catch(e) {
-    console.warn('Course weather forecast unavailable:',e);
-    Wfail=true;
-    if(W?.forecast) W.forecast.stale=true;
-  }
-  renderWeather();
-}
-
+function barChart(...args) { return chartModule.barChart(...args); }
+function sparkline(...args) { return chartModule.sparkline(...args); }
+function renderWeather(...args) { return weatherModule.renderWeather(...args); }
+function loadWeather(...args) { return weatherModule.loadWeather(...args); }
+function enableRainNotifications(...args) { return weatherModule.enableRainNotifications(...args); }
 /* ================= RANGE CONTROLS ================= */
 const PRESETS = [['today','Today'],['yesterday','Yesterday'],['last7','Last 7 days'],['month','This month'],['lastmonth','Last month'],['custom','Custom']];
 function setPreset(st, p) {
@@ -435,83 +216,11 @@ function deltaTxt(a, b, goodWhenDown = false) {
   if (!(b > 0)) return ''; const p = (a - b) / b * 100; if (Math.abs(p) < 1) return ' · same as yesterday';
   return ` · <span class="${p > 0 ? 'up' : 'down'}">${p > 0 ? '?' : '?'} ${fmt(Math.abs(p), 0)}%</span> vs yesterday`;
 }
-const AUTO_REORDER_POLICY = {
-  Fuel: { leadDays: 3, floor: 10 },
-  Fertilizers: { leadDays: 7, floor: 1 },
-  Pesticides: { leadDays: 7, floor: 1 },
-  'Turf Enhancements': { leadDays: 7, floor: 1 },
-  'Spare Parts': { leadDays: 14, floor: 1 },
-  Tools: { leadDays: 7, floor: 1 },
-  Other: { leadDays: 7, floor: 1 }
-};
-let _reorderIndexVersion = -1, _reorderUsageIndex = new Map(), _reorderDetailCache = new Map();
-const normItemName = value => String(value || '').trim().toLowerCase().replace(/\s+/g,' ');
-function resolveInventoryItem(id, name, preferredCategory='') {
-  if (id) { const byId=S.inventory.find(i=>i.id===String(id)); if(byId) return byId; }
-  const n=normItemName(name); if(!n) return null;
-  const candidates=S.inventory.filter(i=>normItemName(itemName(i))===n);
-  if(preferredCategory){ const preferred=candidates.find(i=>String(i.category||'').toLowerCase()===preferredCategory.toLowerCase()); if(preferred) return preferred; }
-  return candidates.length===1 ? candidates[0] : null;
-}
-function buildReorderUsageIndex() {
-  if (_reorderIndexVersion === S._v) return;
-  _reorderIndexVersion = S._v; _reorderUsageIndex = new Map(); _reorderDetailCache = new Map();
-  const push=(item,date,qty,meta={})=>{ if(!item || !date || !(qty>0)) return; const arr=_reorderUsageIndex.get(item.id)||[]; arr.push({date,qty,...meta}); _reorderUsageIndex.set(item.id,arr); };
-  // Fuel history is machine-aware and tied to exact Diesel/Petrol inventory masters.
-  (S.fuel||[]).forEach(f=>{
-    const date=fuelRecordDate(f), type=fuelTypeFromRecord(f), name=type==='Unspecified'?'':type;
-    const item=resolveInventoryItem(null,name,'Fuel');
-    const qty=Math.max(0,num(f.litres ?? f.quantity ?? f.qty ?? f.fuelLitres ?? f.fuelQuantity));
-    if(item) push(item,date,qty,{machine:f.machineName||mName(f.machineId)||'Unknown machine',source:'fuel'});
-  });
-  // Turf usage counts issued/applied entries, never still-planned work.
-  (S.plans||[]).forEach(p=>{
-    const status=turfRecordStatus(p); if(!['Issued','Applied'].includes(status)) return;
-    const date=turfRecordDate(p), item=turfProductForPlan(p) || resolveInventoryItem(p.productId ?? p.itemId ?? p.inventoryId,turfRecordProductName(p));
-    if(!item || !isTurfCategory(item.category)) return;
-    const qty=Math.max(0,turfRecordQuantity(p));
-    if(qty>0) push(item,date,qty,{source:'turf'});
-  });
-  // Parts consumption in maintenance/general logs, when these fields exist in the current schema.
-  [...(S.logs||[]),...(S.maintenance||[])].forEach(log=>{
-    const date=normDate(log.date ?? log.logDate ?? log.maintenanceDate ?? log.reportedDate,log.timestamp ?? log.createdAt ?? log.createdOn ?? log.updatedAt ?? log.completedAt);
-    const nested=log.partsConsumed ?? log.itemsConsumed ?? log.consumedItems ?? log.partsUsed ?? log.inventoryItems ?? [];
-    if(Array.isArray(nested)) nested.forEach(part=>{
-      const item=resolveInventoryItem(part.partId ?? part.itemId ?? part.productId ?? part.inventoryId ?? part.stockItemId, part.partName ?? part.itemName ?? part.productName ?? part.name);
-      const qty=Math.max(0,num(part.qty ?? part.quantity ?? part.usedQty ?? part.consumedQty ?? part.quantityUsed));
-      if(item && !isTurfCategory(item.category) && String(item.category||'').toLowerCase()!=='fuel') push(item,date,qty,{source:'parts'});
-    });
-    const directId=log.itemId ?? log.partId ?? log.productId ?? log.inventoryId;
-    if(directId){
-      const item=resolveInventoryItem(directId,log.itemName ?? log.partName ?? log.productName);
-      const qty=Math.max(0,num(log.quantityOut ?? log.issuedQty ?? log.qtyIssued ?? log.quantityUsed ?? log.qty ?? log.quantity));
-      if(item && !isTurfCategory(item.category) && String(item.category||'').toLowerCase()!=='fuel') push(item,date,qty,{source:'parts'});
-    }
-  });
-}
-function autoReorderDetails(item) {
-  buildReorderUsageIndex();
-  if(_reorderDetailCache.has(item.id)) return _reorderDetailCache.get(item.id);
-  const category=turfCategoryLabel(item.category)!=='Other'?turfCategoryLabel(item.category):String(item.category||'Other').trim();
-  const key=AUTO_REORDER_POLICY[category]?category:'Other', policy=AUTO_REORDER_POLICY[key];
-  const end=today(), start=addDays(end,-89), events=(_reorderUsageIndex.get(item.id)||[]).filter(e=>e.date>=start && e.date<=end);
-  const earliest=events.length?events.map(e=>e.date).sort()[0]:start;
-  const observedStart=earliest>start?earliest:start, observedDates=daysBetween(observedStart,end);
-  const daily=new Map(observedDates.map(d=>[d,0]));
-  events.forEach(e=>daily.set(e.date,(daily.get(e.date)||0)+e.qty));
-  const values=[...daily.values()], total=values.reduce((a,b)=>a+b,0), mean=total/Math.max(1,values.length);
-  const variance=values.reduce((a,v)=>a+Math.pow(v-mean,2),0)/Math.max(1,values.length), sd=Math.sqrt(variance);
-  const activeDays=new Set(events.map(e=>e.date)).size;
-  const reliable=events.length>=3 && activeDays>=3 && observedDates.length>=14;
-  const legacy=Math.max(0,num(item.reorderLevel));
-  const raw=reliable ? mean*policy.leadDays + 1.28*sd*Math.sqrt(policy.leadDays) : Math.max(legacy,policy.floor);
-  const unit=String(item.unit||item.uom||item.stockUnit||'').toLowerCase();
-  const integerUnit=/^(nos?|pieces?|pcs?|packs?|bags?|sets?|units?)$/.test(unit);
-  const level=reliable ? (integerUnit?Math.ceil(raw):Math.ceil(raw*10)/10) : Math.max(legacy,policy.floor);
-  const details={level,leadDays:policy.leadDays,meanDaily:mean,totalUsage:total,windowDays:observedDates.length,transactions:events.length,activeDays,reliable,method:reliable?`${observedDates.length}-day demand + safety buffer`:'Provisional floor',daysCover:mean>0?Math.max(0,num(item.stockQuantity))/mean:null,events};
-  _reorderDetailCache.set(item.id,details); return details;
-}
-function effectiveReorderLevel(item) { return autoReorderDetails(item).level; }
+const normItemName = (...args) => reorderModule.normItemName(...args);
+function resolveInventoryItem(...args) { return reorderModule.resolveInventoryItem(...args); }
+function buildReorderUsageIndex(...args) { return reorderModule.buildReorderUsageIndex(...args); }
+function autoReorderDetails(...args) { return reorderModule.autoReorderDetails(...args); }
+function effectiveReorderLevel(...args) { return reorderModule.effectiveReorderLevel(...args); }
 function renderOperationalIntelligence(t=today()) {
   const days=daysBetween(addDays(t,-29),t), fromWeek=addDays(t,-6), priorStart=addDays(t,-13), priorEnd=addDays(t,-7);
   const perMachineDay=new Map(), machineWeek=new Map(), hoursByMachineDay=new Map(), weekdayTotals=Array.from({length:7},()=>({litres:0,days:0}));
@@ -742,461 +451,39 @@ function renderOverview() {
   renderOperationalIntelligence(t);
   renderTurfAreaPlanDashboard(); // Keep the dashboard area summary in sync with the live plan collection.
 }
-const sortFuel = (a, b) => fuelRecordDate(b).localeCompare(fuelRecordDate(a)) || tsMs(b.timestamp ?? b.createdAt) - tsMs(a.timestamp ?? a.createdAt);
-
-/* Daily costs use transaction rates or Inventory Master unit costs only.
-   No local ROI assumptions or placeholder fuel prices are used here. */
-function fuelTypeForCost(f) {
-  return fuelTypeFromRecord(f);
-}
-function fuelMasterRate(type) {
-  if (!type || type === 'Unspecified') return { rate: 0, source: 'Fuel type unspecified' };
-  const sameName = S.inventory.filter(i => itemName(i).trim().toLowerCase() === type.toLowerCase());
-  const fuelItems = sameName.filter(i => String(i.category || '').trim().toLowerCase() === 'fuel');
-  const matches = fuelItems.length ? fuelItems : (sameName.length === 1 ? sameName : []);
-  if (matches.length !== 1) return { rate: 0, source: matches.length > 1 ? 'Duplicate fuel master item' : 'Fuel master rate missing' };
-  const rate = num(matches[0].unitCost);
-  return rate > 0 ? { rate, source: 'Inventory Master' } : { rate: 0, source: 'Fuel unit cost not set' };
-}
-function fuelCostLine(f) {
-  const qty = Math.max(0, num(f.litres ?? f.quantity ?? f.qty));
-  const transactionRate = num(f.ratePerLitre ?? f.fuelRate ?? f.unitPrice ?? f.pricePerLitre);
-  const fallback = transactionRate > 0 ? null : fuelMasterRate(fuelTypeForCost(f));
-  const rate = transactionRate > 0 ? transactionRate : (fallback ? fallback.rate : 0);
-  return { record: f, date: f._d || today(), time: timeOf(tsMs(f.timestamp)), name: f.machineName || mName(f.machineId) || 'Unassigned machine', category: fuelTypeForCost(f), qty, unit: 'L', rate, cost: rate > 0 ? qty * rate : null, source: transactionRate > 0 ? 'Transaction rate' : (fallback ? fallback.source : 'Transaction rate') };
-}
-function turfCostLine(p) {
-  const product = turfProductForPlan(p);
-  const category = turfPlanCategory(p);
-  const status = turfRecordStatus(p);
-  const stockUnit = String(product && (product.unit ?? product.stockUnit ?? product.uom ?? product.unitOfMeasure) || '').trim();
-  const unit = String(p.unit ?? p.stockUnit ?? p.uom ?? p.unitOfMeasure ?? stockUnit ?? '').trim();
-  const unitMatches = !!(unit && stockUnit && unit.toLowerCase() === stockUnit.toLowerCase());
-  const rate = product ? Math.max(0, num(product.unitCost ?? product.unitRate ?? product.costPerUnit ?? product.rate)) : 0;
-  const qty = Math.max(0, turfRecordQuantity(p));
-  const rateUsable = !!(product && rate > 0 && unitMatches);
-  const cost = ['Applied','Issued'].includes(status) && rateUsable ? qty * rate : null;
-  let source = !product ? 'Product not linked to Inventory Master' : !unitMatches ? 'Unit missing or mismatch' : rate <= 0 ? 'Product unit cost not set' : 'Inventory Master';
-  return { record: p, date: turfRecordDate(p), time: timeOf(tsMs(p.issuedAt ?? p.issueTimestamp ?? p.appliedAt ?? p.completedAt ?? p.timestamp ?? p.createdAt ?? p.createdTime)), name: turfRecordProductName(p) || (product ? itemName(product) : 'Unspecified product'), category, status, qty, unit: unit || stockUnit || 'Unit not set', rate, cost, source, countable: ['Applied','Issued'].includes(status) }; 
-}
-function dayFuelCostLines(day = today()) {
-  return fuelIn(day, day).slice().sort(sortFuel).map(fuelCostLine);
-}
-function dayMaintenanceCostLines(day = today()) {
-  return (S.maintenance || []).filter(r => {
-    const date = r.date || r.maintenanceDate || r.serviceDate || normDate(null, r.timestamp);
-    const raw = [r.totalCost, r.cost, r.amount, r.serviceCost].find(v => v !== undefined && v !== null && v !== '');
-    return date === day && raw !== undefined;
-  }).map(r => {
-    const raw = [r.totalCost, r.cost, r.amount, r.serviceCost].find(v => v !== undefined && v !== null && v !== '');
-    return { record:r, date:r.date || r.maintenanceDate || r.serviceDate || normDate(null, r.timestamp), time:timeOf(tsMs(r.timestamp)), name:r.machineName || mName(r.machineId) || 'Fleet maintenance', category:`Maintenance · ${r.type || 'Service'}`, qty:null, unit:'', rate:0, cost:Math.max(0,num(raw)), source:'Recorded maintenance cost', isMaintenance:true };
-  });
-}
-function dayFleetCostLines(day = today()) {
-  return [...dayFuelCostLines(day), ...dayMaintenanceCostLines(day)].sort((a,b) => (b.date || '').localeCompare(a.date || '') || tsMs(b.record.timestamp) - tsMs(a.record.timestamp));
-}
-function dayTurfCostLines(day = today()) {
-  return (S.plans || []).filter(p => turfRecordDate(p) === day && isTurfCategory(turfPlanCategory(p))).map(turfCostLine).sort((a,b) => tsMs(b.record.issuedAt ?? b.record.issueTimestamp ?? b.record.appliedAt ?? b.record.completedAt ?? b.record.timestamp ?? b.record.createdAt ?? b.record.createdTime) - tsMs(a.record.issuedAt ?? a.record.issueTimestamp ?? a.record.appliedAt ?? a.record.completedAt ?? a.record.timestamp ?? a.record.createdAt ?? a.record.createdTime));
-}
-function summariseCostLines(lines, countableOnly = false) {
-  const relevant = countableOnly ? lines.filter(x => x.countable) : lines;
-  const priced = relevant.filter(x => x.cost !== null && Number.isFinite(x.cost));
-  return { lines, relevant, priced, total: priced.reduce((sum, x) => sum + x.cost, 0), count: relevant.length, pricedCount: priced.length, unpricedCount: relevant.length - priced.length };
-}
-function turfDayProductValueRows(day = today()) {
-  const grouped = new Map();
-  dayTurfCostLines(day).filter(line => line.countable).forEach(line => {
-    const product = turfProductForPlan(line.record);
-    const identity = product?.id || `${String(line.name).trim().toLowerCase()}|${String(line.unit).trim().toLowerCase()}`;
-    const key = `${identity}|${String(line.unit).trim().toLowerCase()}`;
-    if (!grouped.has(key)) grouped.set(key, { name: line.name, category: line.category, unit: line.unit || 'unit not set', qty: 0, cost: 0, pricedQty: 0, unpricedQty: 0, count: 0 });
-    const row = grouped.get(key);
-    row.qty += Math.max(0, num(line.qty));
-    row.count += 1;
-    if (line.cost !== null && Number.isFinite(line.cost)) { row.cost += line.cost; row.pricedQty += Math.max(0, num(line.qty)); }
-    else row.unpricedQty += Math.max(0, num(line.qty));
-  });
-  return [...grouped.values()].map(row => ({ ...row, cost: row.pricedQty > 0 ? row.cost : null }))
-    .sort((a,b) => (b.cost === null ? -1 : b.cost) - (a.cost === null ? -1 : a.cost) || a.name.localeCompare(b.name));
-}
-
-function updateDayCostCards(day = today()) {
-  const fleet = summariseCostLines(dayFleetCostLines(day));
-  const turfLines = dayTurfCostLines(day);
-  const turf = summariseCostLines(turfLines, true);
-  const fleetValue = $('#opsFleetDayCostValue'), fleetMeta = $('#opsFleetDayCostMeta');
-  const turfValue = $('#opsTurfDayCostValue'), turfMeta = $('#opsTurfDayCostMeta');
-  if (fleetValue) fleetValue.textContent = fleet.count && !fleet.pricedCount ? '₹—' : money(fleet.total);
-  if (fleetMeta) fleetMeta.textContent = !fleet.count ? 'No fuel or maintenance costs recorded today' : `${fleet.pricedCount} cost line(s) priced · ${fleet.unpricedCount} fuel issue(s) unpriced`;
-  if (turfValue) turfValue.textContent = turf.count && !turf.pricedCount ? '₹—' : money(turf.total);
-  if (turfMeta) {
-    const plannedCount = turfLines.filter(x => x.status === 'Planned').length;
-    const issueCount = turfLines.filter(x => x.status === 'Issued').length;
-    turfMeta.textContent = !turf.count ? (plannedCount ? `${plannedCount} planned · no issues or applications recorded` : 'No turf issues or applications recorded today') : `${turf.pricedCount} priced · ${turf.unpricedCount} unpriced issue/application line(s)${issueCount ? ` · ${issueCount} issued` : ''}${plannedCount ? ` · ${plannedCount} planned` : ''}`;
-  }
-  const itemsTarget = $('#opsTurfDayCostItems');
-  if (itemsTarget) {
-    const rows = turfDayProductValueRows(day);
-    itemsTarget.innerHTML = !LOADED.plans
-      ? '<div class="ops-day-cost-item-empty">Loading issued product values…</div>'
-      : rows.length
-        ? rows.slice(0,4).map((row, idx) => `<div class="ops-day-cost-item"><span class="ops-day-cost-rank">${idx+1}</span><span class="ops-day-cost-product"><b title="${esc(row.name)}">${esc(row.name)}</b><small>${esc(row.category)} · ${fmt(row.qty,2)} ${esc(row.unit)}</small></span><span class="ops-day-cost-item-value ${row.cost === null ? 'unpriced' : ''}" title="${row.unpricedQty>0?'Partial value: some quantities have no compatible rate':'Value from matched Inventory Master unit cost'}">${row.cost === null ? 'Unpriced' : `${money(row.cost)}${row.unpricedQty>0?'*':''}`}</span></div>`).join('') + (rows.some(row=>row.unpricedQty>0 && row.cost!==null)?'<div class="ops-day-cost-more">* Partial value · some quantities are unpriced</div>':'') + (rows.length>4?`<div class="ops-day-cost-more">+ ${rows.length-4} more products · open analytics</div>`:'')
-        : '<div class="ops-day-cost-item-empty">No issued/applied products recorded today.</div>';
-  }
-}
-function openDayCostLedger(domain = 'fleet') {
-  const day = today(), dayLabel = dLong(day), isFleet = domain !== 'turf';
-  const summary = isFleet ? summariseCostLines(dayFleetCostLines(day)) : summariseCostLines(dayTurfCostLines(day), true);
-  const rows = isFleet ? summary.lines : summary.lines;
-  const bodyRows = rows.length ? rows.map(line => {
-    const costCell = line.cost !== null ? money(line.cost) : (line.status === 'Planned' ? 'Plan only' : 'Unpriced');
-    const status = line.isMaintenance ? '<span class="badge ok">Recorded cost</span>' : line.status ? `<span class="badge ${line.status === 'Applied' ? 'ok' : 'warn'}">${esc(line.status)}</span>` : '<span class="badge mute">Issued</span>';
-    const quantityCell = isFleet ? (line.isMaintenance ? '—' : `${fmt(line.qty,2)} L`) : `${fmt(line.qty,2)} ${esc(line.unit)}`;
-    return `<tr><td>${esc(line.time || '—')}</td><td><b>${esc(line.name)}</b><div class="record-meta">${esc(line.category)}</div></td><td class="num">${quantityCell}</td><td class="num">${line.rate > 0 ? money(line.rate,2) : '—'}</td><td class="num"><b>${esc(costCell)}</b></td><td>${isFleet ? `${status}<div class="record-meta">${esc(line.source)}</div>` : `${status}<div class="record-meta">${esc(line.source)}</div>`}</td></tr>`;
-  }).join('') : `<tr><td colspan="6" class="empty">No ${isFleet ? 'fuel issues' : 'turf application records'} for ${esc(dayLabel)}.</td></tr>`;
-  const pricedVolume = summary.priced.reduce((sum, line) => sum + (line.isMaintenance ? 0 : num(line.qty)), 0);
-  const title = isFleet ? 'Fleet Ops · Day Cost Ledger' : 'Turf Ops · Day Cost Ledger';
-  const caveat = isFleet
-    ? 'Includes fuel issues priced by transaction rate or matching Inventory Master unit cost, plus maintenance records with an explicit cost field. Unpriced fuel issues, labour and other overheads are excluded from the rupee total.'
-    : 'Only records marked Issued or Applied contribute to the total. Cost is estimated from the recorded issue/application quantity × Inventory Master unit cost. Planned-only entries are excluded. Missing or mismatched units remain unpriced.';
-  const head = `<div class="day-ledger-summary"><div><span>RECORDED COST · ${esc(dayLabel.toUpperCase())}</span><b>${summary.count && !summary.pricedCount ? '₹—' : money(summary.total)}</b><small>${summary.pricedCount} priced line(s) · ${summary.unpricedCount} unpriced line(s)${isFleet ? ` · ${fmt(pricedVolume,2)} L priced` : ''}</small></div><div class="day-ledger-meta"><span>${summary.count} cost line(s)</span><span>${isFleet ? 'Fuel issues' : 'Applied turf products'}</span></div></div>`;
-  openModal({ title, sub: 'Daily cost entries · live records', body: `${head}<div class="table-wrap"><table><thead><tr><th>Time</th><th>${isFleet ? 'Machine / fuel type' : 'Product / category'}</th><th class="num">${isFleet ? 'Quantity' : 'Applied qty'}</th><th class="num">Rate</th><th class="num">Cost</th><th>${isFleet ? 'Rate source' : 'Status / rate source'}</th></tr></thead><tbody>${bodyRows}</tbody><tfoot><tr><td colspan="4">Priced total</td><td class="num">${summary.count && !summary.pricedCount ? '₹—' : money(summary.total)}</td><td></td></tr></tfoot></table></div><p class="day-ledger-note">${esc(caveat)}</p>`, footer: `<button class="btn" data-act="export-day-cost" data-domain="${isFleet ? 'fleet' : 'turf'}"><span class="material-symbols-rounded">download</span>Export CSV</button><button class="btn btn-primary" data-act="close-modal">Close</button>` });
-}
-function exportDayCostLedger(domain = 'fleet') {
-  const day = today(), isFleet = domain !== 'turf';
-  const lines = isFleet ? dayFleetCostLines(day) : dayTurfCostLines(day);
-  const header = isFleet ? ['Date','Time','Machine','Fuel type','Litres','Rate per litre','Recorded cost','Rate source'] : ['Date','Time','Category','Product','Status','Quantity','Unit','Unit rate','Recorded cost','Cost source'];
-  const rows = lines.map(line => isFleet
-    ? [line.date,line.time,line.name,line.category,line.qty,line.rate || '',line.cost === null ? '' : line.cost,line.source]
-    : [line.date,line.time,line.category,line.name,line.status,line.qty,line.unit,line.rate || '',line.cost === null ? '' : line.cost,line.source]);
-  downloadCSV(`${isFleet ? 'fleet' : 'turf'}_day_cost_${day}.csv`, [header, ...rows]);
-}
-
-function buildTurfCostAnalytics(from, to) {
-  const allRows = (S.plans || []).filter(p => {
-    const date = turfRecordDate(p);
-    return date && date >= from && date <= to && isTurfCategory(turfPlanCategory(p)) && ['Issued','Applied'].includes(turfRecordStatus(p));
-  }).map(turfCostLine).sort((a,b) => (b.cost ?? -1) - (a.cost ?? -1) || b.date.localeCompare(a.date) || a.name.localeCompare(b.name));
-  const priced = allRows.filter(row => row.cost !== null && Number.isFinite(row.cost));
-  const unpriced = allRows.filter(row => row.cost === null);
-  const total = priced.reduce((sum,row)=>sum+row.cost,0);
-  const productMap = new Map();
-  allRows.forEach(row => {
-    const product = turfProductForPlan(row.record);
-    const key = `${product?.id || String(row.name).trim().toLowerCase()}|${String(row.unit).toLowerCase()}`;
-    if (!productMap.has(key)) productMap.set(key,{name:row.name,category:row.category,unit:row.unit,qty:0,value:0,hasPriced:false,records:0,unpriced:0});
-    const productRow=productMap.get(key); productRow.qty+=Math.max(0,num(row.qty)); productRow.records++;
-    if(row.cost!==null){productRow.value+=row.cost;productRow.hasPriced=true;}else productRow.unpriced++;
-  });
-  const products=[...productMap.values()].map(row=>({...row,value:row.hasPriced?row.value:null})).sort((a,b)=>(b.value===null?-1:b.value)-(a.value===null?-1:a.value)||a.name.localeCompare(b.name));
-  const startMs=new Date(from+'T00:00:00').getTime(), endMs=new Date(to+'T00:00:00').getTime();
-  const spanDays=Math.max(1,Math.floor((endMs-startMs)/86400000)+1);
-  const bucketSize=Math.max(1,Math.ceil(spanDays/28));
-  const buckets=[];
-  for(let offset=0;offset<spanDays;offset+=bucketSize){
-    const bucketFrom=addDays(from,offset),bucketTo=addDays(from,Math.min(spanDays-1,offset+bucketSize-1));
-    buckets.push({from:bucketFrom,to:bucketTo,label:bucketSize===1?dShort(bucketFrom):`${dShort(bucketFrom)}–${dShort(bucketTo)}`,value:0});
-  }
-  priced.forEach(row=>{const offset=Math.max(0,Math.floor((new Date(row.date+'T00:00:00').getTime()-startMs)/86400000));const idx=Math.min(buckets.length-1,Math.floor(offset/bucketSize));if(idx>=0&&buckets[idx])buckets[idx].value+=row.cost;});
-  const productsChart=products.filter(row=>row.value!==null).slice(0,8).map(row=>({label:row.name.length>17?row.name.slice(0,16)+'…':row.name,value:row.value}));
-  const linesHtml=allRows.length?allRows.map(row=>`<tr><td>${esc(row.date)}</td><td><span class="badge ${turfCategoryClass(row.category)}">${esc(row.category)}</span></td><td><b>${esc(row.name)}</b></td><td><span class="badge ${row.status==='Applied'?'ok':'gold'}">${esc(row.status)}</span></td><td class="num">${fmt(row.qty,3)} ${esc(row.unit)}</td><td class="num">${row.rate>0?`${money(row.rate,2)} / ${esc(row.unit)}`:'—'}</td><td class="num"><b>${row.cost===null?'Unpriced':money(row.cost)}</b></td><td>${esc(row.source)}</td></tr>`).join(''):'<tr><td colspan="8" class="empty">No issued/applied turf-product records in this date range.</td></tr>';
-  return `<div class="turf-cost-analytics-results">
-    <div class="turf-cost-summary-grid">
-      <div class="turf-cost-summary primary"><small>PRICED ISSUE / APPLICATION VALUE</small><b>${allRows.length&&!priced.length?'₹—':money(total)}</b><span>Inventory rate × logged issue/application quantity</span></div>
-      <div class="turf-cost-summary"><small>ISSUED / APPLIED RECORDS</small><b>${fmt(allRows.length,0)}</b><span>Recorded status; physical use not independently verified</span></div>
-      <div class="turf-cost-summary"><small>UNPRICED RECORDS</small><b>${fmt(unpriced.length,0)}</b><span>Missing product link, unit match, or inventory rate</span></div>
-      <div class="turf-cost-summary"><small>PRODUCT / UNIT LINES</small><b>${fmt(products.length,0)}</b><span>Different stock units kept separate</span></div>
-    </div>
-    <div class="turf-cost-chart-grid">
-      <section class="turf-cost-panel"><div class="turf-cost-panel-head"><div><small>SPEND TREND</small><h3>Recorded value over time</h3></div><span>${bucketSize===1?'Daily':bucketSize<8?'Weekly buckets':'Range buckets'}</span></div>${priced.length?barChart(buckets,{unit:'₹',h:210}):'<div class="turf-cost-chart-empty">No priced issue/application value in this range.</div>'}</section>
-      <section class="turf-cost-panel"><div class="turf-cost-panel-head"><div><small>PRODUCT MIX</small><h3>Highest recorded value</h3></div><span>Top 8</span></div>${productsChart.length?barChart(productsChart,{unit:'₹',h:210}):'<div class="turf-cost-chart-empty">No products have a reliable cost in this range.</div>'}</section>
-    </div>
-    <section class="turf-cost-panel turf-cost-detail-panel"><div class="turf-cost-panel-head"><div><small>ERP DETAIL REGISTER</small><h3>Issued line items</h3></div><span>${fmt(allRows.length,0)} lines · value descending</span></div><div class="table-wrap"><table class="turf-cost-table"><thead><tr><th>Date</th><th>Category</th><th>Product</th><th>Status</th><th class="num">Quantity</th><th class="num">Unit rate</th><th class="num">Recorded value</th><th>Cost basis</th></tr></thead><tbody>${linesHtml}</tbody></table></div>
-    <p class="turf-cost-caveat">Cost is an estimate from the linked Inventory Master unit cost. A value is calculated only when the product link and unit match and a positive unit cost exists. Planned-only records are excluded; unpriced rows are kept visible instead of being treated as ₹0.</p></section>
-  </div>`;
-}
-function renderTurfCostAnalytics(from, to) {
-  const fromInput=$('#turfCostFrom'),toInput=$('#turfCostTo');
-  if(!fromInput||!toInput)return;
-  if(!from||!to)return;
-  if(from>to){const swap=from;from=to;to=swap;fromInput.value=from;toInput.value=to;}
-  const results=$('#turfCostAnalyticsResults');
-  if(results) results.innerHTML=buildTurfCostAnalytics(from,to);
-}
-function openTurfCostAnalytics() {
-  const to=today(),from=monthStart(to);
-  openModal({title:'Turf Ops · Cost Analytics',sub:'Issued product cost · date-filtered ERP register',size:'turf-cost-analytics',body:`
-    <div class="turf-cost-filterbar"><div class="turf-cost-dates"><label>From<input id="turfCostFrom" type="date" value="${from}" max="${to}"></label><label>To<input id="turfCostTo" type="date" value="${to}" max="${to}"></label><button class="btn btn-primary" data-act="turf-cost-apply"><span class="material-symbols-rounded">filter_alt</span>Apply range</button></div><div class="turf-cost-presets"><button class="chip" data-act="turf-cost-preset" data-range="7d">7 days</button><button class="chip" data-act="turf-cost-preset" data-range="30d">30 days</button><button class="chip on" data-act="turf-cost-preset" data-range="mtd">Month to date</button></div></div>
-    <div id="turfCostAnalyticsResults">${buildTurfCostAnalytics(from,to)}</div>`,footer:`<button class="btn" data-act="export-turf-cost-range"><span class="material-symbols-rounded">download</span>Export CSV</button><button class="btn btn-primary" data-act="close-modal">Close</button>`});
-}
-function applyTurfCostPreset(range) {
-  const to=today();
-  const from=range==='7d'?addDays(to,-6):range==='30d'?addDays(to,-29):monthStart(to);
-  const fromInput=$('#turfCostFrom'),toInput=$('#turfCostTo');
-  if(fromInput)fromInput.value=from;if(toInput)toInput.value=to;
-  $$('.turf-cost-presets .chip').forEach(btn=>btn.classList.toggle('on',btn.dataset.range===range));
-  renderTurfCostAnalytics(from,to);
-}
-function exportTurfCostRange() {
-  const from=$('#turfCostFrom')?.value,to=$('#turfCostTo')?.value;
-  if(!from||!to){toast('Choose a valid date range first','err');return;}
-  const low=from<=to?from:to,high=from<=to?to:from;
-  const lines=(S.plans||[]).filter(p=>{const date=turfRecordDate(p);return date&&date>=low&&date<=high&&isTurfCategory(turfPlanCategory(p))&&['Issued','Applied'].includes(turfRecordStatus(p));}).map(turfCostLine).sort((a,b)=>(b.cost??-1)-(a.cost??-1));
-  downloadCSV(`turf_cost_analytics_${low}_to_${high}.csv`,[['Date','Category','Product','Status','Quantity','Unit','Unit Rate','Recorded Value','Cost Basis'],...lines.map(row=>[row.date,row.category,row.name,row.status,row.qty,row.unit,row.rate||'',row.cost===null?'':row.cost,row.source])]);
-}
-
-function openCostModel() {
-  openForm({ title:'Operating cost model', submit:'Save assumptions', html:
-    `<div class="roi-card-intro" style="margin-bottom:14px">These rates affect dashboard estimates in this browser only. A transaction-level rate saved on a fuel record takes priority. Without a rate, that volume is marked unpriced; historical entries are not modified.</div>` +
-    `<div class="row2">${fld('Diesel price · ₹ / L', `<input id="costDiesel" type="number" min="0" step="0.01" value="${num(COST.dieselRate)}">`, 'Prototype default: ₹92.50/L. Verify against your supplier invoice.')}${fld('Petrol price · ₹ / L', `<input id="costPetrol" type="number" min="0" step="0.01" value="${num(COST.petrolRate)}">`, '₹0 means petrol issues remain unpriced.')}</div>` +
-    `<div class="row2">${fld('Labour cost · ₹ / run hour', `<input id="costLabour" type="number" min="0" step="1" value="${num(COST.labourPerHour)}">`, 'Optional planning assumption. Not included in fuel-only KPIs.')}${fld('Downtime exposure · ₹ / hour', `<input id="costDowntime" type="number" min="0" step="100" value="${num(COST.downtimePerHour)}">`, 'Optional value for estimating incident exposure, not accounting expense.')}</div>` +
-    fld('Fuel-efficiency scenario · %', `<input id="costSavings" type="number" min="0" max="100" step="1" value="${num(COST.savingsPct)}">`, 'A what-if lever applied to projected month-end fuel spend. It is not a measured saving.') +
-    fld('One-time improvement investment · ₹', `<input id="costInvestment" type="number" min="0" step="1000" value="${num(COST.improvementCost)}">`, 'Optional purchase / implementation cost for payback and first-year ROI. Leave at 0 until a real quote is available.') +
-    `<div class="hint">Saved to this browser’s local storage only. For shared, auditable cost rates, move the settings into an authorised Firestore configuration document.</div>`,
-    onSubmit: async()=>{ const v={dieselRate:num($('#costDiesel').value),petrolRate:num($('#costPetrol').value),labourPerHour:num($('#costLabour').value),downtimePerHour:num($('#costDowntime').value),savingsPct:num($('#costSavings').value),improvementCost:num($('#costInvestment').value)}; if(v.savingsPct>100){toast('Scenario percentage must be between 0 and 100','err');return false;} Object.assign(COST,v); saveCostModel(); toast('Cost model saved for this browser'); renderOverview(); }
-  });
-}
-function exportROIReport() {
-  const x=monthlyCostSnapshot(), start=x.from, end=x.t;
-  const rows=[['Clover Greens Ops · ROI & Cost Report'],['Period',start,end],['Important','Fuel cost estimated from transaction prices where present, otherwise configured per-litre rate. Zero/missing prices are excluded.'],[],['SUMMARY','VALUE','NOTES'],
-    ['Modeled fuel spend MTD',x.mFuel.cost,`${fmt(x.mFuel.litres)} L; priced volume ${fmt(x.mFuel.pricedLitres)} L; unpriced ${fmt(x.mFuel.unpricedLitres)} L`],
-    ['Projected monthly fuel reduction scenario',x.savingsScenario,`${fmt(COST.savingsPct)}% of projected month-end fuel spend; not a realised saving`],['Annualised gross fuel savings scenario',x.annualSavingsScenario,'Projected monthly scenario × 12; assumes a comparable run rate'],['One-time improvement investment',COST.improvementCost,'User-entered estimate / quote'],['Payback period in months',x.paybackMonths==null?'':x.paybackMonths,'Only calculated when investment and positive monthly savings are entered'],['First-year ROI %',x.firstYearROI==null?'':x.firstYearROI,'(Annualised gross savings − one-time investment) ÷ investment'],['Fuel cost per engine hour · 30d',x.fuelCostPerHour==null?'':x.fuelCostPerHour,'Fuel only; matched logged engine hours'],['Labour cost proxy · MTD',x.labourCostMTD,`Based on ${money(COST.labourPerHour)}/recorded engine hour; assumption only`],['Projected month-end fuel spend',x.projectedFuel,'Run rate projection, not a budget'],['Inventory stock value · priced lines',x.inv.value,`${x.inv.unpricedCount} stocked line(s) lack unit cost`],['Priced reorder gap',x.inv.reorderValue,'Cost to reach reorder levels on priced items only'],['Priced turf plan lines · MTD',x.plans.cost,`${x.plans.priced} priced lines; ${x.plans.unpriced} unpriced lines`],['Maintenance costs recorded · MTD',x.maintenanceCost,'Only explicit cost fields from maintenance logs included'],['Open incidents',x.openIncidents.length,`${x.downtimeHours} estimated downtime hours entered`],['Estimated downtime exposure',x.downtimeExposure,'Only shown when downtime hours and hourly exposure rate are configured'],[],['MACHINE COST / HOUR · TRAILING 30 DAYS','CATEGORY','FUEL COST','RUN HOURS','LITRES','FUEL COST / HOUR']];
-  x.machineCosts.forEach(m=>rows.push([m.name,m.category,m.fuelCost,m.hours,m.litres,m.costPerHour]));
-  rows.push([],['INVENTORY','STOCK','AUTO REORDER AT','UNIT COST','STOCK VALUE','LOW STOCK']);
-  S.inventory.slice().sort((a,b)=>(a.partName||'').localeCompare(b.partName||'')).forEach(i=>rows.push([itemName(i),num(i.stockQuantity),effectiveReorderLevel(i),num(i.unitCost)||'',num(i.unitCost)>0?num(i.stockQuantity)*num(i.unitCost):'',num(i.stockQuantity)<=effectiveReorderLevel(i)?'YES':'NO']));
-  downloadCSV(`clover_greens_roi_${start}_to_${end}.csv`,rows);
-}
-function editInventoryCost(id) {
-  const i=S.inventory.find(x=>x.id===id); if(!i)return;
-  openForm({title:'Update inventory & unit cost',submit:'Save item',html:
-    fld('Product / part name',`<input id="editPartName" value="${esc(i.partName||'')}">`)+
-    fld('Category',`<select id="editPartCat">${['Fuel','Spare Parts','Fertilizers','Pesticides','Turf Enhancements','Tools','Other'].map(c=>`<option ${i.category===c?'selected':''}>${c}</option>`).join('')}</select>`)+
-    `<div class="row2">${fld('Stock quantity',`<input id="editPartStock" type="number" min="0" step="any" value="${num(i.stockQuantity)}">`)}${fld('Automatic reorder policy',`<div class="auto-reorder-form-note"><b>${fmt(effectiveReorderLevel(i),2)} ${esc(i.unit||'units')}</b><small>${autoReorderDetails(i).method} · ${autoReorderDetails(i).leadDays}-day lead time</small></div>` )}</div>`+
-    fld('Unit',`<select id="editPartUnit">${['Nos','Kg','Litre','Gram','ML','Bag','Pack'].map(u=>`<option ${i.unit===u?'selected':''}>${u}</option>`).join('')}</select>`)+
-    fld('Unit cost · ₹ per stock unit',`<input id="editPartCost" type="number" min="0" step="0.01" value="${num(i.unitCost)}">`,'Set 0 if price is not yet known. Stock value uses quantity × unit cost.'),
-    onSubmit:async()=>{const name=$('#editPartName').value.trim();if(!name){toast('Part name is required','err');return false;}await updateDoc(doc(db,CONFIG.COL.inventory,id),{partName:name,category:$('#editPartCat').value,stockQuantity:Math.max(0,num($('#editPartStock').value)),unit:$('#editPartUnit').value,unitCost:Math.max(0,num($('#editPartCost').value))});toast('Inventory and cost updated');}
-  });
-}
-
-/* ================= FLEET ================= */
-function renderFleet() {
-  const cats = ['All', ...new Set(S.machines.map(m => m.category).filter(Boolean))];
-  setHTML($('#catChips'), cats.map(c => `<button class="chip ${F.cat === c ? 'on' : ''}" data-act="fcat" data-v="${esc(c)}">${esc(c)}</button>`).join(''));
-  setHTML($('#fuelChips'), ['All', 'Diesel', 'Petrol'].map(c => `<button class="chip ${F.fuel === c ? 'on' : ''}" data-act="ffuel" data-v="${c}">${c === 'All' ? 'All fuels' : c}</button>`).join(''));
-  $('#fleetSort').value = F.sort;
-  if (!LOADED.machines) { setHTML($('#fleetGrid'), Array(6).fill('<div class="skeleton" style="height:300px"></div>').join('')); return; }
-  const lk = liveKeys(), q = F.q.toLowerCase();
-  let list = S.machines.filter(m => (!q || `${m.assetName} ${m.category}`.toLowerCase().includes(q)) && (F.cat === 'All' || m.category === F.cat) && (F.fuel === 'All' || m.fuelType === F.fuel));
-  list = list.map(m => ({ m, s: svc(m) }));
-  if (F.sort === 'service') list.sort((a, b) => a.s.remaining - b.s.remaining); else if (F.sort === 'hours') list.sort((a, b) => num(b.m.currentHours) - num(a.m.currentHours)); else list.sort((a, b) => (a.m.assetName || '').localeCompare(b.m.assetName || ''));
-  setHTML($('#fleetGrid'), list.length ? list.map(({ m, s }) => machineCard(m, s, lk.has(m.assetName) || lk.has(m.id))).join('') : '<div class="empty" style="grid-column:1/-1">No machines match. Use “Add machine” to register one.</div>');
-}
-function machineCard(m, s, isLive) {
-  const e = eff(m);
-  let status = '<span class="badge ok">Operational</span>';
-  if (isLive) status = '<span class="badge gold live">Live shift</span>';
-  else if (m.status && m.status !== 'Active') status = `<span class="badge warn">${esc(m.status)}</span>`;
-  else if (s.level === 'over') status = '<span class="badge bad">Service overdue</span>'; else if (s.level === 'due') status = '<span class="badge warn">Service due</span>';
-  const tr = e.trend == null ? '' : `<span class="${e.trend > 3 ? 'up' : e.trend < -3 ? 'down' : ''}">${e.trend > 3 ? '?' : e.trend < -3 ? '?' : '?'} ${fmt(Math.abs(e.trend), 0)}% vs prev. week</span>`;
-  const ft = m.fuelType ? `<span class="badge ${m.fuelType === 'Petrol' ? 'warn' : 'mute'}">${esc(m.fuelType)}</span>` : '';
-  return `<div class="mcard ${isLive ? 'live' : ''}">
-    <div style="display:flex;justify-content:space-between;gap:8px;align-items:flex-start"><div><div class="cat">${esc(m.category || 'Machine')}</div><h4>${esc(m.assetName)}</h4></div><div style="display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end">${ft}${status}</div></div>
-    <div class="mstats">
-      <div class="mstat"><div class="k">Engine hours</div><div class="v">${fmt(num(m.currentHours))} <small>hrs</small></div></div>
-      <div class="mstat"><div class="k">Fuel use</div><div class="v">${e.r == null ? '—' : fmt(e.r, 2)} <small>L/hr</small></div><div class="t">${fmt(e.L)} L · ${fmt(e.H)} hrs (30 d)</div></div>
-    </div>
-    ${tr ? `<div class="sm muted" style="margin-top:-4px">${tr}</div>` : ''}
-    <div><div class="svc-line"><span>Service cycle · ${fmt(s.since, 0)} / ${CONFIG.SERVICE_INTERVAL} hrs</span><span class="${s.level === 'ok' ? '' : s.level === 'due' ? 'up' : ''}" style="${s.level === 'over' ? 'color:var(--bad)' : ''}">${s.remaining <= 0 ? 'Overdue by ' + fmt(-s.remaining, 0) + ' hrs' : 'Due in ' + fmt(s.remaining, 0) + ' hrs'}</span></div><div class="bar"><i class="lvl-${s.level}" style="width:${s.pct}%"></i></div></div>
-    <div class="mactions"><button class="btn btn-sm" data-act="drawer-route" data-id="${esc(m.id)}"><span class="material-symbols-rounded">route</span>Routes</button><button class="btn btn-sm" data-act="drawer-fuel" data-id="${esc(m.id)}"><span class="material-symbols-rounded">local_gas_station</span>Fuel log</button>
-      <div class="kebab-wrap"><button class="btn btn-sm" style="flex:none;width:34px;padding:0" data-act="kebab" aria-label="More actions"><span class="material-symbols-rounded">more_horiz</span></button>
-      <div class="kmenu"><button data-act="edit-machine" data-id="${esc(m.id)}"><span class="material-symbols-rounded">edit</span>Edit details</button><button data-act="svc-done" data-id="${esc(m.id)}"><span class="material-symbols-rounded">build_circle</span>Mark serviced</button><button class="danger" data-act="del" data-col="machines" data-id="${esc(m.id)}" data-label="${esc(m.assetName)}"><span class="material-symbols-rounded">delete</span>Delete</button></div></div>
-    </div></div>`;
-}
-function machineForm(m) {
-  const edit = !!m, cats = ['Greens Mower', 'Fairway Mower', 'Rough Mower', 'Utility Vehicle', 'Tractor', 'Sprayer', 'Buggy'];
-  openForm({
-    title: edit ? 'Edit machine' : 'Register machine',
-    html: fld('Asset name', `<input id="fName" value="${esc(m?.assetName || '')}" placeholder="e.g. Toro Greensmaster 3150">`) +
-      fld('Category', `<input id="fCat" list="catList" value="${esc(m?.category || '')}" placeholder="e.g. Fairway Mower"><datalist id="catList">${cats.map(c => `<option value="${c}">`).join('')}</datalist>`) +
-      fld('Fuel type', `<select id="fFuel"><option value="Diesel" ${m?.fuelType !== 'Petrol' ? 'selected' : ''}>Diesel</option><option value="Petrol" ${m?.fuelType === 'Petrol' ? 'selected' : ''}>Petrol</option></select>`) +
-      `<div class="row2">${fld('Current engine hours', `<input id="fHrs" type="number" min="0" step="0.1" value="${edit ? num(m.currentHours) : 0}">`)}${fld('Last serviced at (hrs)', `<input id="fLast" type="number" min="0" step="0.1" value="${edit && m.lastServiceHours != null ? m.lastServiceHours : ''}" placeholder="optional">`)}</div><div class="hint" style="margin-top:-6px">Leave “last serviced” blank to start the ${CONFIG.SERVICE_INTERVAL}-hr cycle from the current hours.</div>`,
-    submit: edit ? 'Save changes' : 'Register',
-    onSubmit: async () => {
-      const name = $('#fName').value.trim(); if (!name) { toast('Asset name is required', 'err'); return false; }
-      if (S.machines.some(x => x.assetName?.toLowerCase() === name.toLowerCase() && x.id !== m?.id)) { toast('A machine with this name already exists', 'err'); return false; }
-      const hrs = num($('#fHrs').value), lastRaw = $('#fLast').value.trim();
-      const data = { assetName: name, category: $('#fCat').value.trim() || 'Utility Vehicle', fuelType: $('#fFuel').value, currentHours: hrs, lastServiceHours: lastRaw === '' ? (edit && m.lastServiceHours != null ? m.lastServiceHours : hrs) : num(lastRaw) };
-      if (edit) { await updateDoc(doc(db, CONFIG.COL.machines, m.id), data); toast('Machine updated'); }
-      else { await addDoc(collection(db, CONFIG.COL.machines), { ...data, status: 'Active' }); toast('Machine registered'); }
-    }
-  });
-}
-
-/* ================= DRAWERS ================= */
-function drawerRoute(id, filterDate) {
-  const m = mx().get(id); if (!m) return;
-  const allShifts = S.shifts.filter(s => s.machineId === m.id || s.machineId === m.assetName);
-  const selectedDate = filterDate || today();
-  const rows = allShifts.filter(s => s._d === selectedDate).sort((a, b) => tsMs(b.timestamp || b.startTime) - tsMs(a.timestamp || a.startTime));
-
-  const km = sum(rows, "distanceKm"), hrs = sum(rows, "engineHoursLogged");
-  let body = `<div class="field"><label class="f">Pick Custom Date</label><input type="date" value="${selectedDate}" max="${today()}" data-chg="drdate" data-id="${esc(m.id)}"></div>
-    <div class="stat-row" style="grid-template-columns:repeat(3,1fr)"><div class="stat"><div class="k">Shifts</div><div class="v">${rows.length}</div></div><div class="stat"><div class="k">Distance</div><div class="v">${fmt(km)} <small>km</small></div></div><div class="stat"><div class="k">Run time</div><div class="v">${fmt(hrs)} <small>hrs</small></div></div></div>`;
-  if (!rows.length) body += `<div class="empty">No recorded shifts on ${dLong(selectedDate)}.</div>`;
-  rows.forEach(s => {
-    body += `<div class="list-row"><div><b>${esc(s.operatorName || "Unknown")}</b><div class="muted sm">${fmtHrs(s.engineHoursLogged)} Â· ${fmt(num(s.distanceKm), 2)} km</div></div><button class="btn btn-sm btn-primary" data-act="view-path" data-sid="${esc(s.id)}" data-mname="${esc(m.assetName)}"><span class="material-symbols-rounded">route</span>View Path</button></div>`;
-  });
-  openDrawer(m.assetName, `GPS Route Log Â· ${dLong(selectedDate)}`, body);
-}
-
-async function showShiftPathMap(shiftId, machineName) {
-  openModal({
-    title: `Machine Path: ${esc(machineName)}`,
-    sub: `Shift ID: ${shiftId}`,
-    body: `<div id="shiftPathMap" style="height:380px;border-radius:12px;overflow:hidden;border:1px solid var(--border)"></div><div id="pathStats" class="muted sm" style="margin-top:12px">Loading GPS points...</div>`,
-    footer: `<button class="btn btn-primary" data-act="close-modal">Close</button>`
-  });
-
-  setTimeout(async () => {
-    const mapEl = $("#shiftPathMap");
-    if (!mapEl) return;
-    const map = L.map("shiftPathMap", { zoomControl: false }).setView([CONFIG.LAT, CONFIG.LNG], 16);
-    L.control.zoom({ position: "bottomright" }).addTo(map);
-    L.tileLayer(TILE, { maxZoom: 19, attribution: ATTR }).addTo(map);
-
-    try {
-      let latlngs = [];
-      let totalPtsCount = 0;
-      let inZoneCount = 0;
-
-      // 1. Try route_trails collection chunks
-      const trailSnap = await getDocs(collection(db, "route_trails"));
-      const chunks = trailSnap.docs.map(d => d.data()).filter(c => c.shiftId === shiftId).sort((a, b) => (a.seq || 0) - (b.seq || 0));
-
-      if (chunks.length > 0) {
-        chunks.forEach(chunk => {
-          const flat = chunk.pts || [];
-          for (let i = 0; i < flat.length; i += 3) {
-            const lat = num(flat[i]), lng = num(flat[i+1]);
-            if (lat !== 0 && lng !== 0 && !isNaN(lat) && !isNaN(lng)) {
-              latlngs.push([lat, lng]);
-            }
-          }
-        });
-        totalPtsCount = latlngs.length;
-      }
-
-      // 2. Fallback to shifts/{shiftId}/points subcollection
-      if (latlngs.length < 2) {
-        const snap = await getDocs(collection(db, "shifts", shiftId, "points"));
-        const pts = snap.docs.map(d => d.data()).sort((a, b) => tsMs(a.timestamp) - tsMs(b.timestamp));
-        totalPtsCount = pts.length;
-        inZoneCount = pts.filter(p => p.inZone).length;
-        latlngs = pts.map(p => [num(p.lat), num(p.lng)]).filter(p => !isNaN(p[0]) && !isNaN(p[1]) && p[0] !== 0);
-      }
-
-      if (latlngs.length < 2) {
-        $("#pathStats").textContent = `Recorded ${totalPtsCount} point(s), insufficient path movement to draw route.`;
-        return;
-      }
-
-      // Calculate path distance & speed insights
-      let distKm = 0;
-      for (let i = 1; i < latlngs.length; i++) {
-        const p1 = L.latLng(latlngs[i-1][0], latlngs[i-1][1]);
-        const p2 = L.latLng(latlngs[i][0], latlngs[i][1]);
-        distKm += p1.distanceTo(p2) / 1000;
-      }
-
-      const line = L.polyline(latlngs, { color: "#E5C794", weight: 4, opacity: 0.9 }).addTo(map);
-
-      L.circleMarker(latlngs[0], { radius: 8, color: "#5FD39A", fillColor: "#5FD39A", fillOpacity: 1 }).addTo(map).bindTooltip("Shift Start");
-      L.circleMarker(latlngs[latlngs.length - 1], { radius: 8, color: "#ff6b6b", fillColor: "#ff6b6b", fillOpacity: 1 }).addTo(map).bindTooltip("Shift End");
-
-      map.fitBounds(line.getBounds().pad(0.1));
-      $("#pathStats").textContent = `Trail Distance: ${fmt(distKm, 2)} km Â· Points Logged: ${totalPtsCount} ${inZoneCount ? "Â· In-Zone: " + inZoneCount : ""}`;
-    } catch (e) {
-      console.error(e);
-      $("#pathStats").textContent = "Failed to load route points.";
-    }
-  }, 100);
-}
-function drawerFuel(id) {
-  const m = mx().get(id); if (!m) return;
-  const rows = S.fuel.filter(f => f.machineId === m.id || f.machineId === m.assetName).sort(sortFuel);
-  const tot = sum(rows, 'litres'), rateCost = fuelCostSummary(rows), t = today(), days = daysBetween(addDays(t, -29), t), by = {}; rows.forEach(f => by[f._d] = (by[f._d] || 0) + num(f.litres));
-  const l30 = days.reduce((a, d) => a + (by[d] || 0), 0), activeDays = new Set(rows.map(f => f._d)).size;
-  let body = `<div class="stat-row" style="grid-template-columns:repeat(auto-fit,minmax(140px,1fr))"><div class="stat"><div class="k">All-time</div><div class="v">${fmt(tot)} <small>L</small></div></div><div class="stat"><div class="k">Last 30 days</div><div class="v">${fmt(l30)} <small>L</small></div></div><div class="stat"><div class="k">Avg / fuel day</div><div class="v">${fmt(activeDays ? tot / activeDays : 0)} <small>L</small></div></div><div class="stat"><div class="k">Modeled all-time cost</div><div class="v">${money(rateCost.cost)}</div><div class="t">${fmt(rateCost.coverage,0)}% volume priced</div></div></div>
-    <div class="muted sm" style="margin-bottom:4px">Daily litres · last 30 days</div>${sparkline(days.map(d => by[d] || 0))}`;
-  if (!rows.length) body += '<div class="empty">No fuel logs yet.</div>';
-  let last = ''; rows.forEach(f => { if (f._d !== last) { last = f._d; body += `<div class="day-h">${dLong(f._d)} · ${fmt(by[f._d])} L</div>`; } body += `<div class="list-row"><div><b>${fmt(num(f.litres))} L</b><div class="muted sm">${esc(f.notes || 'App fuel log')}${timeOf(tsMs(f.timestamp)) ? ' · ' + timeOf(tsMs(f.timestamp)) : ''}</div></div></div>`; });
-  openDrawer(m.assetName, `Fuel issue log · ${m.fuelType || 'fuel type not set'}`, body);
-}
-
-/* ================= FUEL MODAL (KPI drill-down) ================= */
-function openFuelModal() {
-  curModalRender = renderFuelModal;
-  openModal({ title: 'Fuel consumption', sub: 'Issued litres from the storekeeper ledger', body: '', footer: '<button class="btn" data-act="export-fuel"><span class="material-symbols-rounded">download</span>Export CSV</button><button class="btn btn-primary" data-act="close-modal">Close</button>' });
-  renderFuelModal();
-}
-function renderFuelModal() {
-  const st = R.fuel, t = today(), ent = fuelIn(st.from, st.to), tot = sum(ent, 'litres'), sp = splitFuel(ent), days = daysBetween(st.from, st.to);
-  const quick = [['Today', t, t], ['Yesterday', addDays(t, -1), addDays(t, -1)], ['This month', monthStart(t), t], ['Last month', monthStart(addDays(monthStart(t), -1)), addDays(monthStart(t), -1)]].map(([l, a, b]) => { const e = fuelIn(a, b), s = splitFuel(e), c = fuelCostSummary(e); return `<div class="stat ${l === 'This month' ? 'hl' : ''}"><div class="k">${l}</div><div class="v">${fmt(sum(e, 'litres'))} <small>L</small></div><div class="t">${money(c.cost)} modeled · Diesel ${fmt(s.Diesel)} L · Petrol ${fmt(s.Petrol)} L</div></div>`; }).join('');
-  const byDay = {}; ent.forEach(f => byDay[f._d] = (byDay[f._d] || 0) + num(f.litres));
-  const dayShow = days.length > 120 ? days.slice(-120) : days;
-  const mm = {}; ent.forEach(f => { const k = mKey(f.machineId); (mm[k] = mm[k] || { name: mName(f.machineId), type: fuelTypeFromRecord(f), L: 0, n: 0, H: 0, cost: 0, unpricedL: 0 }); mm[k].L += num(f.litres); mm[k].n++; const r=rateForFuelLog(f); if(r>0) mm[k].cost+=fuelLogCost(f); else mm[k].unpricedL+=num(f.litres); });
-  shiftsIn(st.from, st.to).forEach(s => { const k = mKey(s.machineId); if (mm[k]) mm[k].H += num(s.engineHoursLogged); });
-  const rows = Object.values(mm).sort((a, b) => b.L - a.L);
-  const html = `<div class="stat-row">${quick}</div>${rangeBar('fuel')}
-    <div class="stat-row"><div class="stat hl"><div class="k">Selected total</div><div class="v">${fmt(tot)} <small>L</small></div><div class="t">${esc(rangeLabel(st))}</div></div><div class="stat"><div class="k">Modeled fuel spend</div><div class="v">${money(fuelCostSummary(ent).cost)}</div><div class="t">${fmt(fuelCostSummary(ent).coverage,0)}% volume priced</div></div>
-      <div class="stat"><div class="k">Diesel</div><div class="v">${fmt(sp.Diesel)} <small>L</small></div></div><div class="stat"><div class="k">Petrol</div><div class="v">${fmt(sp.Petrol)} <small>L</small></div></div>
-      ${sp.Unspecified ? `<div class="stat"><div class="k">Type not set</div><div class="v">${fmt(sp.Unspecified)} <small>L</small></div></div>` : ''}
-      <div class="stat"><div class="k">Avg per day</div><div class="v">${fmt(tot / Math.max(1, days.length))} <small>L</small></div><div class="t">${days.length} day${days.length === 1 ? '' : 's'}</div></div>
-      <div class="stat"><div class="k">Entries</div><div class="v">${ent.length}</div></div></div>
-    <div class="section-t">Daily consumption${days.length > 120 ? ' <span class="muted sm">(last 120 days shown)</span>' : ''}</div>${barChart(dayShow.map(d => ({ label: dShort(d), value: byDay[d] || 0 })), { unit: 'L' })}
-    <div class="section-t">By machine</div><div class="table-wrap"><table><thead><tr><th>Machine</th><th>Fuel</th><th class="num">Entries</th><th class="num">Litres</th><th class="num">Modeled cost</th><th class="num">Run hrs</th><th class="num">L / hr</th></tr></thead><tbody>
-    ${rows.length ? rows.map(r => `<tr><td><b>${esc(r.name)}</b></td><td><span class="badge ${r.type === 'Petrol' ? 'warn' : 'mute'}">${esc(r.type)}</span></td><td class="num">${r.n}</td><td class="num"><b>${fmt(r.L)}</b></td><td class="num"><b>${money(r.cost)}</b>${r.unpricedL>0?`<div class="muted sm">${fmt(r.unpricedL)} L unpriced</div>`:''}</td><td class="num">${r.H ? fmt(r.H) : '—'}</td><td class="num">${r.H ? fmt(r.L / r.H, 2) : '—'}</td></tr>`).join('') : '<tr><td colspan="7" class="empty">No fuel issued in this range.</td></tr>'}
-    </tbody>${rows.length ? `<tfoot><tr><td colspan="3">Total</td><td class="num">${fmt(tot)}</td><td class="num">${money(fuelCostSummary(ent).cost)}</td><td colspan="2"></td></tr></tfoot>` : ''}</table></div>`;
-  const body = $('#mBody'), sc = body.scrollTop; if (body._h !== html) { body.innerHTML = html; body._h = html; body.scrollTop = sc; }
-}
-
-/* ================= RUNNING HOURS MODAL (KPI drill-down) ================= */
-function openRunModal() {
-  curModalRender = renderRunModal;
-  openModal({ title: 'Running hours', sub: 'Machine-wise engine run time from completed shifts', body: '', footer: '<button class="btn" data-act="export-run"><span class="material-symbols-rounded">download</span>Export CSV</button><button class="btn btn-primary" data-act="close-modal">Close</button>' });
-  renderRunModal();
-}
-function runData() {
-  const st = R.run, sh = shiftsIn(st.from, st.to), fu = fuelIn(st.from, st.to), lk = liveKeys(), g = {};
-  const ensure = (id) => { const k = mKey(id), m = mx().get(id); return g[k] = g[k] || { name: mName(id), cat: m?.category || '—', ops: new Set(), n: 0, H: 0, km: 0, L: 0, live: m ? (lk.has(m.assetName) || lk.has(m.id)) : lk.has(id) }; };
-  S.machines.forEach(m => ensure(m.id));
-  sh.forEach(s => { const r = ensure(s.machineId); r.n++; r.H += num(s.engineHoursLogged); r.km += num(s.distanceKm); if (s.operatorName) r.ops.add(s.operatorName); });
-  fu.forEach(f => { const k = mKey(f.machineId); if (g[k]) g[k].L += num(f.litres); });
-  const rows = Object.values(g).sort((a, b) => b.H - a.H || a.name.localeCompare(b.name));
-  return { st, sh, rows };
-}
-function renderRunModal() {
-  const { st, sh, rows } = runData(), days = daysBetween(st.from, st.to), tot = sum(sh, 'engineHoursLogged'), km = sum(sh, 'distanceKm');
-  const active = rows.filter(r => r.H > 0), maxH = Math.max(0.0001, ...rows.map(r => r.H)), top = active[0];
-  const L = rows.reduce((a, r) => a + r.L, 0);
-  const byDay = {}; sh.forEach(s => byDay[s._d] = (byDay[s._d] || 0) + num(s.engineHoursLogged));
-  const html = `${rangeBar('run')}
-    <div class="stat-row"><div class="stat hl"><div class="k">Total running time</div><div class="v">${fmt(tot)} <small>hrs</small></div><div class="t">${fmtHrs(tot)} · ${esc(rangeLabel(st))}</div></div>
-      <div class="stat"><div class="k">Machines ran</div><div class="v">${active.length} <small>/ ${S.machines.length}</small></div></div>
-      <div class="stat"><div class="k">Shifts</div><div class="v">${sh.length}</div></div>
-      <div class="stat"><div class="k">Distance</div><div class="v">${fmt(km)} <small>km</small></div></div>
-      <div class="stat"><div class="k">Fleet fuel rate</div><div class="v">${tot > 0 && L > 0 ? fmt(L / tot, 2) : '—'} <small>L/hr</small></div></div>
-      <div class="stat"><div class="k">Longest runner</div><div class="v" style="font-size:16px">${top ? esc(top.name) : '—'}</div><div class="t">${top ? fmtHrs(top.H) : ''}</div></div></div>
-    ${days.length > 1 ? `<div class="section-t">Fleet running hours per day</div>${barChart(days.slice(-120).map(d => ({ label: dShort(d), value: byDay[d] || 0 })), { unit: 'hrs' })}` : ''}
-    <div class="section-t">Machine-wise running time</div>
-    ${active.length ? active.map(r => `<div class="hrow"><div style="font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(r.name)}</div><div class="bar"><i class="lvl-brand" style="width:${r.H / maxH * 100}%"></i></div><div class="right"><b>${fmtHrs(r.H)}</b></div></div>`).join('') : '<div class="empty">No machine ran in this range.</div>'}
-    <div class="section-t">Detail</div><div class="table-wrap"><table><thead><tr><th>Machine</th><th>Category</th><th>Operator(s)</th><th class="num">Shifts</th><th class="num">Run time</th><th class="num">Distance</th><th class="num">Avg km/h</th><th class="num">Fuel (L)</th><th class="num">L / hr</th><th>Status</th></tr></thead><tbody>
-    ${rows.map(r => { const ops = [...r.ops]; return `<tr style="${r.H ? '' : 'opacity:.55'}"><td><b>${esc(r.name)}</b></td><td>${esc(r.cat)}</td><td>${ops.length ? esc(ops.slice(0, 2).join(', ')) + (ops.length > 2 ? ` +${ops.length - 2}` : '') : '—'}</td><td class="num">${r.n || '—'}</td><td class="num"><b>${r.H ? fmtHrs(r.H) : '—'}</b></td><td class="num">${r.km ? fmt(r.km, 1) + ' km' : '—'}</td><td class="num">${r.H && r.km ? fmt(r.km / r.H, 1) : '—'}</td><td class="num">${r.L ? fmt(r.L) : '—'}</td><td class="num">${r.H && r.L ? fmt(r.L / r.H, 2) : '—'}</td><td>${r.live ? '<span class="badge gold live">Live now</span>' : r.H ? '<span class="badge ok">Ran</span>' : '<span class="badge mute">Idle</span>'}</td></tr>`; }).join('')}
-    </tbody>${rows.length ? `<tfoot><tr><td colspan="3">Total</td><td class="num">${sh.length}</td><td class="num">${fmtHrs(tot)}</td><td class="num">${fmt(km, 1)} km</td><td></td><td class="num">${L ? fmt(L) : '—'}</td><td colspan="2"></td></tr></tfoot>` : ''}</table></div>`;
-  const body = $('#mBody'), sc = body.scrollTop; if (body._h !== html) { body.innerHTML = html; body._h = html; body.scrollTop = sc; }
-}
-
-/* ================= LOCAL EXPENSES / STORE LEDGER ================= */
+const sortFuel = (...args) => costModule.sortFuel(...args);
+function fuelTypeForCost(...args) { return costModule.fuelTypeForCost(...args); }
+function fuelMasterRate(...args) { return costModule.fuelMasterRate(...args); }
+function fuelCostLine(...args) { return costModule.fuelCostLine(...args); }
+function turfCostLine(...args) { return costModule.turfCostLine(...args); }
+function dayFuelCostLines(...args) { return costModule.dayFuelCostLines(...args); }
+function dayMaintenanceCostLines(...args) { return costModule.dayMaintenanceCostLines(...args); }
+function dayFleetCostLines(...args) { return costModule.dayFleetCostLines(...args); }
+function dayTurfCostLines(...args) { return costModule.dayTurfCostLines(...args); }
+function summariseCostLines(...args) { return costModule.summariseCostLines(...args); }
+function turfDayProductValueRows(...args) { return costModule.turfDayProductValueRows(...args); }
+function updateDayCostCards(...args) { return costModule.updateDayCostCards(...args); }
+function openDayCostLedger(...args) { return costModule.openDayCostLedger(...args); }
+function exportDayCostLedger(...args) { return costModule.exportDayCostLedger(...args); }
+function buildTurfCostAnalytics(...args) { return costModule.buildTurfCostAnalytics(...args); }
+function renderTurfCostAnalytics(...args) { return costModule.renderTurfCostAnalytics(...args); }
+function openTurfCostAnalytics(...args) { return costModule.openTurfCostAnalytics(...args); }
+function applyTurfCostPreset(...args) { return costModule.applyTurfCostPreset(...args); }
+function exportTurfCostRange(...args) { return costModule.exportTurfCostRange(...args); }
+function openCostModel(...args) { return costModule.openCostModel(...args); }
+function exportROIReport(...args) { return costModule.exportROIReport(...args); }
+function editInventoryCost(...args) { return costModule.editInventoryCost(...args); }
+function renderFleet(...args) { return fleetModule.renderFleet(...args); }
+function machineCard(...args) { return fleetModule.machineCard(...args); }
+function machineForm(...args) { return fleetModule.machineForm(...args); }
+function drawerRoute(...args) { return fleetModule.drawerRoute(...args); }
+function showShiftPathMap(...args) { return fleetModule.showShiftPathMap(...args); }
+function drawerFuel(...args) { return fleetModule.drawerFuel(...args); }
+function openFuelModal(...args) { return fleetModule.openFuelModal(...args); }
+function renderFuelModal(...args) { return fleetModule.renderFuelModal(...args); }
+function openRunModal(...args) { return fleetModule.openRunModal(...args); }
+function runData(...args) { return fleetModule.runData(...args); }
+function renderRunModal(...args) { return fleetModule.renderRunModal(...args); }
 let expFilter = 'all';
 const normName = s => String(s || '').trim().toLowerCase().replace(/\s+/g, ' ');
 const expAmount = x => (x.amount != null && x.amount !== '') ? num(x.amount) : num(x.qty) * num(x.rate);
@@ -2799,3 +2086,311 @@ $("#cmdRes").addEventListener("click", event => {
   }
   toggleCmdPal();
 });
+
+
+// Injected service context shared by function-based feature modules.
+const APP_CONTEXT = {
+  $,
+  ATTR,
+  C,
+  CONFIG,
+  COST,
+  COST_DEFAULTS,
+  EXP_CAT_RULES,
+  F,
+  FUEL_RATE,
+  H,
+  LOADED,
+  MON,
+  NAV_GROUPS,
+  PRESETS,
+  R,
+  RBAC,
+  RENDER,
+  RER,
+  RESET_GROUPS,
+  ROLE_LABELS,
+  ROLE_PERMISSIONS,
+  ReCaptchaEnterpriseProvider,
+  RecaptchaVerifier,
+  S,
+  STORE_CATS,
+  TILE,
+  VIEWS,
+  VIEW_COLLECTIONS,
+  ZCOL,
+  _mx,
+  _mxv,
+  activeNavGroup,
+  addDays,
+  addDoc,
+  addLocateControl,
+  ago,
+  app,
+  appCheckSiteKey,
+  applyTurfCostPreset,
+  auth,
+  autoReorderDetails,
+  badgeCounts,
+  barChart,
+  buildNav,
+  buildReorderUsageIndex,
+  buildTurfCostAnalytics,
+  calcTot,
+  canRole,
+  canonicalFuelType,
+  chartModule,
+  closeDrawer,
+  closeModal,
+  cmdOpen,
+  collection,
+  collectionAffectsCurrentView,
+  confirmDelete,
+  confirmationResult,
+  costModule,
+  courseZone,
+  createChartModule,
+  createCostAnalyticsModule,
+  createFleetModule,
+  createFnbModule,
+  createReorderIntelligenceModule,
+  createUIPrimitivesModule,
+  createWeatherModule,
+  cur,
+  curModalRender,
+  currentTurfWeekStart,
+  dLong,
+  dShort,
+  dayFleetCostLines,
+  dayFuelCostLines,
+  dayMaintenanceCostLines,
+  dayTurfCostLines,
+  daysBetween,
+  db,
+  deleteDoc,
+  deleteStoreInwardFromEditor,
+  deleteStoreItemFromEditor,
+  deltaTxt,
+  doc,
+  downloadCSV,
+  drawCoords,
+  drawZones,
+  drawerFuel,
+  drawerRoute,
+  drawn,
+  editInventoryCost,
+  eff,
+  effectiveReorderLevel,
+  enableRainNotifications,
+  esc,
+  exRowHTML,
+  exUpdateTotal,
+  expAmount,
+  expFilter,
+  expIsMine,
+  expIsReclaimed,
+  expItems,
+  exportDayCostLedger,
+  exportROIReport,
+  exportTurfCostRange,
+  exportTurfVariance,
+  findInventoryByName,
+  firebaseConfig,
+  fitToCourse,
+  fld,
+  fleetModule,
+  fmt,
+  fmtHrs,
+  fnbModule,
+  fuelCostLine,
+  fuelCostSummary,
+  fuelIn,
+  fuelLogCost,
+  fuelMasterRate,
+  fuelRecordDate,
+  fuelTypeForCost,
+  fuelTypeFromRecord,
+  fuelTypeOf,
+  getAuth,
+  getDoc,
+  getDocs,
+  getFirestore,
+  getSunday,
+  groupForView,
+  guessCategory,
+  hoursFor,
+  increment,
+  initRadarMap,
+  initZoneMap,
+  initializeApp,
+  initializeAppCheck,
+  inventoryCategoryOpen,
+  inventoryCostSummary,
+  inventoryRowsMarkup,
+  isTurfCategory,
+  itemName,
+  ledgerRows,
+  listenerEpochs,
+  listenersStarted,
+  litresFor,
+  liveKeys,
+  liveList,
+  liveNow,
+  loadCostModel,
+  loadWeather,
+  lookupCategoryOnline,
+  mKey,
+  mName,
+  machineCard,
+  machineForm,
+  machineOptions,
+  markers,
+  money,
+  monthPlansCost,
+  monthStart,
+  monthlyCostSnapshot,
+  mx,
+  normDate,
+  normItemName,
+  normMobile,
+  normName,
+  num,
+  onAuthStateChanged,
+  onSnapshot,
+  openAddSprayTaskForm,
+  openCostModel,
+  openDataReset,
+  openDayCostLedger,
+  openDrawer,
+  openForm,
+  openFuelModal,
+  openInward,
+  openModal,
+  openNavGroup,
+  openNewItemPopup,
+  openRoleAdmin,
+  openRunModal,
+  openStoreRecordsEditor,
+  openTurfCostAnalytics,
+  openTurfPlanner,
+  openTurfVarianceModal,
+  orderBy,
+  pad,
+  permissionForAction,
+  permissionForCollection,
+  permissionForView,
+  previewInward,
+  query,
+  radarFitted,
+  radarMap,
+  raf,
+  rangeBar,
+  rangeLabel,
+  rateForFuelLog,
+  recaptchaVerifier,
+  recordsTab,
+  renderAll,
+  renderCmd,
+  renderFleet,
+  renderFuelModal,
+  renderGroupTabs,
+  renderIncidents,
+  renderLedger,
+  renderLocalExpenseLedger,
+  renderOperationalIntelligence,
+  renderOverview,
+  renderRadarPanel,
+  renderRecords,
+  renderRegistry,
+  renderRunModal,
+  renderShifts,
+  renderStoreRecordsEditor,
+  renderTp,
+  renderTurfApplications,
+  renderTurfAreaPlanDashboard,
+  renderTurfCare,
+  renderTurfCategoryCards,
+  renderTurfCostAnalytics,
+  renderTurfUsageIntelligence,
+  renderTurfVariance,
+  renderUsersMaster,
+  renderWeather,
+  renderZonePanel,
+  reorderModule,
+  resolveInventoryItem,
+  runData,
+  runNewItemQueue,
+  runTransaction,
+  saveCostModel,
+  saveTurfBatch,
+  serverTimestamp,
+  setConn,
+  setCurModalRenderer,
+  setDoc,
+  setHTML,
+  setPreset,
+  setTurfSection,
+  shiftRows,
+  shiftsIn,
+  showShiftPathMap,
+  signInWithPhoneNumber,
+  signOut,
+  sortFuel,
+  sparkline,
+  splitFuel,
+  startListeners,
+  stopListeners,
+  stopOneListener,
+  storeRecordsTab,
+  sum,
+  summariseCostLines,
+  svc,
+  switchView,
+  syncListenersForView,
+  tile,
+  timeOf,
+  toast,
+  today,
+  toggleCmdPal,
+  toggleDock,
+  tpState,
+  tsMs,
+  turfAppCategory,
+  turfAppSearch,
+  turfAppStatus,
+  turfCategoryClass,
+  turfCategoryLabel,
+  turfCostLine,
+  turfDayProductValueRows,
+  turfPlanCategory,
+  turfProductCategory,
+  turfProductForPlan,
+  turfProductUnit,
+  turfRecordDate,
+  turfRecordProductName,
+  turfRecordQuantity,
+  turfRecordStatus,
+  turfSection,
+  uiModule,
+  unsubs,
+  updateBadges,
+  updateDayCostCards,
+  updateDoc,
+  updateInwardItems,
+  updateRadar,
+  usersRoleFilter,
+  usersSearchText,
+  weatherModule,
+  where,
+  writeBatch,
+  ymd,
+  zoneForm,
+  zoneLayers,
+  zoneMap
+};
+uiModule = createUIPrimitivesModule(APP_CONTEXT);
+chartModule = createChartModule(APP_CONTEXT);
+weatherModule = createWeatherModule(APP_CONTEXT);
+reorderModule = createReorderIntelligenceModule(APP_CONTEXT);
+costModule = createCostAnalyticsModule(APP_CONTEXT);
+fleetModule = createFleetModule(APP_CONTEXT);
