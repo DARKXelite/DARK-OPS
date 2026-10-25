@@ -64,3 +64,21 @@
 #pinError{position:absolute;top:calc(50% + 44px);left:0;right:0;text-align:center;font-size:12px;color:#f1d1b9;pointer-events:none}
 .pin-foot,.pin-logo,.pin-eyebrow,.pin-title,.pin-subtitle{display:none!important}
 @media(max-width:420px){.pin-shell{width:92vw!important;padding:20px 0}.pin-dots{width:100%!important;gap:clamp(3px,1.2vw,6px)!important}.pin-dot{border-radius:50%!important}}
+
+
+/* Fail-closed first paint: never render operational UI before Firebase auth and RBAC finish. */
+body.auth-locked .main,
+body.auth-locked #dockPill,
+body.auth-locked #golfballFab,
+body.auth-locked #cmdOverlay,
+body.auth-locked #cmdPal,
+body.auth-locked #overlay,
+body.auth-locked #drawerOv,
+body.auth-locked #toasts {
+  display: none !important;
+}
+body.auth-locked #login {
+  display: grid !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+}
