@@ -7,6 +7,7 @@ import { createChartModule } from "./modules/ui/charts.js";
 import { createWeatherModule } from "./modules/weather/weather-module.js";
 import { createReorderIntelligenceModule } from "./modules/inventory/reorder-intelligence.js";
 import { createCostAnalyticsModule } from "./modules/cost/cost-analytics.js";
+import { COST_DEFAULTS, loadCostModel as loadStoredCostModel, persistCostModel } from "./modules/cost/cost-model-storage.js";
 import { createFleetModule } from "./modules/fleet/fleet-module.js";
 import { createTurfDomainModule } from "./modules/turf/turf-domain.js";
 import { createOverviewModule } from "./modules/views/overview-module.js";
@@ -59,13 +60,14 @@ const R = {
 let cur = 'overview', curModalRender = null;
 function getCurrentView() { return cur; }
 
-const COST_DEFAULTS = { dieselRate: 92.50, petrolRate: 0, labourPerHour: 0, downtimePerHour: 0, savingsPct: 10, improvementCost: 0 };
 function loadCostModel() {
-  try { const saved = JSON.parse(localStorage.getItem('cloverOpsCostModel') || '{}'); return { ...COST_DEFAULTS, ...Object.fromEntries(Object.keys(COST_DEFAULTS).map(k => [k, Number.isFinite(+saved[k]) && +saved[k] >= 0 ? +saved[k] : COST_DEFAULTS[k]])) }; }
+  try { return loadStoredCostModel(localStorage); }
   catch (_) { return { ...COST_DEFAULTS }; }
 }
 const COST = loadCostModel();
-function saveCostModel() { try { localStorage.setItem('cloverOpsCostModel', JSON.stringify(COST)); } catch (_) {} }
+function saveCostModel() {
+  try { persistCostModel(COST, localStorage); } catch (_) {}
+}
 function rateForFuelLog(...args) { return fleetDomainModule.rateForFuelLog(...args); }
 function fuelLogCost(...args) { return fleetDomainModule.fuelLogCost(...args); }
 function fuelCostSummary(...args) { return fleetDomainModule.fuelCostSummary(...args); }
