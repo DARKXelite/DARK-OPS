@@ -23,7 +23,7 @@ export function registerAppEventDelegation(context) {
     if (permission && !RBAC.can(permission)) { toast("Your role does not have permission for this action.", "err"); return; }
     const handlers = getActionHandlers(); const fn = handlers[el.dataset.act]; if (fn) fn(el.dataset, el, e);
   });
-  document.addEventListener('change', e => { const el = e.target.closest('[data-chg]'); if (el && getChangeHandlers()[el.dataset.chg]) C[el.dataset.chg](el.value, el.dataset, el); });
+  document.addEventListener('change', e => { const el = e.target.closest('[data-chg]'); if (el && getChangeHandlers()[el.dataset.chg]) getChangeHandlers()[el.dataset.chg](el.value, el.dataset, el); });
   document.addEventListener('change', async e => { const el=e.target.closest('[data-expense-paid]'); if(!el)return; try{await updateDoc(doc(db,CONFIG.COL.expenses,el.dataset.expensePaid),el.checked?{paidBy:'accounts',spentByMe:true,reclaimedAt:serverTimestamp()}:{paidBy:'me',spentByMe:true,reclaimedAt:null});toast(el.checked?'Reclaimed — marked as paid by accounts':'Marked as pending from office');}catch(err){el.checked=!el.checked;toast(err.message||'Could not update expense','err');} });
   document.addEventListener('click', e => {
     if (e.target.closest('#exAddRow')) { const h=$('#exRows'); h.insertAdjacentHTML('beforeend',exRowHTML()); h.lastElementChild.querySelector('.exi-name').focus(); }
