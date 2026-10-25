@@ -355,7 +355,8 @@ function stopOneListener(k) {
 }
 function syncListenersForView() {
   if (!listenersStarted) return;
-  setConn('');
+  // View changes reuse the existing Firestore subscriptions. Do not reset the
+  // global connection indicator to "Connecting" unless listeners are restarted.
   const desired = new Set(VIEW_COLLECTIONS[cur] || []);
   Object.keys(CONFIG.COL).forEach(k => {
     const permitted = RBAC.can(permissionForCollection(CONFIG.COL[k], false));
