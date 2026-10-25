@@ -87,6 +87,7 @@ const R = {
   shifts: { preset: 'last7', from: addDays(today(), -6), to: today(), machine: '', op: '' }
 };
 let cur = 'overview', curModalRender = null;
+function getCurrentView() { return cur; }
 
 const COST_DEFAULTS = { dieselRate: 92.50, petrolRate: 0, labourPerHour: 0, downtimePerHour: 0, savingsPct: 10, improvementCost: 0 };
 function loadCostModel() {
