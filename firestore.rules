@@ -140,6 +140,8 @@ service cloud.firestore {
     function validFnbReceiptCreate(id) {
       let d = request.resource.data;
       let orderPath = /databases/$(database)/documents/fnb_orders/$(d.orderId);
+      let inwardPath = /databases/$(database)/documents/store_inwards/$(d.inwardId);
+      let inventoryPath = /databases/$(database)/documents/inventory/$(d.itemId);
       return d.keys().hasOnly([
           'orderId', 'itemId', 'itemName', 'category', 'supplier', 'unit', 'quantity',
           'rate', 'receiptDate', 'createdAt', 'transactionType', 'inwardId'
@@ -166,7 +168,27 @@ service cloud.firestore {
         && get(orderPath).data.receivedQty is number
         && getAfter(orderPath).data.receivedQty - get(orderPath).data.receivedQty > d.quantity - 0.000001
         && getAfter(orderPath).data.receivedQty - get(orderPath).data.receivedQty < d.quantity + 0.000001
-        && getAfter(orderPath).data.receivedQty <= getAfter(orderPath).data.orderedQty;
+        && getAfter(orderPath).data.receivedQty <= getAfter(orderPath).data.orderedQty
+        // Receipt, inward ledger, inventory balance, and order state must be one atomic posting.
+        && existsAfter(inwardPath)
+        && getAfter(inwardPath).data.transactionType == 'FNB_RECEIPT'
+        && getAfter(inwardPath).data.fnbReceiptId == id
+        && getAfter(inwardPath).data.fnbOrderId == d.orderId
+        && getAfter(inwardPath).data.itemId == d.itemId
+        && getAfter(inwardPath).data.quantity == d.quantity
+        && getAfter(inwardPath).data.rate == d.rate
+        && existsAfter(inventoryPath)
+        && getAfter(inventoryPath).data.lastReceiptId == id
+        && getAfter(inventoryPath).data.stockQuantity is number
+        && (
+          (!exists(inventoryPath)
+            && getAfter(inventoryPath).data.stockQuantity > d.quantity - 0.000001
+            && getAfter(inventoryPath).data.stockQuantity < d.quantity + 0.000001)
+          || (exists(inventoryPath)
+            && get(inventoryPath).data.stockQuantity is number
+            && getAfter(inventoryPath).data.stockQuantity - get(inventoryPath).data.stockQuantity > d.quantity - 0.000001
+            && getAfter(inventoryPath).data.stockQuantity - get(inventoryPath).data.stockQuantity < d.quantity + 0.000001)
+        );
     }
 
     match /app_roles/{uid} {
