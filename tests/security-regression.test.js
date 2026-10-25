@@ -117,3 +117,12 @@ test("received F&B order history cannot be deleted", async () => {
   const rules = await read("../firestore.rules");
   assert.match(rules, /allow delete: if manager\(\) && !resource\.data\.keys\(\)\.hasAny\(\['lastReceiptId'\]\)/);
 });
+
+test("F&B receipt rules require matching inward and stock records", async () => {
+  const rules = await read("../firestore.rules");
+  assert.match(rules, /existsAfter\(inwardPath\)/);
+  assert.match(rules, /getAfter\(inwardPath\)\.data\.fnbReceiptId == id/);
+  assert.match(rules, /existsAfter\(inventoryPath\)/);
+  assert.match(rules, /getAfter\(inventoryPath\)\.data\.lastReceiptId == id/);
+  assert.match(rules, /getAfter\(inventoryPath\)\.data\.stockQuantity - get\(inventoryPath\)\.data\.stockQuantity > d\.quantity - 0\.000001/);
+});
