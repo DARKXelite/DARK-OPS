@@ -60,6 +60,14 @@ export function createNavigationController(context) {
   let raf = 0; const scheduleRender = () => { if (!raf) raf = requestAnimationFrame(() => { raf = 0; renderAll(); }); };
   function renderAll() { try { (RENDER[getCurrentView()] || (() => {}))(); updateBadges(); const modalRenderer = getCurrentModalRenderer(); if (modalRenderer) modalRenderer(); } catch (e) { console.error(e); } }
 
+  // Refresh live-age labels only on the radar; the rest of the dashboard is event-driven.
+  setInterval(() => {
+    if (getCurrentView() === 'radar') {
+      updateBadges('live');
+      scheduleRender();
+    }
+  }, 10000);
+
   return {
     groupForView, renderGroupTabs, buildNav, openNavGroup, toggleDock,
     updateBadges, switchView, renderAll, scheduleRender,
