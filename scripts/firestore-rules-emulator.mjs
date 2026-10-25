@@ -275,3 +275,65 @@ test("a receipt cannot be posted without its stock inward and inventory balance"
     });
   }));
 });
+
+test("normal inward receipts and inventory increases must post atomically", async () => {
+  await seed(
+    ["app_roles/storekeeper-1", role("storekeeper")],
+    ["inventory/sand-1", { partName: "Sand", category: "Supplies", unit: "Bag", stockQuantity: 5, unitCost: 4, reorderLevel: 1 }]
+  );
+  const db = testEnv.authenticatedContext("storekeeper-1").firestore();
+  const itemRef = doc(db, "inventory", "sand-1");
+  const inwardRef = doc(collection(db, "store_inwards"));
+  const quantity = 3;
+  const rate = 6;
+
+  await assertSucceeds(runTransaction(db, async tx => {
+    const itemSnapshot = await tx.get(itemRef);
+    const item = itemSnapshot.data();
+    tx.update(itemRef, {
+      stockQuantity: item.stockQuantity + quantity,
+      unitCost: rate,
+      lastInwardId: inwardRef.id,
+      updatedAt: serverTimestamp()
+    });
+    tx.set(inwardRef, {
+      itemId: itemRef.id,
+      itemName: item.partName,
+      category: item.category,
+      unit: item.unit,
+      quantity,
+      rate,
+      gstPercent: 0,
+      taxableAmount: quantity * rate,
+      gstAmount: 0,
+      total: quantity * rate,
+      supplier: "Sample Supplier",
+      invoiceNumber: "GRN-001",
+      receiptDate: "2026-10-25",
+      notes: "",
+      createdAt: serverTimestamp(),
+      transactionType: "INWARD"
+    });
+  }));
+  assert.equal((await getDoc(itemRef)).data().stockQuantity, 8);
+
+  const invalidInwardRef = doc(collection(db, "store_inwards"));
+  await assertFails(setDoc(invalidInwardRef, {
+    itemId: itemRef.id,
+    itemName: "Sand",
+    category: "Supplies",
+    unit: "Bag",
+    quantity: 2,
+    rate: 6,
+    gstPercent: 0,
+    taxableAmount: 12,
+    gstAmount: 0,
+    total: 12,
+    supplier: "Sample Supplier",
+    invoiceNumber: "GRN-002",
+    receiptDate: "2026-10-25",
+    notes: "",
+    createdAt: serverTimestamp(),
+    transactionType: "INWARD"
+  }));
+});
