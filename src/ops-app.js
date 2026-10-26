@@ -2860,7 +2860,7 @@ async function saveTurfPlanEdit() {
   if(!product||!(qty>0)||!area){toast('Choose a valid product and enter positive quantity and area.','err');return;}
   const unit=turfProductUnit(product); if(!unit){toast('Set this product unit in Products & stock first.','err');return;}
   try {
-    await updateDoc(doc(db,col,id),{date,plannedDate:date,dayIndex:new Date(date+'T12:00:00').getDay(),productId:product.id,productName:itemName(product),category:product.category||plan.category||'Fertilizers',targetQty:qty,unit,targetArea:area,area,notes:$('#turfEditNotes')?.value?.trim()||''});
+    await updateDoc(doc(db,col,id),{date,dayIndex:new Date(date+'T12:00:00').getDay(),productId:product.id,productName:itemName(product),category:product.category||plan.category||'Fertilizers',targetQty:qty,unit,targetArea:area,area,notes:$('#turfEditNotes')?.value?.trim()||''});
     toast('Plan updated'); openTurfPlansManager(); renderTurfCare();
   } catch(e){console.error(e);toast('Plan update failed.','err');}
 }
