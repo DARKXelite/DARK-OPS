@@ -211,12 +211,13 @@ function liveKeys() { const s = new Set(); liveNow().forEach(l => { s.add(l._nam
 /* ================= UI PRIMITIVES ================= */
 function toast(msg, type = 'ok') {
   const t = document.createElement('div'); t.className = 'toast' + (type === 'err' ? ' err' : type === 'warn' ? ' warn' : '');
-  t.innerHTML = `<span class="material-symbols-rounded">${type === 'err' ? 'error' : type === 'warn' ? 'warning' : 'check_circle'}</span><span>${esc(msg)}</span>`;
+  t.setAttribute('role', type === 'err' ? 'alert' : 'status'); t.setAttribute('aria-live', type === 'err' ? 'assertive' : 'polite'); t.setAttribute('aria-atomic', 'true');
+  t.innerHTML = `<span class="material-symbols-rounded" aria-hidden="true">${type === 'err' ? 'error' : type === 'warn' ? 'warning' : 'check_circle'}</span><span>${esc(msg)}</span>`;
   $('#toasts').appendChild(t); setTimeout(() => { t.style.opacity = '0'; setTimeout(() => t.remove(), 250); }, type === 'err' ? 6000 : 3500);
 }
 function setConn(state) { document.documentElement.dataset.firebaseState = state || 'connecting'; const dot=$('#connDot'); if(dot) dot.className='dot '+state; const label=$('#connText'); if(label) label.textContent=state==='ok'?'Connected':state==='err'?'Connection error':'Connecting'; }
 function openModal({ title, sub = '', body = '', footer = '', size = '' }) {
-  $('#modal').className = 'modal ' + size; $('#modal').setAttribute('aria-label', title || 'Dialog'); $('#mTitle').textContent = title; $('#mSub').textContent = sub;
+  $('#modal').className = 'modal ' + size; $('#modal').setAttribute('role', 'dialog'); $('#modal').setAttribute('aria-modal', 'true'); $('#modal').setAttribute('aria-label', title || 'Dialog'); $('#mTitle').textContent = title; $('#mSub').textContent = sub;
   $('#mBody').innerHTML = body; $('#mBody')._h = null; $('#mFoot').innerHTML = footer; $('#mFoot').style.display = footer ? 'flex' : 'none';
   $('#overlay').classList.add('open');
 }
@@ -2935,31 +2936,37 @@ function openAddSprayTaskForm(dayIdx, dateStr) {
   openModal({title:`Plan treatments · ${dayNames[Number(dayIdx)] || 'Selected day'}`,sub:`${dShort(dateStr)} · Schedule up to 10 products`,size:'turf-batch-modal',body:`<div class="turf-batch-modal-body"><div class="muted sm">Choose the course area and validity window. Selected weekdays create a scheduled task for each matching date. Empty product rows are ignored; inventory is not deducted until issue is recorded.</div><div class="turf-plan-schedule-grid"><label>Course area<select id="turfBatchArea">${areas.map(a=>`<option value="${a}" ${a==='Greens'?'selected':''}>${a}</option>`).join('')}</select></label><label>Valid from<input type="date" id="turfBatchFrom" value="${esc(dateStr)}" required></label><label>Valid until<input type="date" id="turfBatchUntil" value="${esc(dateStr)}" required></label></div><fieldset class="turf-weekday-picks"><legend>Repeat on weekdays</legend>${weekdayNames.map((d,i)=>`<label><input type="checkbox" name="turfBatchWeekday" value="${i}" ${i===Number(dayIdx)?'checked':''}>${d.slice(0,3)}</label>`).join('')}</fieldset><div class="turf-batch-entry-grid" style="padding:0 8px"><label>Product</label><label>Planned quantity</label><label>Area</label></div><div class="turf-batch-entry-list">${rows}</div><label style="display:grid;gap:5px;font-size:10px;color:var(--muted);font-weight:700">Shared planning notes<textarea id="turfBatchNotes" rows="2" placeholder="Purpose, rate reference or planning notes"></textarea></label><input type="hidden" id="turfBatchDay" value="${Number(dayIdx)}"><input type="hidden" id="turfBatchDate" value="${esc(dateStr)}"></div>`,footer:`<button class="btn" data-act="close-modal">Cancel</button><button class="btn btn-primary" data-act="save-turf-batch"><span class="material-symbols-rounded">playlist_add_check</span>Save schedule</button>`});
 }
 async function saveTurfBatch() {
+  const saveButton = document.querySelector('[data-act="save-turf-batch"]');
+  if (saveButton?.disabled) return;
+  if (saveButton) { saveButton.disabled = true; saveButton.setAttribute('aria-busy', 'true'); }
+  const releaseSave = () => { if (saveButton) { saveButton.disabled = false; saveButton.removeAttribute('aria-busy'); } };
   const dayIdx = Number($('#turfBatchDay')?.value), fallbackDate = $('#turfBatchDate')?.value;
   const from = $('#turfBatchFrom')?.value || fallbackDate, until = $('#turfBatchUntil')?.value || fallbackDate;
   const area = $('#turfBatchArea')?.value || 'Greens';
   const weekdays = $$('input[name="turfBatchWeekday"]:checked').map(x=>Number(x.value));
   const notes = $('#turfBatchNotes')?.value?.trim() || '';
-  if(!from || !until || until < from){toast('Choose a valid date range.','err');return;}
-  if(!weekdays.length){toast('Select at least one weekday.','err');return;}
+  if(!from || !until || until < from){toast('Choose a valid date range.','err');releaseSave();return;}
+  const spanDays = Math.floor((new Date(until + 'T12:00:00') - new Date(from + 'T12:00:00')) / 86400000) + 1;
+  if (spanDays > 366) { toast('Keep a schedule within 366 days so it can be reviewed safely.', 'err'); return; }
+  if(!weekdays.length){toast('Select at least one weekday.','err');releaseSave();return;}
   const rows=[];
   for(let i=0;i<10;i++){
     const productId=$(`#turfBatchProd${i}`)?.value, qty=num($(`#turfBatchQty${i}`)?.value);
     if(!productId && !(qty>0)) continue;
     const product=S.inventory.find(p=>p.id===productId&&isTurfCategory(p.category));
-    if(!product){toast(`Choose a valid product in row ${i+1}.`,'err');return;}
-    if(!(qty>0)){toast(`Enter a quantity greater than zero in row ${i+1}.`,'err');return;}
-    const unit=turfProductUnit(product);if(!unit){toast(`Set the stock unit for ${itemName(product)} in Products & stock first.`,'err');return;}
+    if(!product){toast(`Choose a valid product in row ${i+1}.`,'err');releaseSave();return;}
+    if(!(qty>0)){toast(`Enter a quantity greater than zero in row ${i+1}.`,'err');releaseSave();return;}
+    const unit=turfProductUnit(product);if(!unit){toast(`Set the stock unit for ${itemName(product)} in Products & stock first.`,'err');releaseSave();return;}
     rows.push({product,qty,unit});
   }
-  if(!rows.length){toast('Add at least one product and quantity.','warn');return;}
+  if(!rows.length){toast('Add at least one product and quantity.','warn');releaseSave();return;}
   const dates=[];for(let d=from;d<=until;d=addDays(d,1)){const date=new Date(`${d}T12:00:00`);if(weekdays.includes(date.getDay()))dates.push(d);if(d===until)break;}
-  if(!dates.length){toast('No dates in this range match the selected weekdays.','err');return;}
-  if(dates.length*rows.length>500){toast('This schedule creates more than 500 tasks. Narrow the date range or weekdays.','err');return;}
+  if(!dates.length){toast('No dates in this range match the selected weekdays.','err');releaseSave();return;}
+  if(dates.length*rows.length>500){toast('This schedule creates more than 500 tasks. Narrow the date range or weekdays.','err');releaseSave();return;}
   try{
     for(const dateStr of dates){const dateObj=new Date(`${dateStr}T12:00:00`);for(const r of rows) await addDoc(collection(db,CONFIG.COL.plans),{weekStart:currentTurfWeekStart,date:dateStr,dayIndex:dateObj.getDay(),productId:r.product.id,productName:itemName(r.product),category:r.product.category||'Fertilizers',targetQty:r.qty,unit:r.unit,targetArea:area,area,validFrom:from,validUntil:until,repeatWeekdays:weekdays,notes,status:'Planned',createdAt:Date.now()});}
     closeModal();toast(`${rows.length} product${rows.length===1?'':'s'} scheduled for ${dates.length} date${dates.length===1?'':'s'} in ${area}.`);renderTurfCare();
-  }catch(e){console.error(e);toast('Schedule save failed. Some tasks may have saved; refresh and verify before retrying.','err');}
+  }catch(e){console.error(e);toast('Schedule save failed. Some tasks may have saved; refresh and verify before retrying.','err');releaseSave();}
 }
 function renderTurfAreaPlanDashboard(){
   const el=$('#opsTurfAreaPlan'); if(!el)return;
@@ -3206,7 +3213,7 @@ function renderTp() {
     const canPlan = !!unit;
     return '<article class="tp-product-row" data-unit="' + esc(unit) + '">' +
       '<div class="tp-product-ident"><span class="tp-product-icon material-symbols-rounded">' + esc(category === 'Fertilizers' ? 'spa' : category === 'Pesticides' ? 'pest_control' : 'eco') + '</span>' +
-      '<div class="tp-product-copy"><b>' + esc(itemName(product)) + '</b><span>' + esc(unit || 'Unit not set') + ' · Stock ' + fmt(stock, 2) + (num(product.unitCost) > 0 ? ' · ' + money(num(product.unitCost)) + '/' + esc(unit) : '') + '</span></div></div>' +
+      '<div class="tp-product-copy"><b>' + esc(itemName(product)) + '</b><span>' + esc(unit || 'Unit not set') + ' · Available stock: ' + fmt(stock, 2) + (num(product.unitCost) > 0 ? ' · ' + money(num(product.unitCost)) + '/' + esc(unit) : ' · Unit cost not set') + '</span>' + (stock <= effectiveReorderLevel(product) ? '<small class="tp-stock-hint is-low">Low stock · at or below reorder level</small>' : '<small class="tp-stock-hint">Stock is checked again when issuing</small>') + '</div></div>' +
       '<div class="tp-qty-control"><label>Qty (' + esc(unit || 'unit') + ')' +
       '<input type="number" min="0" step="any" inputmode="decimal" value="' + esc(qtyValue) + '" placeholder="0" aria-label="Quantity for ' + esc(itemName(product)) + '" data-tp-qty data-product="' + esc(product.id) + '"' + (canPlan ? '' : ' disabled') + '></label></div>' +
       '<div class="tp-scope-control">' +
