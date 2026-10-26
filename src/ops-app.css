@@ -2854,3 +2854,205 @@ body .drawer .table-wrap table tbody tr:hover td{background:#354F3C!important}
   .ops-dashboard-period{flex-wrap:wrap}
   .ops-dashboard-period .ops-analytics-launch{margin-left:auto}
 }
+
+
+/* ============================================================
+   COLOR CONSISTENCY AUDIT — single dark-olive application palette
+   Fixes legacy light-theme overrides that left pale surfaces paired
+   with dark-theme text (and dark surfaces paired with pale-theme text).
+   Login/weather illustrations and the separately themed analytics modal
+   intentionally retain their own palettes.
+   ============================================================ */
+:root {
+  --sidebar: #0F1C16;
+  --panel: #0F1C16;
+  --table-bg: #172820;
+  --table-row: #1B3026;
+  --table-row-alt: #20362B;
+  --table-row-hover: #304B3B;
+  --table-head: #294436;
+  --table-line: #3A5144;
+  --table-text: #F0F1EB;
+  --table-muted: #C1CBC1;
+}
+
+/* App chrome and everyday containers */
+body:not(.auth-locked) .main .card,
+body:not(.auth-locked) .main .panel,
+body:not(.auth-locked) .main .stat-card,
+body:not(.auth-locked) .main .kmenu,
+body:not(.auth-locked) .main .drawer,
+body:not(.auth-locked) .main .dropdown-menu,
+body:not(.auth-locked) .main .popover,
+body:not(.auth-locked) #overlay .modal,
+body:not(.auth-locked) #overlay .modal-content,
+body:not(.auth-locked) #overlay .table-wrap,
+body:not(.auth-locked) #overlay .table-container,
+body:not(.auth-locked) .drawer .table-wrap {
+  background-color: var(--panel) !important;
+  color: var(--text) !important;
+  border-color: var(--border) !important;
+}
+body:not(.auth-locked) .topbar,
+body:not(.auth-locked) .top-header {
+  background: rgba(7, 13, 10, .94) !important;
+  color: var(--text) !important;
+  border-color: var(--border) !important;
+}
+body:not(.auth-locked) .brand b,
+body:not(.auth-locked) .topbar h1,
+body:not(.auth-locked) .card-h h3,
+body:not(.auth-locked) .section-title,
+body:not(.auth-locked) .modal h2,
+body:not(.auth-locked) .modal h3,
+body:not(.auth-locked) .main h1,
+body:not(.auth-locked) .main h2,
+body:not(.auth-locked) .main h3,
+body:not(.auth-locked) .main h4,
+body:not(.auth-locked) .main .section-t {
+  color: var(--text) !important;
+}
+body:not(.auth-locked) .main .muted,
+body:not(.auth-locked) .main .hint,
+body:not(.auth-locked) .main small,
+body:not(.auth-locked) #overlay .modal .muted,
+body:not(.auth-locked) #overlay .modal .hint {
+  color: var(--muted);
+}
+
+/* Inputs: remove legacy white fields inside the otherwise dark application */
+body:not(.auth-locked) .main input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
+body:not(.auth-locked) .main select,
+body:not(.auth-locked) .main textarea,
+body:not(.auth-locked) #overlay .modal input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
+body:not(.auth-locked) #overlay .modal select,
+body:not(.auth-locked) #overlay .modal textarea,
+body:not(.auth-locked) .drawer input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
+body:not(.auth-locked) .drawer select,
+body:not(.auth-locked) .drawer textarea {
+  background: #0B1510 !important;
+  color: var(--text) !important;
+  border-color: rgba(229, 199, 148, .28) !important;
+  color-scheme: dark;
+}
+body:not(.auth-locked) .main select option,
+body:not(.auth-locked) #overlay .modal select option,
+body:not(.auth-locked) .drawer select option {
+  background: #0F1C16 !important;
+  color: var(--text) !important;
+}
+body:not(.auth-locked) .main input::placeholder,
+body:not(.auth-locked) .main textarea::placeholder,
+body:not(.auth-locked) #overlay .modal input::placeholder,
+body:not(.auth-locked) #overlay .modal textarea::placeholder {
+  color: #9BA99F !important;
+  opacity: 1;
+}
+
+/* Utility/search/filter controls that previously kept pale-theme text */
+body:not(.auth-locked) .user-search,
+body:not(.auth-locked) .user-role-filter,
+body:not(.auth-locked) .user-role-filter select,
+body:not(.auth-locked) .search,
+body:not(.auth-locked) .search input {
+  color: var(--text) !important;
+}
+body:not(.auth-locked) .user-search,
+body:not(.auth-locked) .user-role-filter select {
+  background: #0B1510 !important;
+  border-color: var(--border) !important;
+}
+body:not(.auth-locked) .user-search input {
+  background: transparent !important;
+}
+body:not(.auth-locked) .main .btn:not(.btn-primary):not(.btn-danger),
+body:not(.auth-locked) #overlay .modal .btn:not(.btn-primary):not(.btn-danger),
+body:not(.auth-locked) .drawer .btn:not(.btn-primary):not(.btn-danger),
+body:not(.auth-locked) .main button.secondary,
+body:not(.auth-locked) .main .btn-secondary {
+  background: rgba(255,255,255,.055) !important;
+  color: var(--text) !important;
+  border-color: var(--border) !important;
+}
+body:not(.auth-locked) .main .btn-primary,
+body:not(.auth-locked) #overlay .modal .btn-primary {
+  background: #265942 !important;
+  color: #FFFFFF !important;
+  border-color: rgba(229,199,148,.42) !important;
+}
+
+/* All standard operational tables use one surface/text pairing.
+   Status badges and explicit semantic colors remain independently styled. */
+body:not(.auth-locked) .main table,
+body:not(.auth-locked) #overlay .modal:not(.ops-analytics-modal) table,
+body:not(.auth-locked) .drawer table {
+  background: var(--table-bg) !important;
+  color: var(--table-text) !important;
+  border-color: var(--table-line) !important;
+}
+body:not(.auth-locked) .main table thead th,
+body:not(.auth-locked) #overlay .modal:not(.ops-analytics-modal) table thead th,
+body:not(.auth-locked) .drawer table thead th {
+  background: var(--table-head) !important;
+  color: #F0F1EB !important;
+  border-color: var(--table-line) !important;
+}
+body:not(.auth-locked) .main table tbody tr,
+body:not(.auth-locked) #overlay .modal:not(.ops-analytics-modal) table tbody tr,
+body:not(.auth-locked) .drawer table tbody tr {
+  background: var(--table-row) !important;
+  color: var(--table-text) !important;
+}
+body:not(.auth-locked) .main table tbody tr:nth-child(even),
+body:not(.auth-locked) #overlay .modal:not(.ops-analytics-modal) table tbody tr:nth-child(even),
+body:not(.auth-locked) .drawer table tbody tr:nth-child(even) {
+  background: var(--table-row-alt) !important;
+}
+body:not(.auth-locked) .main table tbody tr:hover,
+body:not(.auth-locked) #overlay .modal:not(.ops-analytics-modal) table tbody tr:hover,
+body:not(.auth-locked) .drawer table tbody tr:hover {
+  background: var(--table-row-hover) !important;
+  color: var(--table-text) !important;
+}
+body:not(.auth-locked) .main table td,
+body:not(.auth-locked) #overlay .modal:not(.ops-analytics-modal) table td,
+body:not(.auth-locked) .drawer table td {
+  background-color: transparent;
+  color: var(--table-text) !important;
+  border-color: var(--table-line) !important;
+}
+body:not(.auth-locked) .main table td b,
+body:not(.auth-locked) #overlay .modal:not(.ops-analytics-modal) table td b,
+body:not(.auth-locked) .drawer table td b {
+  color: #F7F6EF !important;
+}
+body:not(.auth-locked) .main table .muted,
+body:not(.auth-locked) #overlay .modal:not(.ops-analytics-modal) table .muted,
+body:not(.auth-locked) .drawer table .muted {
+  color: #C1CBC1 !important;
+}
+body:not(.auth-locked) .main table tfoot td,
+body:not(.auth-locked) #overlay .modal:not(.ops-analytics-modal) table tfoot td,
+body:not(.auth-locked) .drawer table tfoot td {
+  background: #20362B !important;
+  color: #F0F1EB !important;
+}
+
+/* Modals and toasts follow the surface they actually render on */
+body:not(.auth-locked) #overlay .modal .m-head,
+body:not(.auth-locked) #overlay .modal .m-foot {
+  background: #14231A !important;
+  color: var(--text) !important;
+  border-color: var(--border) !important;
+}
+body:not(.auth-locked) #overlay .modal .m-head h2,
+body:not(.auth-locked) #overlay .modal .m-head p,
+body:not(.auth-locked) #overlay .modal .m-head .muted,
+body:not(.auth-locked) #overlay .modal .m-head .icon-btn {
+  color: var(--text) !important;
+}
+body:not(.auth-locked) #toasts .toast {
+  background: #14231A !important;
+  color: var(--text) !important;
+  border-color: var(--border) !important;
+}
