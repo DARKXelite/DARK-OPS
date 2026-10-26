@@ -102,10 +102,11 @@ function fuelCostSummary(rows) {
   return { litres, pricedLitres, unpricedLitres: Math.max(0, litres - pricedLitres), cost, coverage: litres > 0 ? pricedLitres / litres * 100 : 100 };
 }
 function inventoryCostSummary(items=S.inventory) {
+  const stock = i => inventoryOnHand(i);
   const priced = items.filter(i => num(i.unitCost) > 0);
-  const unpriced = items.filter(i => num(i.stockQuantity) > 0 && num(i.unitCost) <= 0);
-  return { value: priced.reduce((a, i) => a + Math.max(0, num(i.stockQuantity)) * num(i.unitCost), 0), pricedCount: priced.length, unpricedCount: unpriced.length, total: items.length,
-    reorderValue: items.reduce((a, i) => a + Math.max(0, effectiveReorderLevel(i) - num(i.stockQuantity)) * Math.max(0, num(i.unitCost)), 0), low: items.filter(i => num(i.stockQuantity) <= effectiveReorderLevel(i)) };
+  const unpriced = items.filter(i => stock(i) > 0 && num(i.unitCost) <= 0);
+  return { value: priced.reduce((a, i) => a + stock(i) * num(i.unitCost), 0), pricedCount: priced.length, unpricedCount: unpriced.length, total: items.length,
+    reorderValue: items.reduce((a, i) => a + Math.max(0, effectiveReorderLevel(i) - stock(i)) * Math.max(0, num(i.unitCost)), 0), low: items.filter(i => stock(i) <= effectiveReorderLevel(i)) };
 }
 function monthPlansCost(from, to) {
   const rows = allTurfPlanRecords().filter(p => {
@@ -178,6 +179,18 @@ function fuelRecordDate(f) {
   const dateValue = f && (f.issueDate ?? f.issuedDate ?? f.date ?? f.transactionDate ?? f.createdDate);
   return normDate(dateValue, f && (f.issuedAt ?? f.issueTimestamp ?? f.timestamp ?? f.createdAt ?? f.createdOn ?? f.updatedAt ?? f.recordedAt));
 }
+// Fuel issue logs are the consumption ledger already used by the dashboard. Compute on-hand
+// from the same records; never mutate stock from snapshot listeners (that would double-deduct).
+function inventoryOnHand(item) {
+  const raw = Math.max(0, num(item && item.stockQuantity));
+  if (String(item && item.category || '').trim().toLowerCase() !== 'fuel') return raw;
+  const fuelType = canonicalFuelType(item && (item.partName ?? item.itemName ?? item.name ?? item.productName));
+  if (!fuelType) return raw;
+  const issued = (S.fuel || []).reduce((total, f) => fuelTypeFromRecord(f) === fuelType
+    ? total + Math.max(0, num(f.litres ?? f.quantity ?? f.qty ?? f.fuelLitres ?? f.fuelQuantity))
+    : total, 0);
+  return Math.max(0, raw - issued);
+}
 const fuelIn = (a, b) => S.fuel.filter(f => { const d = fuelRecordDate(f); return d && d >= a && d <= b; });
 const shiftsIn = (a, b) => S.shifts.filter(s => s._d && s._d >= a && s._d <= b);
 const litresFor = (m, a, b) => S.fuel.reduce((t, f) => { const d=fuelRecordDate(f); return (d >= a && d <= b && (f.machineId === m.id || f.machineId === m.assetName)) ? t + num(f.litres ?? f.quantity ?? f.qty) : t; }, 0);
@@ -211,12 +224,13 @@ function liveKeys() { const s = new Set(); liveNow().forEach(l => { s.add(l._nam
 /* ================= UI PRIMITIVES ================= */
 function toast(msg, type = 'ok') {
   const t = document.createElement('div'); t.className = 'toast' + (type === 'err' ? ' err' : type === 'warn' ? ' warn' : '');
-  t.innerHTML = `<span class="material-symbols-rounded">${type === 'err' ? 'error' : type === 'warn' ? 'warning' : 'check_circle'}</span><span>${esc(msg)}</span>`;
+  t.setAttribute('role', type === 'err' ? 'alert' : 'status'); t.setAttribute('aria-live', type === 'err' ? 'assertive' : 'polite'); t.setAttribute('aria-atomic', 'true');
+  t.innerHTML = `<span class="material-symbols-rounded" aria-hidden="true">${type === 'err' ? 'error' : type === 'warn' ? 'warning' : 'check_circle'}</span><span>${esc(msg)}</span>`;
   $('#toasts').appendChild(t); setTimeout(() => { t.style.opacity = '0'; setTimeout(() => t.remove(), 250); }, type === 'err' ? 6000 : 3500);
 }
 function setConn(state) { document.documentElement.dataset.firebaseState = state || 'connecting'; const dot=$('#connDot'); if(dot) dot.className='dot '+state; const label=$('#connText'); if(label) label.textContent=state==='ok'?'Connected':state==='err'?'Connection error':'Connecting'; }
 function openModal({ title, sub = '', body = '', footer = '', size = '' }) {
-  $('#modal').className = 'modal ' + size; $('#modal').setAttribute('aria-label', title || 'Dialog'); $('#mTitle').textContent = title; $('#mSub').textContent = sub;
+  $('#modal').className = 'modal ' + size; $('#modal').setAttribute('role', 'dialog'); $('#modal').setAttribute('aria-modal', 'true'); $('#modal').setAttribute('aria-label', title || 'Dialog'); $('#mTitle').textContent = title; $('#mSub').textContent = sub;
   $('#mBody').innerHTML = body; $('#mBody')._h = null; $('#mFoot').innerHTML = footer; $('#mFoot').style.display = footer ? 'flex' : 'none';
   $('#overlay').classList.add('open');
 }
@@ -528,7 +542,7 @@ function autoReorderDetails(item) {
   const unit=String(item.unit||item.uom||item.stockUnit||'').toLowerCase();
   const integerUnit=/^(nos?|pieces?|pcs?|packs?|bags?|sets?|units?)$/.test(unit);
   const level=reliable ? (integerUnit?Math.ceil(raw):Math.ceil(raw*10)/10) : Math.max(legacy,policy.floor);
-  const details={level,leadDays:policy.leadDays,meanDaily:mean,totalUsage:total,windowDays:observedDates.length,transactions:events.length,activeDays,reliable,method:reliable?`${observedDates.length}-day demand + safety buffer`:'Provisional floor',daysCover:mean>0?Math.max(0,num(item.stockQuantity))/mean:null,events};
+  const details={level,leadDays:policy.leadDays,meanDaily:mean,totalUsage:total,windowDays:observedDates.length,transactions:events.length,activeDays,reliable,method:reliable?`${observedDates.length}-day demand + safety buffer`:'Provisional floor',daysCover:mean>0?inventoryOnHand(item)/mean:null,events};
   _reorderDetailCache.set(item.id,details); return details;
 }
 function effectiveReorderLevel(item) { return autoReorderDetails(item).level; }
@@ -1792,14 +1806,14 @@ const itemName = i => i.partName || i.itemName || i.name || i.productName || 'Un
 const inventoryCategoryOpen = new Set();
 function inventoryRowsMarkup(items) {
   return `<div class="table-wrap inv-category-table"><table><thead><tr><th>Item name</th><th>Unit</th><th class="num">On hand</th><th class="num">Auto reorder at</th><th class="num">Last unit rate</th><th class="num">Stock value</th><th>Status</th><th></th></tr></thead><tbody>${items.length ? items.map(i=>{
-    const qty=num(i.stockQuantity), reorder=effectiveReorderLevel(i), policy=autoReorderDetails(i), low=qty<=reorder;
+    const qty=inventoryOnHand(i), reorder=effectiveReorderLevel(i), policy=autoReorderDetails(i), low=qty<=reorder;
     return `<tr><td><b>${esc(itemName(i))}</b></td><td>${esc(i.unit||'Unit not set')}</td><td class="num"><b>${fmt(qty,3)}</b></td><td class="num"><b>${fmt(reorder,3)}</b><div class="muted sm">${policy.reliable?'Trend-based':'Provisional floor'}</div></td><td class="num">${num(i.unitCost)?money(i.unitCost,2):'—'}</td><td class="num">${money(qty*num(i.unitCost),2)}</td><td><span class="badge ${low?'warn':'ok'}">${low?'Reorder':'In stock'}</span></td><td><button class="btn btn-sm" data-act="edit-part" data-id="${esc(i.id)}">Edit</button></td></tr>`;
   }).join(''):'<tr><td colspan="8" class="empty">No items in this category.</td></tr>'}</tbody></table></div>`;
 }
 function renderRegistry() {
   const items=S.inventory.slice();
-  const low=items.filter(i=>num(i.stockQuantity)<=effectiveReorderLevel(i)).length;
-  const total=items.reduce((v,i)=>v+Math.max(0,num(i.stockQuantity))*Math.max(0,num(i.unitCost)),0);
+  const low=items.filter(i=>inventoryOnHand(i)<=effectiveReorderLevel(i)).length;
+  const total=items.reduce((v,i)=>v+inventoryOnHand(i)*Math.max(0,num(i.unitCost)),0);
   setHTML($('#storeKpis'), `<div class="kpi"><div class="kpi-label">SKUs</div><div class="kpi-value">${items.length}</div></div><div class="kpi"><div class="kpi-label">Low stock</div><div class="kpi-value">${low}</div></div><div class="kpi"><div class="kpi-label">Stock value (recorded rates)</div><div class="kpi-value">${money(total)}</div></div><div class="kpi"><div class="kpi-label">Goods receipts</div><div class="kpi-value">${S.inwards.length}</div></div>`);
 
   if (!LOADED.inventory) {
@@ -1817,8 +1831,8 @@ function renderRegistry() {
       return ra-rb || a.localeCompare(b);
     });
     const markup = cats.map(cat=>{
-      const rows=groups.get(cat), lowRows=rows.filter(i=>num(i.stockQuantity)<=effectiveReorderLevel(i));
-      const value=rows.reduce((v,i)=>v+Math.max(0,num(i.stockQuantity))*Math.max(0,num(i.unitCost)),0);
+      const rows=groups.get(cat), lowRows=rows.filter(i=>inventoryOnHand(i)<=effectiveReorderLevel(i));
+      const value=rows.reduce((v,i)=>v+inventoryOnHand(i)*Math.max(0,num(i.unitCost)),0);
       const isOpen=inventoryCategoryOpen.has(cat);
       return `<details class="inv-category" data-inv-category="${esc(cat)}" ${isOpen?'open':''}><summary><span class="inv-cat-icon material-symbols-rounded">${cat==='Fuel'?'local_gas_station':cat==='Fertilizers'?'spa':cat==='Pesticides'?'pest_control':cat==='Turf Enhancements'?'eco':cat==='Spare Parts'?'build':cat==='Tools'?'handyman':'inventory_2'}</span><span class="inv-cat-main"><b>${esc(cat)}</b><small>${rows.length} item${rows.length===1?'':'s'} · ${money(value)} recorded stock value</small></span><span class="inv-cat-alert ${lowRows.length?'warn':''}">${lowRows.length?`${lowRows.length} reorder`:'Stock OK'}</span><span class="inv-cat-chevron material-symbols-rounded">expand_more</span></summary><div class="inv-category-body">${isOpen?inventoryRowsMarkup(rows):'<div class="inv-category-placeholder">Expand to view items in this category</div>'}</div></details>`;
     }).join('');
@@ -2199,6 +2213,10 @@ const H = {
   'nav-turfcare': () => { setTurfSection('workboard'); switchView('turfcare'); },
   'nav-inventory-master': () => switchView('registry'),
   'turf-tab': d => setTurfSection(d.tab),
+  'turf-open-plans': () => openTurfPlansManager(),
+  'turf-edit-plan': d => editTurfPlan(d.id, d.source),
+  'turf-delete-plan': d => deleteTurfPlan(d.id, d.source),
+  'turf-save-plan-edit': () => saveTurfPlanEdit(),
   'turf-category-products': d => { turfProductCategory = d.category || 'All categories'; setTurfSection('products'); },
   'export-turf-applications': () => { const rows=allTurfPlanRecords().filter(p=>isTurfCategory(turfPlanCategory(p))).sort((a,b)=>turfRecordDate(a).localeCompare(turfRecordDate(b))); downloadCSV('turf-application-records.csv', [['Date','Category','Product','Quantity','Unit','Treated area','Status','Notes','Created at'], ...rows.map(p=>[turfRecordDate(p),turfPlanCategory(p),turfRecordProductName(p),turfRecordQuantity(p),p.unit||p.stockUnit||p.uom||'',p.targetArea||p.area||p.location||'',turfRecordStatus(p),p.notes||p.reason||'',p.createdAt ? new Date(tsMs(p.createdAt)).toISOString() : ''])]); },
   'rec-tab': d => { recordsTab = d.tab; renderRecords(); },
@@ -2310,7 +2328,7 @@ const H = {
   'export-shifts': () => { const st = R.shifts; downloadCSV(`shifts_${st.from}_to_${st.to}.csv`, [['Date', 'Operator', 'Machine', 'Distance km', 'Engine hours'], ...shiftRows().map(s => [s._d, s.operatorName || '', mName(s.machineId), num(s.distanceKm), num(s.engineHoursLogged)])]); },
   'export-run': () => { const { st, rows } = runData(); downloadCSV(`running_hours_${st.from}_to_${st.to}.csv`, [['Machine', 'Category', 'Operators', 'Shifts', 'Run hours', 'Distance km', 'Fuel L', 'L/hr'], ...rows.map(r => [r.name, r.cat, [...r.ops].join('; '), r.n, +r.H.toFixed(2), +r.km.toFixed(2), +r.L.toFixed(2), r.H && r.L ? +(r.L / r.H).toFixed(2) : ''])]); },
   'add-inward': () => openInward(),
-  'export-stock': () => downloadCSV('inventory_stock.csv',[['Category','Item','Unit','Stock','Auto reorder at','Rate basis','Unit rate'],...S.inventory.map(i=>[i.category,itemName(i),i.unit||'Nos',i.stockQuantity,effectiveReorderLevel(i),autoReorderDetails(i).method,i.unitCost])]),
+  'export-stock': () => downloadCSV('inventory_stock.csv',[['Category','Item','Unit','Stock','Auto reorder at','Rate basis','Unit rate'],...S.inventory.map(i=>[i.category,itemName(i),i.unit||'Nos',inventoryOnHand(i),effectiveReorderLevel(i),autoReorderDetails(i).method,i.unitCost])]),
   'export-inwards': () => downloadCSV('goods_inwards.csv',[['Date','Invoice','Supplier','Category','Item','Unit','Qty','Rate','GST %','Taxable','GST amount','Total'],...S.inwards.map(r=>[r.receiptDate,r.invoiceNumber,r.supplier,r.category,r.itemName,r.unit,r.quantity,r.rate,r.gstPercent,r.taxableAmount,r.gstAmount,r.total])]),
   'edit-user': d => { const u=S.users.find(x=>x.id===d.id); if(!u) return toast('User record not found','err'); openForm({title:'Edit workforce member',submit:'Save changes',html:fld('Full name','<input id="euName" required>')+fld('Mobile number','<input id="euMob" inputmode="tel" required>','Saved in normalized +91 format where applicable.')+fld('Role','<select id="euRole"><option value="operator">Operator</option><option value="incharge">Incharge</option><option value="storekeeper">Storekeeper (Fuel Ledger)</option><option value="storekeeper_fertilizer">Storekeeper (Fertilizers & Pesticides)</option></select>'),onSubmit:async()=>{const name=$('#euName').value.trim(), mob=normMobile($('#euMob').value), role=$('#euRole').value;if(!name){toast('Name is required','err');return false;}if(!/^\+\d{10,14}$/.test(mob)){toast('Enter a valid mobile number','err');return false;}if(S.users.some(x=>x.id!==u.id&&x.mobileNumber===mob)){toast('This mobile number is already registered','err');return false;}await updateDoc(doc(db,CONFIG.COL.users,u.id),{fullName:name,username:name,mobileNumber:mob,role});toast('User profile updated');}});setTimeout(()=>{if($('#euName'))$('#euName').value=u.fullName||u.username||'';if($('#euMob'))$('#euMob').value=u.mobileNumber||'';if($('#euRole'))$('#euRole').value=u.role||'operator';},0); },
   'add-user': () => openForm({ title: 'Register workforce member', submit: 'Add user',
@@ -2812,6 +2830,60 @@ function renderTurfApplications() {
     return `<tr><td>${esc(turfRecordDate(p) || '—')}<div class="muted sm">${p.createdAt ? 'Entered '+esc(dShort(normDate(null,p.createdAt))) : ''}</div></td><td><span class="badge ${turfCategoryClass(category)}">${esc(category)}</span></td><td><b>${esc(turfRecordProductName(p) || 'Unspecified product')}</b></td><td class="num">${fmt(turfRecordQuantity(p),2)} ${esc(p.unit || p.stockUnit || '')}</td><td>${esc(p.targetArea || p.area || p.location || 'Course')}</td><td><span class="badge ${status==='Applied'?'ok':status==='Issued'?'gold':'warn'}">${status}</span></td><td class="muted">${esc(p.notes || p.reason || '—')}</td></tr>`;
   }).join('') : '<tr><td colspan="7" class="empty">No application records match these filters.</td></tr>'}</tbody></table>`);
 }
+
+function turfEditablePlanRecord(plan) {
+  return !!plan && turfRecordStatus(plan) === 'Planned' &&
+    ['turf_plans','daily_application_plans'].includes(plan._sourceCollection) &&
+    !!String(plan.id || plan.planId || '').trim();
+}
+function openTurfPlansManager() {
+  const records = allTurfPlanRecords().filter(p => isTurfCategory(turfPlanCategory(p)))
+    .sort((a,b) => turfRecordDate(b).localeCompare(turfRecordDate(a)) || tsMs(b.createdAt)-tsMs(a.createdAt));
+  curModalRender = renderTurfPlansManager;
+  openModal({title:'Turf treatment plans',sub:'Expand a date to inspect its plan records. Only planned, not-yet-issued records can be edited or deleted.',size:'turf-plans-manager-modal',body:'<div id="turfPlansManagerRoot"></div>',footer:'<button class="btn" data-act="close-modal">Close</button>'});
+  renderTurfPlansManager();
+}
+function renderTurfPlansManager() {
+  const root=$('#turfPlansManagerRoot'); if(!root)return;
+  const records=allTurfPlanRecords().filter(p=>isTurfCategory(turfPlanCategory(p)))
+    .sort((a,b)=>turfRecordDate(b).localeCompare(turfRecordDate(a))||tsMs(b.createdAt)-tsMs(a.createdAt));
+  const groups=new Map();
+  records.forEach(p=>{const date=turfRecordDate(p)||'Undated';if(!groups.has(date))groups.set(date,[]);groups.get(date).push(p);});
+  root.innerHTML=records.length?[...groups.entries()].map(([date,items],idx)=>'<details class="turf-plan-group" '+(idx===0?'open':'')+'><summary><b>'+esc(date)+'</b><span>'+items.length+' item'+(items.length===1?'':'s')+'</span><span class="muted sm">'+esc(items.map(turfRecordStatus).filter((v,i,a)=>a.indexOf(v)===i).join(' · '))+'</span></summary><div class="table-wrap"><table class="turf-plan-manager-table"><thead><tr><th>Product</th><th>Area</th><th>Qty</th><th>Status</th><th>Actions</th></tr></thead><tbody>'+items.map(p=>{
+    const editable=turfEditablePlanRecord(p), source=p._sourceCollection||'turf_plans';
+    return '<tr><td><b>'+esc(turfRecordProductName(p)||'Unspecified product')+'</b><small>'+esc(turfPlanCategory(p))+'</small></td><td>'+esc(p.targetArea||p.area||p.location||'Course')+'</td><td>'+fmt(turfRecordQuantity(p),2)+' '+esc(p.unit||p.stockUnit||'units')+'</td><td><span class="badge">'+esc(turfRecordStatus(p))+'</span></td><td class="turf-plan-actions">'+(editable?'<button class="btn btn-sm" data-act="turf-edit-plan" data-id="'+esc(p.id||p.planId)+'" data-source="'+esc(source)+'">Edit</button><button class="btn btn-sm btn-danger" data-act="turf-delete-plan" data-id="'+esc(p.id||p.planId)+'" data-source="'+esc(source)+'">Delete</button>':'<span class="muted sm">Locked after issue</span>')+'</td></tr>';
+  }).join('')+'</tbody></table></div></details>').join(''):'<div class="empty">No turf plans found.</div>';
+}
+function editTurfPlan(id, source) {
+  const col=source==='daily_application_plans'?CONFIG.COL.dailyPlans:CONFIG.COL.plans;
+  const plan=(source==='daily_application_plans'?S.dailyPlans:S.plans).find(p=>String(p.id||p.planId)===String(id));
+  if(!plan||!turfEditablePlanRecord({...plan,_sourceCollection:source})){toast('Only planned records can be edited. Issued/applied records are locked.','err');return;}
+  const date=turfRecordDate(plan)||today(), productId=String(plan.productId||plan.partId||'');
+  const options=S.inventory.filter(i=>isTurfCategory(i.category)).map(i=>'<option value="'+esc(i.id)+'" '+(String(i.id)===productId?'selected':'')+'>'+esc(itemName(i))+'</option>').join('');
+  openModal({title:'Edit planned treatment',sub:'Backdating is blocked. Issued and applied records cannot be edited.',size:'sm',body:'<div class="form-grid"><label>Plan date<input id="turfEditDate" type="date" min="'+esc(date>today()?today():date)+'" value="'+esc(date)+'" required></label><label>Product<select id="turfEditProduct">'+options+'</select></label><label>Quantity<input id="turfEditQty" type="number" min="0.01" step="any" value="'+esc(turfRecordQuantity(plan))+'" required></label><label>Area<input id="turfEditArea" value="'+esc(plan.targetArea||plan.area||plan.location||'Course')+'" required></label><label>Notes<input id="turfEditNotes" value="'+esc(plan.notes||'')+'"></label></div><input type="hidden" id="turfEditId" value="'+esc(id)+'"><input type="hidden" id="turfEditSource" value="'+esc(source)+'"><input type="hidden" id="turfEditOriginalDate" value="'+esc(date)+'">',footer:'<button class="btn" data-act="close-modal">Cancel</button><button class="btn btn-primary" data-act="turf-save-plan-edit">Save changes</button>'});
+}
+async function saveTurfPlanEdit() {
+  const id=$('#turfEditId')?.value, source=$('#turfEditSource')?.value, originalDate=$('#turfEditOriginalDate')?.value, date=$('#turfEditDate')?.value;
+  const col=source==='daily_application_plans'?CONFIG.COL.dailyPlans:CONFIG.COL.plans;
+  const plan=(source==='daily_application_plans'?S.dailyPlans:S.plans).find(p=>String(p.id||p.planId)===String(id));
+  if(!plan||!turfEditablePlanRecord({...plan,_sourceCollection:source})){toast('This plan is no longer editable.','err');return;}
+  if(!date||date<today()||date<originalDate){toast('Backdating is not allowed. Choose today or a future date, not earlier than the original plan date.','err');return;}
+  const product=S.inventory.find(i=>i.id===$('#turfEditProduct')?.value&&isTurfCategory(i.category));
+  const qty=num($('#turfEditQty')?.value), area=$('#turfEditArea')?.value?.trim();
+  if(!product||!(qty>0)||!area){toast('Choose a valid product and enter positive quantity and area.','err');return;}
+  const unit=turfProductUnit(product); if(!unit){toast('Set this product unit in Products & stock first.','err');return;}
+  try {
+    await updateDoc(doc(db,col,id),{date,dayIndex:new Date(date+'T12:00:00').getDay(),productId:product.id,productName:itemName(product),category:product.category||plan.category||'Fertilizers',targetQty:qty,unit,targetArea:area,area,notes:$('#turfEditNotes')?.value?.trim()||''});
+    toast('Plan updated'); openTurfPlansManager(); renderTurfCare();
+  } catch(e){console.error(e);toast('Plan update failed.','err');}
+}
+function deleteTurfPlan(id, source) {
+  const col=source==='daily_application_plans'?CONFIG.COL.dailyPlans:CONFIG.COL.plans;
+  const plan=(source==='daily_application_plans'?S.dailyPlans:S.plans).find(p=>String(p.id||p.planId)===String(id));
+  if(!plan||!turfEditablePlanRecord({...plan,_sourceCollection:source})){toast('Only planned records can be deleted. Issued/applied records are locked.','err');return;}
+  openForm({title:'Delete planned treatment',submit:'Delete plan',danger:true,html:'<p>This deletes only the selected planned record. Issued/applied history is locked.</p><p><b>'+esc(turfRecordProductName(plan))+'</b> · '+esc(turfRecordDate(plan))+'</p>',onSubmit:async()=>{await deleteDoc(doc(db,col,id));toast('Planned treatment deleted');openTurfPlansManager();renderTurfCare();}});
+}
+
 function renderTurfCare() {
   if (!currentTurfWeekStart) currentTurfWeekStart = getSunday(today());
   const weekStartEl = $('#turfWeekStart');
@@ -2883,13 +2955,13 @@ function renderTurfCare() {
         <div class="turf-focus-metrics"><div><small>Scheduled products</small><b>${fmt(tasksCount,0)}</b></div><div><small>Issued / applied</small><b>${fmt(issuedCount,0)}</b></div><div title="Issued/applied quantity × matching Inventory Master unit cost"><small>Priced value</small><b>${esc(focusCostLabel)}</b><span>${esc(focusCostHint)}</span></div></div>
         <div class="turf-featured-list-heading"><span>PRODUCT & STATUS</span><span>QTY / VALUE</span></div>
         <div class="turf-day-plans turf-featured-plans">${planRows}</div>
-        <div class="turf-featured-foot"><span>Recorded status only · cost requires a matching stock unit and unit rate</span><button class="turf-add-day" data-act="add-spray" data-day="${idx}" data-date="${dateStr}"><span class="material-symbols-rounded">add</span>Add task</button></div>
+        <div class="turf-featured-foot"><span>Recorded status only · cost requires a matching stock unit and unit rate</span></div>
       </article>`;
     }
     const issuedCount=dayPlans.filter(p=>['Issued','Applied'].includes(turfRecordStatus(p))).length;
     const daySummary=dayPlans.length ? `${dayPlans.length} item${dayPlans.length===1?'':'s'} · ${issuedCount} issued/applied` : 'No work planned';
     const topNames=dayPlans.slice(0,2).map(p=>`${turfRecordProductName(p)||'Unspecified product'} · ${p.targetArea||p.area||p.location||'Course'} · ${fmt(turfRecordQuantity(p),2)} ${p.unit||p.stockUnit||'units'}`).join(' · ');
-    return `<article class="turf-week-side-card${todayClass}"><div class="turf-week-side-date"><b>${esc(dayNames[idx])}</b><span>${esc(dShort(dateStr))}</span>${dateStr===todayStr?'<span class="turf-today-pill">Today</span>':''}</div><div class="turf-week-side-main"><div class="turf-week-side-summary">${esc(daySummary)}</div><div class="turf-week-side-products">${esc(topNames || 'Ready for scheduling')}${dayPlans.length>2?` · +${dayPlans.length-2} more`:''}</div></div><button class="turf-add-day compact" data-act="add-spray" data-day="${idx}" data-date="${dateStr}" aria-label="Add application for ${dayNames[idx]}"><span class="material-symbols-rounded">add</span><span>Add</span></button></article>`;
+    return `<article class="turf-week-side-card${todayClass}"><div class="turf-week-side-date"><b>${esc(dayNames[idx])}</b><span>${esc(dShort(dateStr))}</span>${dateStr===todayStr?'<span class="turf-today-pill">Today</span>':''}</div><div class="turf-week-side-main"><div class="turf-week-side-summary">${esc(daySummary)}</div><div class="turf-week-side-products">${esc(topNames || 'Ready for scheduling')}${dayPlans.length>2?` · +${dayPlans.length-2} more`:''}</div></div></article>`;
   };
   const focusDayMarkup=dayCard({dateStr:focusDate,idx:focusIdx,plans:focusPlans},true);
   setHTML($('#turfPlannerGrid'), `<div class="turf-week-layout"><div class="turf-week-focus-column">${focusDayMarkup}</div><div class="turf-week-side-stack" aria-label="Other days in selected week">${otherDays.map(day=>dayCard(day,false)).join('')}</div></div>`);
@@ -2915,8 +2987,8 @@ function renderTurfCare() {
   // Product register: category-first, concise and stock-oriented.
   const filteredProducts = turfItems.filter(i => turfProductCategory === 'All categories' || turfCategoryLabel(i.category) === turfProductCategory).sort((a,b)=>itemName(a).localeCompare(itemName(b)));
   setHTML($('#turfInvTbl'), `<table><thead><tr><th>Product</th><th>Category</th><th>Unit</th><th class="num">On hand</th><th class="num">Auto reorder at</th><th class="num">Unit rate</th><th>Status</th><th>Actions</th></tr></thead><tbody>${!LOADED.inventory?'<tr><td colspan="8">Loading products…</td></tr>':filteredProducts.length?filteredProducts.map(i=>{
-    const low=num(i.stockQuantity)<=effectiveReorderLevel(i);
-    return `<tr><td><b>${esc(itemName(i))}</b></td><td><span class="badge ${turfCategoryClass(i.category)}">${esc(turfCategoryLabel(i.category))}</span></td><td>${esc(i.unit || 'Nos')}</td><td class="num"><b>${fmt(i.stockQuantity,3)}</b></td><td class="num"><b>${fmt(effectiveReorderLevel(i),3)}</b><div class="muted sm">${autoReorderDetails(i).reliable?'Trend-based':'Provisional'}</div></td><td class="num">${num(i.unitCost)>0?money(i.unitCost,2):'—'}</td><td><span class="badge ${low?'warn':'ok'}">${low?'Reorder':'In stock'}</span></td><td class="right nowrap"><button class="btn btn-sm" data-act="edit-part" data-id="${esc(i.id)}" title="Edit product"><span class="material-symbols-rounded">edit</span></button></td></tr>`;
+    const stock=inventoryOnHand(i), low=stock<=effectiveReorderLevel(i);
+    return `<tr><td><b>${esc(itemName(i))}</b></td><td><span class="badge ${turfCategoryClass(i.category)}">${esc(turfCategoryLabel(i.category))}</span></td><td>${esc(i.unit || 'Nos')}</td><td class="num"><b>${fmt(stock,3)}</b></td><td class="num"><b>${fmt(effectiveReorderLevel(i),3)}</b><div class="muted sm">${autoReorderDetails(i).reliable?'Trend-based':'Provisional'}</div></td><td class="num">${num(i.unitCost)>0?money(i.unitCost,2):'—'}</td><td><span class="badge ${low?'warn':'ok'}">${low?'Reorder':'In stock'}</span></td><td class="right nowrap"><button class="btn btn-sm" data-act="edit-part" data-id="${esc(i.id)}" title="Edit product"><span class="material-symbols-rounded">edit</span></button></td></tr>`;
   }).join(''):'<tr><td colspan="8" class="empty">No turf products in this category. Add a product in the item master first.</td></tr>'}</tbody></table>`);
   renderTurfApplications();
   renderTurfAreaPlanDashboard();
@@ -2935,31 +3007,37 @@ function openAddSprayTaskForm(dayIdx, dateStr) {
   openModal({title:`Plan treatments · ${dayNames[Number(dayIdx)] || 'Selected day'}`,sub:`${dShort(dateStr)} · Schedule up to 10 products`,size:'turf-batch-modal',body:`<div class="turf-batch-modal-body"><div class="muted sm">Choose the course area and validity window. Selected weekdays create a scheduled task for each matching date. Empty product rows are ignored; inventory is not deducted until issue is recorded.</div><div class="turf-plan-schedule-grid"><label>Course area<select id="turfBatchArea">${areas.map(a=>`<option value="${a}" ${a==='Greens'?'selected':''}>${a}</option>`).join('')}</select></label><label>Valid from<input type="date" id="turfBatchFrom" value="${esc(dateStr)}" required></label><label>Valid until<input type="date" id="turfBatchUntil" value="${esc(dateStr)}" required></label></div><fieldset class="turf-weekday-picks"><legend>Repeat on weekdays</legend>${weekdayNames.map((d,i)=>`<label><input type="checkbox" name="turfBatchWeekday" value="${i}" ${i===Number(dayIdx)?'checked':''}>${d.slice(0,3)}</label>`).join('')}</fieldset><div class="turf-batch-entry-grid" style="padding:0 8px"><label>Product</label><label>Planned quantity</label><label>Area</label></div><div class="turf-batch-entry-list">${rows}</div><label style="display:grid;gap:5px;font-size:10px;color:var(--muted);font-weight:700">Shared planning notes<textarea id="turfBatchNotes" rows="2" placeholder="Purpose, rate reference or planning notes"></textarea></label><input type="hidden" id="turfBatchDay" value="${Number(dayIdx)}"><input type="hidden" id="turfBatchDate" value="${esc(dateStr)}"></div>`,footer:`<button class="btn" data-act="close-modal">Cancel</button><button class="btn btn-primary" data-act="save-turf-batch"><span class="material-symbols-rounded">playlist_add_check</span>Save schedule</button>`});
 }
 async function saveTurfBatch() {
+  const saveButton = document.querySelector('[data-act="save-turf-batch"]');
+  if (saveButton?.disabled) return;
+  if (saveButton) { saveButton.disabled = true; saveButton.setAttribute('aria-busy', 'true'); }
+  const releaseSave = () => { if (saveButton) { saveButton.disabled = false; saveButton.removeAttribute('aria-busy'); } };
   const dayIdx = Number($('#turfBatchDay')?.value), fallbackDate = $('#turfBatchDate')?.value;
   const from = $('#turfBatchFrom')?.value || fallbackDate, until = $('#turfBatchUntil')?.value || fallbackDate;
   const area = $('#turfBatchArea')?.value || 'Greens';
   const weekdays = $$('input[name="turfBatchWeekday"]:checked').map(x=>Number(x.value));
   const notes = $('#turfBatchNotes')?.value?.trim() || '';
-  if(!from || !until || until < from){toast('Choose a valid date range.','err');return;}
-  if(!weekdays.length){toast('Select at least one weekday.','err');return;}
+  if(!from || !until || until < from){toast('Choose a valid date range.','err');releaseSave();return;}
+  const spanDays = Math.floor((new Date(until + 'T12:00:00') - new Date(from + 'T12:00:00')) / 86400000) + 1;
+  if (spanDays > 366) { toast('Keep a schedule within 366 days so it can be reviewed safely.', 'err'); return; }
+  if(!weekdays.length){toast('Select at least one weekday.','err');releaseSave();return;}
   const rows=[];
   for(let i=0;i<10;i++){
     const productId=$(`#turfBatchProd${i}`)?.value, qty=num($(`#turfBatchQty${i}`)?.value);
     if(!productId && !(qty>0)) continue;
     const product=S.inventory.find(p=>p.id===productId&&isTurfCategory(p.category));
-    if(!product){toast(`Choose a valid product in row ${i+1}.`,'err');return;}
-    if(!(qty>0)){toast(`Enter a quantity greater than zero in row ${i+1}.`,'err');return;}
-    const unit=turfProductUnit(product);if(!unit){toast(`Set the stock unit for ${itemName(product)} in Products & stock first.`,'err');return;}
+    if(!product){toast(`Choose a valid product in row ${i+1}.`,'err');releaseSave();return;}
+    if(!(qty>0)){toast(`Enter a quantity greater than zero in row ${i+1}.`,'err');releaseSave();return;}
+    const unit=turfProductUnit(product);if(!unit){toast(`Set the stock unit for ${itemName(product)} in Products & stock first.`,'err');releaseSave();return;}
     rows.push({product,qty,unit});
   }
-  if(!rows.length){toast('Add at least one product and quantity.','warn');return;}
+  if(!rows.length){toast('Add at least one product and quantity.','warn');releaseSave();return;}
   const dates=[];for(let d=from;d<=until;d=addDays(d,1)){const date=new Date(`${d}T12:00:00`);if(weekdays.includes(date.getDay()))dates.push(d);if(d===until)break;}
-  if(!dates.length){toast('No dates in this range match the selected weekdays.','err');return;}
-  if(dates.length*rows.length>500){toast('This schedule creates more than 500 tasks. Narrow the date range or weekdays.','err');return;}
+  if(!dates.length){toast('No dates in this range match the selected weekdays.','err');releaseSave();return;}
+  if(dates.length*rows.length>500){toast('This schedule creates more than 500 tasks. Narrow the date range or weekdays.','err');releaseSave();return;}
   try{
     for(const dateStr of dates){const dateObj=new Date(`${dateStr}T12:00:00`);for(const r of rows) await addDoc(collection(db,CONFIG.COL.plans),{weekStart:currentTurfWeekStart,date:dateStr,dayIndex:dateObj.getDay(),productId:r.product.id,productName:itemName(r.product),category:r.product.category||'Fertilizers',targetQty:r.qty,unit:r.unit,targetArea:area,area,validFrom:from,validUntil:until,repeatWeekdays:weekdays,notes,status:'Planned',createdAt:Date.now()});}
     closeModal();toast(`${rows.length} product${rows.length===1?'':'s'} scheduled for ${dates.length} date${dates.length===1?'':'s'} in ${area}.`);renderTurfCare();
-  }catch(e){console.error(e);toast('Schedule save failed. Some tasks may have saved; refresh and verify before retrying.','err');}
+  }catch(e){console.error(e);toast('Schedule save failed. Some tasks may have saved; refresh and verify before retrying.','err');releaseSave();}
 }
 function renderTurfAreaPlanDashboard(){
   const el=$('#opsTurfAreaPlan'); if(!el)return;
@@ -3206,7 +3284,7 @@ function renderTp() {
     const canPlan = !!unit;
     return '<article class="tp-product-row" data-unit="' + esc(unit) + '">' +
       '<div class="tp-product-ident"><span class="tp-product-icon material-symbols-rounded">' + esc(category === 'Fertilizers' ? 'spa' : category === 'Pesticides' ? 'pest_control' : 'eco') + '</span>' +
-      '<div class="tp-product-copy"><b>' + esc(itemName(product)) + '</b><span>' + esc(unit || 'Unit not set') + ' · Stock ' + fmt(stock, 2) + (num(product.unitCost) > 0 ? ' · ' + money(num(product.unitCost)) + '/' + esc(unit) : '') + '</span></div></div>' +
+      '<div class="tp-product-copy"><b>' + esc(itemName(product)) + '</b><span>' + esc(unit || 'Unit not set') + ' · Available stock: ' + fmt(stock, 2) + (num(product.unitCost) > 0 ? ' · ' + money(num(product.unitCost)) + '/' + esc(unit) : ' · Unit cost not set') + '</span>' + (stock <= effectiveReorderLevel(product) ? '<small class="tp-stock-hint is-low">Low stock · at or below reorder level</small>' : '<small class="tp-stock-hint">Stock is checked again when issuing</small>') + '</div></div>' +
       '<div class="tp-qty-control"><label>Qty (' + esc(unit || 'unit') + ')' +
       '<input type="number" min="0" step="any" inputmode="decimal" value="' + esc(qtyValue) + '" placeholder="0" aria-label="Quantity for ' + esc(itemName(product)) + '" data-tp-qty data-product="' + esc(product.id) + '"' + (canPlan ? '' : ' disabled') + '></label></div>' +
       '<div class="tp-scope-control">' +
