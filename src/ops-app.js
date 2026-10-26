@@ -922,7 +922,6 @@ function buildTurfCostAnalytics(from, to) {
 
 function renderTurfCostAnalytics(from, to) {
   const target = $('#turfCostAnalyticsResults');
-  if (!target) return '';
   if (!from || !to) return '';
   if (from > to) { const swap = from; from = to; to = swap; }
   const { allRows, priced, unpriced, total, products } = buildTurfCostAnalytics(from, to);
@@ -958,7 +957,7 @@ function renderTurfCostAnalytics(from, to) {
     <section class="turf-cost-panel turf-cost-detail-panel"><div class="turf-cost-panel-head"><div><small>ERP DETAIL REGISTER</small><h3>Issued line items</h3></div><span>${fmt(allRows.length, 0)} lines · value descending</span></div><div class="table-wrap"><table class="turf-cost-table"><thead><tr><th>Date</th><th>Category</th><th>Product</th><th>Status</th><th class="num">Quantity</th><th class="num">Unit rate</th><th class="num">Recorded value</th><th>Cost basis</th></tr></thead><tbody>${linesHtml}</tbody></table></div>
     <p class="turf-cost-caveat">Cost is estimated from the linked Inventory Master unit cost. A value is calculated only when the product link and unit match and a positive unit cost exists. Planned-only records are excluded; unpriced rows remain visible instead of being treated as ₹0.</p></section>
   </div>`;
-  target.innerHTML = html;
+  if (target) target.innerHTML = html;
   return html;
 }
 
