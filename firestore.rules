@@ -275,6 +275,14 @@ service cloud.firestore {
       allow create, update: if opsTeam() || hasRole(['storekeeper']);
       allow delete: if manager();
     }
+
+    // Native Android issues and Turf Ops cost reporting use this collection.
+    // Keep the same role policy as turf_plans; never allow public access.
+    match /daily_application_plans/{id} {
+      allow read: if opsTeam() || hasRole(['storekeeper']);
+      allow create, update: if opsTeam() || hasRole(['storekeeper']);
+      allow delete: if manager();
+    }
     match /store_inwards/{id} {
       allow read: if storeTeam();
       allow create: if storeTeam() && (validNormalInwardCreate(id) || validFnbInwardCreate(id));
