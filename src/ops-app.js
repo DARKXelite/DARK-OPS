@@ -919,11 +919,54 @@ function buildTurfCostAnalytics(from, to) {
   return { allRows, priced, unpriced, total, products };
 }
 
+
+function renderTurfCostAnalytics(from, to) {
+  const target = $('#turfCostAnalyticsResults');
+  if (!target) return '';
+  if (!from || !to) return '';
+  if (from > to) { const swap = from; from = to; to = swap; }
+  const { allRows, priced, unpriced, total, products } = buildTurfCostAnalytics(from, to);
+  const startMs = new Date(from + 'T00:00:00').getTime();
+  const spanDays = Math.max(1, Math.floor((new Date(to + 'T00:00:00').getTime() - startMs) / 86400000) + 1);
+  const bucketSize = Math.max(1, Math.ceil(spanDays / 28));
+  const buckets = [];
+  for (let offset = 0; offset < spanDays; offset += bucketSize) {
+    const bucketFrom = addDays(from, offset);
+    const bucketTo = addDays(from, Math.min(spanDays - 1, offset + bucketSize - 1));
+    buckets.push({ label: bucketSize === 1 ? dShort(bucketFrom) : `${dShort(bucketFrom)}–${dShort(bucketTo)}`, value: 0 });
+  }
+  priced.forEach(row => {
+    const offset = Math.max(0, Math.floor((new Date(row.date + 'T00:00:00').getTime() - startMs) / 86400000));
+    const index = Math.min(buckets.length - 1, Math.floor(offset / bucketSize));
+    if (buckets[index]) buckets[index].value += row.cost;
+  });
+  const productChart = products.filter(row => row.value !== null).slice(0, 8).map(row => ({
+    label: row.name.length > 17 ? row.name.slice(0, 16) + '…' : row.name, value: row.value
+  }));
+  const linesHtml = allRows.length ? allRows.map(row => `<tr><td>${esc(row.date)}</td><td><span class="badge ${turfCategoryClass(row.category)}">${esc(row.category)}</span></td><td><b>${esc(row.name)}</b></td><td><span class="badge ${row.status === 'Applied' ? 'ok' : 'gold'}">${esc(row.status)}</span></td><td class="num">${fmt(row.qty, 3)} ${esc(row.unit)}</td><td class="num">${row.rate > 0 ? `${money(row.rate, 2)} / ${esc(row.unit)}` : '—'}</td><td class="num"><b>${row.cost === null ? 'Unpriced' : money(row.cost)}</b></td><td>${esc(row.source)}</td></tr>`).join('') : '<tr><td colspan="8" class="empty">No issued/applied turf-product records in this date range.</td></tr>';
+  const html = `<div class="turf-cost-analytics-results">
+    <div class="turf-cost-summary-grid">
+      <div class="turf-cost-summary primary"><small>PRICED ISSUE / APPLICATION VALUE</small><b>${allRows.length && !priced.length ? '₹—' : money(total)}</b><span>Inventory rate × logged issue/application quantity</span></div>
+      <div class="turf-cost-summary"><small>ISSUED / APPLIED RECORDS</small><b>${fmt(allRows.length, 0)}</b><span>Recorded status; physical use not independently verified</span></div>
+      <div class="turf-cost-summary"><small>UNPRICED RECORDS</small><b>${fmt(unpriced.length, 0)}</b><span>Missing product link, unit match, or inventory rate</span></div>
+      <div class="turf-cost-summary"><small>PRODUCT / UNIT LINES</small><b>${fmt(products.length, 0)}</b><span>Different stock units kept separate</span></div>
+    </div>
+    <div class="turf-cost-chart-grid">
+      <section class="turf-cost-panel"><div class="turf-cost-panel-head"><div><small>SPEND TREND</small><h3>Recorded value over time</h3></div><span>${bucketSize === 1 ? 'Daily' : bucketSize < 8 ? 'Weekly buckets' : 'Range buckets'}</span></div>${priced.length ? barChart(buckets, { unit: '₹', h: 210 }) : '<div class="turf-cost-chart-empty">No priced issue/application value in this range.</div>'}</section>
+      <section class="turf-cost-panel"><div class="turf-cost-panel-head"><div><small>PRODUCT MIX</small><h3>Highest recorded value</h3></div><span>Top 8</span></div>${productChart.length ? barChart(productChart, { unit: '₹', h: 210 }) : '<div class="turf-cost-chart-empty">No products have a reliable cost in this range.</div>'}</section>
+    </div>
+    <section class="turf-cost-panel turf-cost-detail-panel"><div class="turf-cost-panel-head"><div><small>ERP DETAIL REGISTER</small><h3>Issued line items</h3></div><span>${fmt(allRows.length, 0)} lines · value descending</span></div><div class="table-wrap"><table class="turf-cost-table"><thead><tr><th>Date</th><th>Category</th><th>Product</th><th>Status</th><th class="num">Quantity</th><th class="num">Unit rate</th><th class="num">Recorded value</th><th>Cost basis</th></tr></thead><tbody>${linesHtml}</tbody></table></div>
+    <p class="turf-cost-caveat">Cost is estimated from the linked Inventory Master unit cost. A value is calculated only when the product link and unit match and a positive unit cost exists. Planned-only records are excluded; unpriced rows remain visible instead of being treated as ₹0.</p></section>
+  </div>`;
+  target.innerHTML = html;
+  return html;
+}
+
 function openTurfCostAnalytics() {
   const to=today(),from=monthStart(to);
   openModal({title:'Turf Ops · Cost Analytics',sub:'Issued product cost · date-filtered ERP register',size:'turf-cost-analytics',body:`
     <div class="turf-cost-filterbar"><div class="turf-cost-dates"><label>From<input id="turfCostFrom" type="date" value="${from}" max="${to}"></label><label>To<input id="turfCostTo" type="date" value="${to}" max="${to}"></label><button class="btn btn-primary" data-act="turf-cost-apply"><span class="material-symbols-rounded">filter_alt</span>Apply range</button></div><div class="turf-cost-presets"><button class="chip" data-act="turf-cost-preset" data-range="7d">7 days</button><button class="chip" data-act="turf-cost-preset" data-range="30d">30 days</button><button class="chip on" data-act="turf-cost-preset" data-range="mtd">Month to date</button></div></div>
-    <div id="turfCostAnalyticsResults">${buildTurfCostAnalytics(from,to)}</div>`,footer:`<button class="btn" data-act="export-turf-cost-range"><span class="material-symbols-rounded">download</span>Export CSV</button><button class="btn btn-primary" data-act="close-modal">Close</button>`});
+    <div id="turfCostAnalyticsResults">${renderTurfCostAnalytics(from,to)}</div>`,footer:`<button class="btn" data-act="export-turf-cost-range"><span class="material-symbols-rounded">download</span>Export CSV</button><button class="btn btn-primary" data-act="close-modal">Close</button>`});
 }
 function applyTurfCostPreset(range) {
   const to=today();
