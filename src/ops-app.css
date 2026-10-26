@@ -3091,3 +3091,24 @@ body:not(.auth-locked) .main :is(#ledgerCard,#usersTbl,#invTbl,#inwardTbl) table
 #toasts .toast{max-width:min(92vw,460px);line-height:1.45}
 #toasts .toast[role="alert"]{border:1px solid #FF9C92}
 #toasts .toast[role="status"]{border:1px solid #A9D6A1}
+
+/* TurfOps compact workboard and plan register */
+.turf-plan-item{gap:6px!important;padding:5px 8px!important;margin:3px 0!important;min-height:0!important;grid-template-columns:auto minmax(110px,1fr) auto auto auto!important}
+.turf-plan-title{min-width:0!important;white-space:nowrap!important;overflow:hidden!important;text-overflow:ellipsis!important}
+.turf-plan-inline-qty,.turf-plan-row-value{white-space:nowrap!important;font-size:11px!important}
+.turf-week-side-card{padding:7px 10px!important;gap:8px!important;min-height:0!important}
+.turf-week-side-date{gap:3px!important}
+.turf-week-side-main{min-width:0!important}
+.turf-week-side-products{white-space:nowrap!important;overflow:hidden!important;text-overflow:ellipsis!important;font-size:11px!important}
+.turf-featured-foot{justify-content:flex-start!important;min-height:0!important;padding:5px 0 0!important}
+.turf-featured-foot>span{font-size:10px!important}
+.turf-plans-manager-modal{width:min(1100px,96vw)!important;max-width:1100px!important}
+.turf-plan-group{border:1px solid var(--border);border-radius:10px;margin:8px 0;overflow:hidden}
+.turf-plan-group>summary{display:flex;align-items:center;gap:12px;padding:10px 12px;cursor:pointer;list-style:none;background:var(--surface-2,var(--surface))}
+.turf-plan-group>summary::-webkit-details-marker{display:none}
+.turf-plan-group>summary span:last-child{margin-left:auto}
+.turf-plan-manager-table td,.turf-plan-manager-table th{padding:6px 9px!important;vertical-align:middle}
+.turf-plan-manager-table td:first-child small{display:block;color:var(--muted);font-size:10px}
+.turf-plan-actions{white-space:nowrap;display:flex;gap:5px}
+.turf-plan-actions .btn{padding:4px 8px!important;min-height:28px!important}
+@media(max-width:700px){.turf-plan-item{grid-template-columns:auto minmax(80px,1fr) auto!important}.turf-plan-row-value{display:none}.turf-plan-item .badge{font-size:9px}.turf-plan-actions{display:flex;flex-wrap:wrap}.turf-plan-manager-table{min-width:580px}}
