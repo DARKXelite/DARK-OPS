@@ -102,10 +102,11 @@ function fuelCostSummary(rows) {
   return { litres, pricedLitres, unpricedLitres: Math.max(0, litres - pricedLitres), cost, coverage: litres > 0 ? pricedLitres / litres * 100 : 100 };
 }
 function inventoryCostSummary(items=S.inventory) {
+  const stock = i => inventoryOnHand(i);
   const priced = items.filter(i => num(i.unitCost) > 0);
-  const unpriced = items.filter(i => num(i.stockQuantity) > 0 && num(i.unitCost) <= 0);
-  return { value: priced.reduce((a, i) => a + Math.max(0, num(i.stockQuantity)) * num(i.unitCost), 0), pricedCount: priced.length, unpricedCount: unpriced.length, total: items.length,
-    reorderValue: items.reduce((a, i) => a + Math.max(0, effectiveReorderLevel(i) - num(i.stockQuantity)) * Math.max(0, num(i.unitCost)), 0), low: items.filter(i => num(i.stockQuantity) <= effectiveReorderLevel(i)) };
+  const unpriced = items.filter(i => stock(i) > 0 && num(i.unitCost) <= 0);
+  return { value: priced.reduce((a, i) => a + stock(i) * num(i.unitCost), 0), pricedCount: priced.length, unpricedCount: unpriced.length, total: items.length,
+    reorderValue: items.reduce((a, i) => a + Math.max(0, effectiveReorderLevel(i) - stock(i)) * Math.max(0, num(i.unitCost)), 0), low: items.filter(i => stock(i) <= effectiveReorderLevel(i)) };
 }
 function monthPlansCost(from, to) {
   const rows = allTurfPlanRecords().filter(p => {
@@ -177,6 +178,18 @@ function fuelRecordDate(f) {
   if (f && f._d) return f._d;
   const dateValue = f && (f.issueDate ?? f.issuedDate ?? f.date ?? f.transactionDate ?? f.createdDate);
   return normDate(dateValue, f && (f.issuedAt ?? f.issueTimestamp ?? f.timestamp ?? f.createdAt ?? f.createdOn ?? f.updatedAt ?? f.recordedAt));
+}
+// Fuel issue logs are the consumption ledger already used by the dashboard. Compute on-hand
+// from the same records; never mutate stock from snapshot listeners (that would double-deduct).
+function inventoryOnHand(item) {
+  const raw = Math.max(0, num(item && item.stockQuantity));
+  if (String(item && item.category || '').trim().toLowerCase() !== 'fuel') return raw;
+  const fuelType = canonicalFuelType(item && (item.partName ?? item.itemName ?? item.name ?? item.productName));
+  if (!fuelType) return raw;
+  const issued = (S.fuel || []).reduce((total, f) => fuelTypeFromRecord(f) === fuelType
+    ? total + Math.max(0, num(f.litres ?? f.quantity ?? f.qty ?? f.fuelLitres ?? f.fuelQuantity))
+    : total, 0);
+  return Math.max(0, raw - issued);
 }
 const fuelIn = (a, b) => S.fuel.filter(f => { const d = fuelRecordDate(f); return d && d >= a && d <= b; });
 const shiftsIn = (a, b) => S.shifts.filter(s => s._d && s._d >= a && s._d <= b);
@@ -529,7 +542,7 @@ function autoReorderDetails(item) {
   const unit=String(item.unit||item.uom||item.stockUnit||'').toLowerCase();
   const integerUnit=/^(nos?|pieces?|pcs?|packs?|bags?|sets?|units?)$/.test(unit);
   const level=reliable ? (integerUnit?Math.ceil(raw):Math.ceil(raw*10)/10) : Math.max(legacy,policy.floor);
-  const details={level,leadDays:policy.leadDays,meanDaily:mean,totalUsage:total,windowDays:observedDates.length,transactions:events.length,activeDays,reliable,method:reliable?`${observedDates.length}-day demand + safety buffer`:'Provisional floor',daysCover:mean>0?Math.max(0,num(item.stockQuantity))/mean:null,events};
+  const details={level,leadDays:policy.leadDays,meanDaily:mean,totalUsage:total,windowDays:observedDates.length,transactions:events.length,activeDays,reliable,method:reliable?`${observedDates.length}-day demand + safety buffer`:'Provisional floor',daysCover:mean>0?inventoryOnHand(item)/mean:null,events};
   _reorderDetailCache.set(item.id,details); return details;
 }
 function effectiveReorderLevel(item) { return autoReorderDetails(item).level; }
@@ -1793,14 +1806,14 @@ const itemName = i => i.partName || i.itemName || i.name || i.productName || 'Un
 const inventoryCategoryOpen = new Set();
 function inventoryRowsMarkup(items) {
   return `<div class="table-wrap inv-category-table"><table><thead><tr><th>Item name</th><th>Unit</th><th class="num">On hand</th><th class="num">Auto reorder at</th><th class="num">Last unit rate</th><th class="num">Stock value</th><th>Status</th><th></th></tr></thead><tbody>${items.length ? items.map(i=>{
-    const qty=num(i.stockQuantity), reorder=effectiveReorderLevel(i), policy=autoReorderDetails(i), low=qty<=reorder;
+    const qty=inventoryOnHand(i), reorder=effectiveReorderLevel(i), policy=autoReorderDetails(i), low=qty<=reorder;
     return `<tr><td><b>${esc(itemName(i))}</b></td><td>${esc(i.unit||'Unit not set')}</td><td class="num"><b>${fmt(qty,3)}</b></td><td class="num"><b>${fmt(reorder,3)}</b><div class="muted sm">${policy.reliable?'Trend-based':'Provisional floor'}</div></td><td class="num">${num(i.unitCost)?money(i.unitCost,2):'—'}</td><td class="num">${money(qty*num(i.unitCost),2)}</td><td><span class="badge ${low?'warn':'ok'}">${low?'Reorder':'In stock'}</span></td><td><button class="btn btn-sm" data-act="edit-part" data-id="${esc(i.id)}">Edit</button></td></tr>`;
   }).join(''):'<tr><td colspan="8" class="empty">No items in this category.</td></tr>'}</tbody></table></div>`;
 }
 function renderRegistry() {
   const items=S.inventory.slice();
-  const low=items.filter(i=>num(i.stockQuantity)<=effectiveReorderLevel(i)).length;
-  const total=items.reduce((v,i)=>v+Math.max(0,num(i.stockQuantity))*Math.max(0,num(i.unitCost)),0);
+  const low=items.filter(i=>inventoryOnHand(i)<=effectiveReorderLevel(i)).length;
+  const total=items.reduce((v,i)=>v+inventoryOnHand(i)*Math.max(0,num(i.unitCost)),0);
   setHTML($('#storeKpis'), `<div class="kpi"><div class="kpi-label">SKUs</div><div class="kpi-value">${items.length}</div></div><div class="kpi"><div class="kpi-label">Low stock</div><div class="kpi-value">${low}</div></div><div class="kpi"><div class="kpi-label">Stock value (recorded rates)</div><div class="kpi-value">${money(total)}</div></div><div class="kpi"><div class="kpi-label">Goods receipts</div><div class="kpi-value">${S.inwards.length}</div></div>`);
 
   if (!LOADED.inventory) {
@@ -1818,8 +1831,8 @@ function renderRegistry() {
       return ra-rb || a.localeCompare(b);
     });
     const markup = cats.map(cat=>{
-      const rows=groups.get(cat), lowRows=rows.filter(i=>num(i.stockQuantity)<=effectiveReorderLevel(i));
-      const value=rows.reduce((v,i)=>v+Math.max(0,num(i.stockQuantity))*Math.max(0,num(i.unitCost)),0);
+      const rows=groups.get(cat), lowRows=rows.filter(i=>inventoryOnHand(i)<=effectiveReorderLevel(i));
+      const value=rows.reduce((v,i)=>v+inventoryOnHand(i)*Math.max(0,num(i.unitCost)),0);
       const isOpen=inventoryCategoryOpen.has(cat);
       return `<details class="inv-category" data-inv-category="${esc(cat)}" ${isOpen?'open':''}><summary><span class="inv-cat-icon material-symbols-rounded">${cat==='Fuel'?'local_gas_station':cat==='Fertilizers'?'spa':cat==='Pesticides'?'pest_control':cat==='Turf Enhancements'?'eco':cat==='Spare Parts'?'build':cat==='Tools'?'handyman':'inventory_2'}</span><span class="inv-cat-main"><b>${esc(cat)}</b><small>${rows.length} item${rows.length===1?'':'s'} · ${money(value)} recorded stock value</small></span><span class="inv-cat-alert ${lowRows.length?'warn':''}">${lowRows.length?`${lowRows.length} reorder`:'Stock OK'}</span><span class="inv-cat-chevron material-symbols-rounded">expand_more</span></summary><div class="inv-category-body">${isOpen?inventoryRowsMarkup(rows):'<div class="inv-category-placeholder">Expand to view items in this category</div>'}</div></details>`;
     }).join('');
@@ -2315,7 +2328,7 @@ const H = {
   'export-shifts': () => { const st = R.shifts; downloadCSV(`shifts_${st.from}_to_${st.to}.csv`, [['Date', 'Operator', 'Machine', 'Distance km', 'Engine hours'], ...shiftRows().map(s => [s._d, s.operatorName || '', mName(s.machineId), num(s.distanceKm), num(s.engineHoursLogged)])]); },
   'export-run': () => { const { st, rows } = runData(); downloadCSV(`running_hours_${st.from}_to_${st.to}.csv`, [['Machine', 'Category', 'Operators', 'Shifts', 'Run hours', 'Distance km', 'Fuel L', 'L/hr'], ...rows.map(r => [r.name, r.cat, [...r.ops].join('; '), r.n, +r.H.toFixed(2), +r.km.toFixed(2), +r.L.toFixed(2), r.H && r.L ? +(r.L / r.H).toFixed(2) : ''])]); },
   'add-inward': () => openInward(),
-  'export-stock': () => downloadCSV('inventory_stock.csv',[['Category','Item','Unit','Stock','Auto reorder at','Rate basis','Unit rate'],...S.inventory.map(i=>[i.category,itemName(i),i.unit||'Nos',i.stockQuantity,effectiveReorderLevel(i),autoReorderDetails(i).method,i.unitCost])]),
+  'export-stock': () => downloadCSV('inventory_stock.csv',[['Category','Item','Unit','Stock','Auto reorder at','Rate basis','Unit rate'],...S.inventory.map(i=>[i.category,itemName(i),i.unit||'Nos',inventoryOnHand(i),effectiveReorderLevel(i),autoReorderDetails(i).method,i.unitCost])]),
   'export-inwards': () => downloadCSV('goods_inwards.csv',[['Date','Invoice','Supplier','Category','Item','Unit','Qty','Rate','GST %','Taxable','GST amount','Total'],...S.inwards.map(r=>[r.receiptDate,r.invoiceNumber,r.supplier,r.category,r.itemName,r.unit,r.quantity,r.rate,r.gstPercent,r.taxableAmount,r.gstAmount,r.total])]),
   'edit-user': d => { const u=S.users.find(x=>x.id===d.id); if(!u) return toast('User record not found','err'); openForm({title:'Edit workforce member',submit:'Save changes',html:fld('Full name','<input id="euName" required>')+fld('Mobile number','<input id="euMob" inputmode="tel" required>','Saved in normalized +91 format where applicable.')+fld('Role','<select id="euRole"><option value="operator">Operator</option><option value="incharge">Incharge</option><option value="storekeeper">Storekeeper (Fuel Ledger)</option><option value="storekeeper_fertilizer">Storekeeper (Fertilizers & Pesticides)</option></select>'),onSubmit:async()=>{const name=$('#euName').value.trim(), mob=normMobile($('#euMob').value), role=$('#euRole').value;if(!name){toast('Name is required','err');return false;}if(!/^\+\d{10,14}$/.test(mob)){toast('Enter a valid mobile number','err');return false;}if(S.users.some(x=>x.id!==u.id&&x.mobileNumber===mob)){toast('This mobile number is already registered','err');return false;}await updateDoc(doc(db,CONFIG.COL.users,u.id),{fullName:name,username:name,mobileNumber:mob,role});toast('User profile updated');}});setTimeout(()=>{if($('#euName'))$('#euName').value=u.fullName||u.username||'';if($('#euMob'))$('#euMob').value=u.mobileNumber||'';if($('#euRole'))$('#euRole').value=u.role||'operator';},0); },
   'add-user': () => openForm({ title: 'Register workforce member', submit: 'Add user',
@@ -2974,8 +2987,8 @@ function renderTurfCare() {
   // Product register: category-first, concise and stock-oriented.
   const filteredProducts = turfItems.filter(i => turfProductCategory === 'All categories' || turfCategoryLabel(i.category) === turfProductCategory).sort((a,b)=>itemName(a).localeCompare(itemName(b)));
   setHTML($('#turfInvTbl'), `<table><thead><tr><th>Product</th><th>Category</th><th>Unit</th><th class="num">On hand</th><th class="num">Auto reorder at</th><th class="num">Unit rate</th><th>Status</th><th>Actions</th></tr></thead><tbody>${!LOADED.inventory?'<tr><td colspan="8">Loading products…</td></tr>':filteredProducts.length?filteredProducts.map(i=>{
-    const low=num(i.stockQuantity)<=effectiveReorderLevel(i);
-    return `<tr><td><b>${esc(itemName(i))}</b></td><td><span class="badge ${turfCategoryClass(i.category)}">${esc(turfCategoryLabel(i.category))}</span></td><td>${esc(i.unit || 'Nos')}</td><td class="num"><b>${fmt(i.stockQuantity,3)}</b></td><td class="num"><b>${fmt(effectiveReorderLevel(i),3)}</b><div class="muted sm">${autoReorderDetails(i).reliable?'Trend-based':'Provisional'}</div></td><td class="num">${num(i.unitCost)>0?money(i.unitCost,2):'—'}</td><td><span class="badge ${low?'warn':'ok'}">${low?'Reorder':'In stock'}</span></td><td class="right nowrap"><button class="btn btn-sm" data-act="edit-part" data-id="${esc(i.id)}" title="Edit product"><span class="material-symbols-rounded">edit</span></button></td></tr>`;
+    const stock=inventoryOnHand(i), low=stock<=effectiveReorderLevel(i);
+    return `<tr><td><b>${esc(itemName(i))}</b></td><td><span class="badge ${turfCategoryClass(i.category)}">${esc(turfCategoryLabel(i.category))}</span></td><td>${esc(i.unit || 'Nos')}</td><td class="num"><b>${fmt(stock,3)}</b></td><td class="num"><b>${fmt(effectiveReorderLevel(i),3)}</b><div class="muted sm">${autoReorderDetails(i).reliable?'Trend-based':'Provisional'}</div></td><td class="num">${num(i.unitCost)>0?money(i.unitCost,2):'—'}</td><td><span class="badge ${low?'warn':'ok'}">${low?'Reorder':'In stock'}</span></td><td class="right nowrap"><button class="btn btn-sm" data-act="edit-part" data-id="${esc(i.id)}" title="Edit product"><span class="material-symbols-rounded">edit</span></button></td></tr>`;
   }).join(''):'<tr><td colspan="8" class="empty">No turf products in this category. Add a product in the item master first.</td></tr>'}</tbody></table>`);
   renderTurfApplications();
   renderTurfAreaPlanDashboard();
