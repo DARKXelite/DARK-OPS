@@ -3073,3 +3073,21 @@ body:not(.auth-locked) .main :is(#v-fuel,#v-shifts,#v-records,#v-turfcare,#v-reg
 body:not(.auth-locked) .main :is(#ledgerCard,#usersTbl,#invTbl,#inwardTbl) table td .muted {
   color: #C1CBC1 !important;
 }
+
+
+/* TurfOps workflow feedback and accessibility refinements (schema-neutral). */
+#v-turfcare .tp-stock-hint{display:block;margin-top:4px;color:#C1CBC1;font-size:11px;line-height:1.4}
+#v-turfcare .tp-stock-hint.is-low{color:#FFD28A;font-weight:700}
+#v-turfcare .tp-product-copy:focus-within,
+#v-turfcare .tp-qty-control input:focus-visible,
+#v-turfcare button:focus-visible,
+#v-turfcare input:focus-visible,
+#v-turfcare select:focus-visible,
+#v-turfcare textarea:focus-visible,
+#modal button:focus-visible,
+#modal input:focus-visible,
+#modal select:focus-visible,
+#modal textarea:focus-visible{outline:2px solid #B9E4A5;outline-offset:2px}
+#toasts .toast{max-width:min(92vw,460px);line-height:1.45}
+#toasts .toast[role="alert"]{border:1px solid #FF9C92}
+#toasts .toast[role="status"]{border:1px solid #A9D6A1}
