@@ -3056,3 +3056,20 @@ body:not(.auth-locked) #toasts .toast {
   color: var(--text) !important;
   border-color: var(--border) !important;
 }
+
+
+/* Raise specificity above the former per-view table overrides. */
+body:not(.auth-locked) .main :is(#v-fuel,#v-shifts,#v-records,#v-turfcare,#v-registry,#v-users,#v-expenses) table td,
+body:not(.auth-locked) .main :is(#ledgerCard,#usersTbl,#invTbl,#inwardTbl) table td {
+  background-color: transparent !important;
+  color: var(--table-text) !important;
+  border-color: var(--table-line) !important;
+}
+body:not(.auth-locked) .main :is(#v-fuel,#v-shifts,#v-records,#v-turfcare,#v-registry,#v-users,#v-expenses) table td b,
+body:not(.auth-locked) .main :is(#ledgerCard,#usersTbl,#invTbl,#inwardTbl) table td b {
+  color: #F7F6EF !important;
+}
+body:not(.auth-locked) .main :is(#v-fuel,#v-shifts,#v-records,#v-turfcare,#v-registry,#v-users,#v-expenses) table td .muted,
+body:not(.auth-locked) .main :is(#ledgerCard,#usersTbl,#invTbl,#inwardTbl) table td .muted {
+  color: #C1CBC1 !important;
+}
