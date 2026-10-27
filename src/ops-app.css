@@ -3112,3 +3112,50 @@ body:not(.auth-locked) .main :is(#ledgerCard,#usersTbl,#invTbl,#inwardTbl) table
 .turf-plan-actions{white-space:nowrap;display:flex;gap:5px}
 .turf-plan-actions .btn{padding:4px 8px!important;min-height:28px!important}
 @media(max-width:700px){.turf-plan-item{grid-template-columns:auto minmax(80px,1fr) auto!important}.turf-plan-row-value{display:none}.turf-plan-item .badge{font-size:9px}.turf-plan-actions{display:flex;flex-wrap:wrap}.turf-plan-manager-table{min-width:580px}}
+
+
+/* Day Planner density pass: single-line item rows, less wasted vertical space. */
+#v-turfcare .turf-day-plans{gap:3px!important;min-height:0!important}
+#v-turfcare .turf-plan-item{
+  display:grid!important;
+  grid-template-columns:3px minmax(0,1fr) auto auto auto!important;
+  grid-template-areas:none!important;
+  align-items:center!important;
+  column-gap:5px!important;
+  row-gap:0!important;
+  min-height:0!important;
+  margin:1px 0!important;
+  padding:4px 6px!important;
+  border-radius:5px!important;
+  overflow:hidden!important;
+  line-height:1.15!important;
+}
+#v-turfcare .turf-plan-item>.turf-plan-inline-dot{grid-column:1!important;grid-row:1!important}
+#v-turfcare .turf-plan-item>.turf-plan-title{
+  grid-column:2!important;grid-row:1!important;min-width:0!important;
+  white-space:nowrap!important;overflow:hidden!important;text-overflow:ellipsis!important;
+  font-size:10px!important;line-height:1.2!important;overflow-wrap:normal!important
+}
+#v-turfcare .turf-plan-item>.turf-plan-title small{white-space:nowrap!important}
+#v-turfcare .turf-plan-item>.turf-plan-inline-qty{
+  grid-column:3!important;grid-row:1!important;white-space:nowrap!important;
+  font-size:9px!important;line-height:1.2!important
+}
+#v-turfcare .turf-plan-item>.turf-plan-row-value{
+  grid-column:4!important;grid-row:1!important;white-space:nowrap!important;
+  font-size:9px!important;line-height:1.2!important
+}
+#v-turfcare .turf-plan-item>.badge{
+  grid-column:5!important;grid-row:1!important;justify-self:end!important;
+  white-space:nowrap!important;font-size:8px!important;padding:2px 4px!important;
+  line-height:1.15!important
+}
+#v-turfcare .turf-plan-item:hover{transform:none!important}
+#v-turfcare .turf-day-card{gap:6px!important;padding:8px!important}
+#v-turfcare .turf-day-plans .turf-empty-day{padding:4px 0!important}
+@media(max-width:700px){
+  #v-turfcare .turf-plan-item{grid-template-columns:3px minmax(0,1fr) auto!important;gap:5px!important;padding:4px 5px!important}
+  #v-turfcare .turf-plan-item>.turf-plan-row-value,
+  #v-turfcare .turf-plan-item>.badge{display:none!important}
+  #v-turfcare .turf-plan-item>.turf-plan-inline-qty{grid-column:3!important}
+}
