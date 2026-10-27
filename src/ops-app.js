@@ -1811,6 +1811,8 @@ const STORE_CATS = ['Fuel','Fertilizers','Pesticides','Turf Enhancements','Spare
 const itemName = i => i.partName || i.itemName || i.name || i.productName || 'Unnamed item';
 const inventoryCategoryOpen = new Set();
 function inventoryRowsMarkup(items) {
+  const importToolbar = $('#v-registry .toolbar');
+  if (importToolbar && !$('#openInventoryImportButton')) importToolbar.insertAdjacentHTML('beforeend', '<button id="openInventoryImportButton" class="btn" data-act="open-inventory-import"><span class="material-symbols-rounded">upload_file</span> Import stock</button>');
   return `<div class="table-wrap inv-category-table"><table><thead><tr><th>Item name</th><th>Unit</th><th class="num">On hand</th><th class="num">Auto reorder at</th><th class="num">Last unit rate</th><th class="num">Stock value</th><th>Status</th><th></th></tr></thead><tbody>${items.length ? items.map(i=>{
     const qty=inventoryOnHand(i), reorder=effectiveReorderLevel(i), policy=autoReorderDetails(i), low=qty<=reorder;
     return `<tr><td><b>${esc(itemName(i))}</b></td><td>${esc(i.unit||'Unit not set')}</td><td class="num"><b>${fmt(qty,3)}</b></td><td class="num"><b>${fmt(reorder,3)}</b><div class="muted sm">${policy.reliable?'Trend-based':'Provisional floor'}</div></td><td class="num">${num(i.unitCost)?money(i.unitCost,2):'—'}</td><td class="num">${money(qty*num(i.unitCost),2)}</td><td><span class="badge ${low?'warn':'ok'}">${low?'Reorder':'In stock'}</span></td><td><button class="btn btn-sm" data-act="edit-part" data-id="${esc(i.id)}">Edit</button></td></tr>`;
@@ -2189,6 +2191,323 @@ function stopListeners() {
 setInterval(() => { if (cur === 'radar') { updateBadges('live'); scheduleRender(); } }, 10000);
 
 /* ================= EVENTS ================= */
+
+const INVENTORY_IMPORT_FIELDS = [
+  { key: 'itemName', label: 'Item name', aliases: ['item name','item','product name','product','material','description','stock item','part name','sku name','name','particulars','item description'] },
+  { key: 'category', label: 'Category', aliases: ['category','item category','product category','group','type','department','material category'] },
+  { key: 'unitCost', label: 'Rate / unit cost', aliases: ['rate','unit rate','unit cost','price','cost','price per unit','rate per unit','basic rate','purchase rate','mrp'] },
+  { key: 'unit', label: 'UOM', aliases: ['uom','unit','unit of measure','measure','stock unit','measurement','units'] },
+  { key: 'quantity', label: 'Quantity / stock', aliases: ['qty','quantity','stock','closing stock','current stock','balance','on hand','physical stock','opening stock','available quantity','closing qty','stock qty'] }
+];
+const normalizeHeader = value => String(value ?? '').toLowerCase().normalize('NFKD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, ' ').trim();
+const normalizeItem = value => String(value ?? '').trim().toLowerCase().replace(/\s+/g, ' ');
+const aliasMatches = (header, alias) => {
+  const h = normalizeHeader(header), a = normalizeHeader(alias);
+  return h === a || (a.length >= 5 && h.includes(a));
+};
+const columnLabel = index => {
+  let n = index + 1, out = '';
+  while (n) { const r = (n - 1) % 26; out = String.fromCharCode(65 + r) + out; n = Math.floor((n - 1) / 26); }
+  return 'Column ' + out;
+};
+const numberFromCell = value => {
+  if (typeof value === 'number') return Number.isFinite(value) ? value : NaN;
+  const text = String(value ?? '').trim();
+  if (!text) return NaN;
+  const cleaned = text.replace(/[₹$€£,\s]/g, '').replace(/^\((.*)\)$/, '-$1');
+  const number = Number(cleaned);
+  return Number.isFinite(number) ? number : NaN;
+};
+function createInventoryImporter(options) {
+  const { db, collection, doc, writeBatch, serverTimestamp, getInventory, onComplete, esc, toast, openModal, closeModal } = options;
+  let state = null;
+  function detectHeaderRow(matrix) {
+    let bestIndex = -1, bestScore = 0;
+    for (let i = 0; i < Math.min(matrix.length, 20); i++) {
+      const cells = (matrix[i] || []).map(normalizeHeader);
+      const score = INVENTORY_IMPORT_FIELDS.reduce((total, field) => total + (cells.some(cell => field.aliases.some(alias => aliasMatches(cell, alias))) ? 1 : 0), 0);
+      if (score > bestScore) { bestScore = score; bestIndex = i; }
+    }
+    return bestScore >= 2 ? bestIndex : -1;
+  }
+  function configureHeader(headerIndex) {
+    state.headerIndex = headerIndex;
+    const maxColumns = state.matrix.reduce((max, row) => Math.max(max, row.length), 1);
+    if (headerIndex < 0) {
+      state.headers = Array.from({ length: maxColumns }, (_, i) => columnLabel(i));
+      state.rows = state.matrix;
+    } else {
+      state.headers = Array.from({ length: maxColumns }, (_, i) => String(state.matrix[headerIndex]?.[i] ?? '').trim() || columnLabel(i));
+      state.rows = state.matrix.slice(headerIndex + 1);
+    }
+    state.rows = state.rows.map((row, index) => ({ sourceIndex: index, cells: row || [] })).filter(row => row.cells.some(cell => String(cell ?? '').trim() !== ''));
+    state.mapping = {};
+    for (const field of INVENTORY_IMPORT_FIELDS) state.mapping[field.key] = state.headers.findIndex(header => field.aliases.some(alias => aliasMatches(header, alias)));
+    if (headerIndex < 0) INVENTORY_IMPORT_FIELDS.forEach((field, index) => {
+      if (state.mapping[field.key] < 0 && index < state.headers.length) state.mapping[field.key] = index;
+    });
+    state.corrections = {};
+  }
+  function mappedRows() {
+    return state.rows.map((row, index) => {
+      const correction = state.corrections[index] || {};
+      const raw = key => {
+        if (Object.prototype.hasOwnProperty.call(correction, key)) return correction[key];
+        const column = state.mapping[key];
+        return column >= 0 ? String(row.cells[column] ?? '').trim() : '';
+      };
+      return {
+        index,
+        sourceRow: state.headerIndex < 0 ? index + 1 : index + state.headerIndex + 2,
+        itemName: raw('itemName'), category: raw('category'), unitCost: raw('unitCost'),
+        unit: raw('unit'), quantity: raw('quantity')
+      };
+    });
+  }
+  function fieldSelect(field) {
+    const current = state.mapping[field.key];
+    const optionsHtml = ['<option value="-1">Not mapped</option>'].concat(state.headers.map((header, index) =>
+      '<option value="' + index + '"' + (current === index ? ' selected' : '') + '>' + esc(header) + ' (' + columnLabel(index).replace('Column ', '') + ')</option>'
+    )).join('');
+    return '<label class="inv-import-map-field"><span>' + esc(field.label) + '</span><select data-invimp-map="' + field.key + '">' + optionsHtml + '</select></label>';
+  }
+  function inputFor(row, field, label) {
+    const value = row[field];
+    const type = (field === 'quantity' || field === 'unitCost') ? 'number' : 'text';
+    const step = field === 'unitCost' ? '0.01' : 'any';
+    return '<label class="inv-import-edit-field"><span>' + esc(label) + '</span><input data-invimp-row="' + row.index + '" data-invimp-field="' + field + '" type="' + type + '"' + (type === 'number' ? ' min="0" step="' + step + '"' : '') + ' value="' + esc(value) + '" placeholder="' + esc(label) + '"></label>';
+  }
+  function render() {
+    if (!state) return;
+    const hasFile = Boolean(state.fileName);
+    const rows = mappedRows();
+    const incomplete = rows.filter(row => !row.itemName.trim() || !String(row.quantity).trim() || !String(row.category).trim() || !String(row.unit).trim() || !String(row.unitCost).trim());
+    const previewRows = rows.slice(0, 6).map(row => '<tr><td>' + row.sourceRow + '</td><td>' + esc(row.itemName || 'Missing item name') + '</td><td>' + esc(row.category || 'Other (default)') + '</td><td>' + esc(row.unit || 'Nos (default)') + '</td><td class="num">' + esc(row.unitCost || '0 (unknown)') + '</td><td class="num">' + esc(row.quantity || '0 / missing') + '</td></tr>').join('');
+    const corrections = incomplete.slice(0, 100).map(row =>
+      '<div class="inv-import-correction"><div class="inv-import-row-title">File row ' + row.sourceRow + '</div><div class="inv-import-edit-grid">' +
+      inputFor(row, 'itemName', 'Item name') + inputFor(row, 'category', 'Category') + inputFor(row, 'unitCost', 'Rate') + inputFor(row, 'unit', 'UOM') + inputFor(row, 'quantity', 'Quantity') +
+      '</div></div>'
+    ).join('');
+    const headerOptions = ['<option value="-1"' + (state.headerIndex < 0 ? ' selected' : '') + '>No header row (columns by position)</option>']
+      .concat(state.matrix.slice(0, 20).map((row, index) => '<option value="' + index + '"' + (state.headerIndex === index ? ' selected' : '') + '>Row ' + (index + 1) + ': ' + esc(row.slice(0, 5).join(' · ').slice(0, 70)) + '</option>')).join('');
+    const body = '<div class="inv-import-intro"><p>Upload an Excel or CSV stock sheet. The importer guesses the header row and matches common names like Item, Category, Rate, UOM and Qty. Review the mapping and preview before writing anything.</p>' +
+      '<label class="inv-import-file"><span class="material-symbols-rounded">upload_file</span><span><b>' + (hasFile ? esc(state.fileName) : 'Choose inventory file') + '</b><small>Excel (.xlsx, .xls), CSV or TSV</small></span><input id="invImportFile" type="file" accept=".xlsx,.xls,.csv,.tsv,.txt"></label>' +
+      (state.error ? '<div class="inv-import-error">' + esc(state.error) + '</div>' : '') + '</div>' +
+      (hasFile ? '<div class="inv-import-meta"><b>' + rows.length + ' data rows detected</b><span>' + state.headers.length + ' columns · ' + (state.headerIndex < 0 ? 'no header row' : 'header on row ' + (state.headerIndex + 1)) + '</span></div>' +
+        '<label class="inv-import-header-row"><span>Header row</span><select id="invImportHeaderRow">' + headerOptions + '</select></label>' +
+        '<h4 class="inv-import-section-title">Match file columns</h4><div class="inv-import-mapping">' + INVENTORY_IMPORT_FIELDS.map(fieldSelect).join('') + '</div>' +
+        '<label class="inv-import-physical"><input id="invImportPhysical" type="checkbox" ' + (state.physicalStock ? 'checked' : '') + '><span><b>Uploaded quantity is physical stock</b><small>When checked, overwrite the current stock balance of matching existing items. Leave unchecked to preserve existing balances. New items use the uploaded quantity as opening stock.</small></span></label>' +
+        '<h4 class="inv-import-section-title">Preview</h4><div class="table-wrap inv-import-preview"><table><thead><tr><th>Row</th><th>Item</th><th>Category</th><th>UOM</th><th class="num">Rate</th><th class="num">Qty</th></tr></thead><tbody>' + (previewRows || '<tr><td colspan="6">No data rows found.</td></tr>') + '</tbody></table></div>' +
+        (incomplete.length ? '<div class="inv-import-corrections"><div class="inv-import-section-heading"><h4>Rows needing attention (' + incomplete.length + ')</h4><p>Correct blank or unmapped values below. Showing up to 100 rows; use column matching for larger files.</p></div>' + corrections + '</div>' : '<div class="inv-import-ok">All rows have values for the mapped fields.</div>') +
+        '<p class="inv-import-note">Blank category defaults to Other for new items. Blank UOM defaults to Nos. Missing rates remain unchanged on existing items and default to 0 on new items. Physical-stock mode requires a quantity for every row.</p>'
+        : '<div class="inv-import-empty">Select a file to inspect its contents and configure column matching.</div>');
+    openModal({
+      title: 'Smart inventory import',
+      sub: 'Map columns, fix missing values, then review the stock update mode.',
+      size: 'lg',
+      body: '<div class="inv-importer">' + body + '</div>',
+      footer: '<button class="btn" data-act="close-modal">Cancel</button><button class="btn btn-primary" data-act="inventory-import-commit"' + (!hasFile || !rows.length ? ' disabled' : '') + '>Import inventory</button>'
+    });
+  }
+  async function readFile(file) {
+    if (!file) return;
+    if (!globalThis.XLSX) { toast('Excel parser did not load. Refresh and try again.', 'err'); return; }
+    state.fileName = file.name;
+    state.error = '';
+    state.matrix = [];
+    try {
+      const data = await file.arrayBuffer();
+      const workbook = globalThis.XLSX.read(data, { type: 'array', cellDates: true });
+      const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+      if (!firstSheet) throw new Error('The workbook has no worksheets.');
+      state.matrix = globalThis.XLSX.utils.sheet_to_json(firstSheet, { header: 1, defval: '', raw: false })
+        .filter(row => Array.isArray(row) && row.some(cell => String(cell ?? '').trim() !== ''));
+      if (!state.matrix.length) throw new Error('The selected file contains no rows.');
+      configureHeader(detectHeaderRow(state.matrix));
+      render();
+    } catch (error) {
+      state.error = 'Could not read this file: ' + (error?.message || 'unsupported or damaged file');
+      render();
+    }
+  }
+  function open() {
+    state = { fileName: '', matrix: [], rows: [], headers: [], mapping: {}, corrections: {}, headerIndex: -1, physicalStock: false, error: '' };
+    render();
+  }
+  async function commit() {
+    if (!state?.rows?.length) { toast('Choose a valid file first.', 'err'); return; }
+    const rows = mappedRows();
+    const physicalStock = Boolean(document.getElementById('invImportPhysical')?.checked ?? state.physicalStock);
+    const missingName = rows.filter(row => !row.itemName.trim());
+    const missingQty = physicalStock ? rows.filter(row => !String(row.quantity).trim() || !Number.isFinite(numberFromCell(row.quantity)) || numberFromCell(row.quantity) < 0) : [];
+    if (missingName.length || missingQty.length) {
+      state.error = missingName.length
+        ? missingName.length + ' row(s) still need an item name. Correct them below before importing.'
+        : missingQty.length + ' row(s) need a valid non-negative quantity because physical-stock mode is enabled.';
+      state.physicalStock = physicalStock;
+      render();
+      toast('Fix the highlighted missing values before importing.', 'err');
+      return;
+    }
+    const existing = getInventory() || [];
+    const updates = [], creates = [];
+    const seen = new Set();
+    let duplicates = 0, ambiguous = 0;
+    for (const row of rows) {
+      const name = String(row.itemName).trim();
+      const categoryText = String(row.category || '').trim();
+      const category = categoryText || 'Other';
+      const unit = String(row.unit || '').trim();
+      const rate = numberFromCell(row.unitCost);
+      const quantity = numberFromCell(row.quantity);
+      const key = normalizeItem(name);
+      if (seen.has(key)) { duplicates++; continue; }
+      seen.add(key);
+      const matches = existing.filter(item => normalizeItem(item.partName || item.itemName || item.name || item.productName) === normalizeItem(name));
+      let match = null;
+      if (matches.length === 1) match = matches[0];
+      else if (matches.length > 1) {
+        const categoryMatches = matches.filter(item => normalizeItem(item.category || 'Other') === normalizeItem(category));
+        if (categoryMatches.length === 1) match = categoryMatches[0];
+        else { ambiguous++; continue; }
+      }
+      const data = {};
+      if (name) data.partName = name;
+      if (categoryText) data.category = categoryText;
+      else if (!match) data.category = 'Other';
+      if (unit) data.unit = unit;
+      else if (!match) data.unit = 'Nos';
+      if (Number.isFinite(rate) && String(row.unitCost).trim() !== '') data.unitCost = Math.max(0, rate);
+      else if (!match) data.unitCost = 0;
+      if (match) {
+        if (physicalStock) data.stockQuantity = Math.max(0, quantity);
+        data.updatedAt = serverTimestamp();
+        updates.push({ id: match.id, data });
+      } else {
+        data.stockQuantity = Number.isFinite(quantity) && quantity >= 0 ? quantity : 0;
+        data.reorderLevel = 0;
+        data.updatedAt = serverTimestamp();
+        creates.push(data);
+      }
+    }
+    if (!updates.length && !creates.length) {
+      toast(ambiguous ? 'No rows imported. Some names match multiple existing items; resolve duplicates first.' : 'No valid rows to import.', 'err');
+      return;
+    }
+    try {
+      const operations = [
+        ...updates.map(item => ({ type: 'update', id: item.id, data: item.data })),
+        ...creates.map(data => ({ type: 'create', data }))
+      ];
+      for (let start = 0; start < operations.length; start += 400) {
+        const batch = writeBatch(db);
+        operations.slice(start, start + 400).forEach(operation => {
+          if (operation.type === 'update') batch.update(doc(db, 'inventory', operation.id), operation.data);
+          else batch.set(doc(collection(db, 'inventory')), operation.data);
+        });
+        await batch.commit();
+      }
+      closeModal();
+      onComplete?.();
+      toast('Inventory import complete · ' + creates.length + ' created · ' + updates.length + ' updated' + (physicalStock ? ' · physical stock applied' : ' · existing stock preserved') + (duplicates ? ' · ' + duplicates + ' duplicate rows skipped' : '') + (ambiguous ? ' · ' + ambiguous + ' ambiguous rows skipped' : ''));
+      state = null;
+    } catch (error) {
+      toast('Import failed: ' + (error?.message || 'database write error'), 'err');
+    }
+  }
+  document.addEventListener('change', event => {
+    const target = event.target;
+    if (target?.id === 'invImportFile') { readFile(target.files?.[0]); return; }
+    if (target?.id === 'invImportHeaderRow' && state) { configureHeader(Number(target.value)); render(); return; }
+    if (target?.id === 'invImportPhysical' && state) { state.physicalStock = target.checked; return; }
+    const field = target?.dataset?.invimpMap;
+    if (field && state && Object.prototype.hasOwnProperty.call(state.mapping, field)) {
+      state.mapping[field] = Number(target.value);
+      render();
+    }
+  });
+  document.addEventListener('input', event => {
+    const target = event.target;
+    if (!target?.dataset?.invimpRow || !target?.dataset?.invimpField || !state) return;
+    const index = Number(target.dataset.invimpRow), field = target.dataset.invimpField;
+    if (!state.corrections[index]) state.corrections[index] = {};
+    state.corrections[index][field] = target.value;
+  });
+  return { open, commit };
+}
+
+
+function installInventoryReadabilityStyles() {
+  if (document.getElementById('inventoryReadabilityStyles')) return;
+  const style = document.createElement('style');
+  style.id = 'inventoryReadabilityStyles';
+  style.textContent = [
+    '#v-registry { --inv-surface:#202f27; --inv-row:#26372d; --inv-row-alt:#2b3d32; --inv-line:#45594a; --inv-text:#e4e9df; --inv-muted:#b7c4b5; }',
+    '#v-registry .card { background:var(--inv-surface)!important; color:var(--inv-text)!important; border-color:var(--inv-line)!important; box-shadow:none!important; }',
+    '#v-registry .card-h h3,#v-registry .kpi-label,#v-registry .inv-category summary,#v-registry .inv-category summary b { color:var(--inv-text)!important; }',
+    '#v-registry .card-h .muted,#v-registry .inv-category summary small,#v-registry .inv-category-placeholder,#v-registry .muted { color:var(--inv-muted)!important; }',
+    '#v-registry .kpi { background:#26372d!important; color:var(--inv-text)!important; border-color:var(--inv-line)!important; box-shadow:none!important; }',
+    '#v-registry .kpi-value { color:#f0f1e9!important; }',
+    '#v-registry .inv-category { background:var(--inv-row)!important; border-color:var(--inv-line)!important; }',
+    '#v-registry .inv-category>summary:hover { background:#304438!important; }',
+    '#v-registry .inv-cat-icon { background:#304438!important; border-color:#506454!important; color:#c7d4bd!important; }',
+    '#v-registry .inv-cat-alert { background:#2d4034!important; border-color:#506454!important; color:#d1dacd!important; }',
+    '#v-registry .inv-category-body { border-color:var(--inv-line)!important; }',
+    '#v-registry table { background:var(--inv-row)!important; color:var(--inv-text)!important; border-color:var(--inv-line)!important; }',
+    '#v-registry table thead th { background:#34493b!important; color:#edf0e8!important; border-color:#4a5e4e!important; }',
+    '#v-registry table tbody tr,#v-registry table tbody tr td { background:var(--inv-row)!important; color:var(--inv-text)!important; border-color:var(--inv-line)!important; }',
+    '#v-registry table tbody tr:nth-child(even),#v-registry table tbody tr:nth-child(even) td { background:var(--inv-row-alt)!important; }',
+    '#v-registry table tbody tr:hover,#v-registry table tbody tr:hover td { background:#354b3d!important; }',
+    '#v-registry table td b { color:#f1f2eb!important; }',
+    '#v-registry table .muted,#v-registry table small { color:#b9c7b8!important; }',
+    '#v-registry .toolbar .btn:not(.btn-primary) { background:#293b30!important; color:#e4e9df!important; border-color:#506454!important; }',
+    '#v-registry .toolbar .btn:not(.btn-primary):hover { background:#354b3d!important; }',
+    '#overlay .modal .inv-importer { color:#e4e9df; }',
+    '#overlay .modal .inv-importer p { color:#b9c7b8; font-size:12px; line-height:1.55; }',
+    '#overlay .modal .inv-import-file { display:flex; align-items:center; gap:12px; position:relative; overflow:hidden; padding:14px; border:1px dashed #607766; border-radius:10px; background:#263a2e; cursor:pointer; }',
+    '#overlay .modal .inv-import-file>.material-symbols-rounded { color:#c7d4bd; font-size:26px; }',
+    '#overlay .modal .inv-import-file span:nth-child(2) { display:grid; gap:4px; }',
+    '#overlay .modal .inv-import-file b { color:#edf0e8; font-size:13px; overflow-wrap:anywhere; }',
+    '#overlay .modal .inv-import-file small { color:#b9c7b8; font-size:11px; }',
+    '#overlay .modal .inv-import-file input { position:absolute; inset:0; width:100%; height:100%; opacity:0; cursor:pointer; }',
+    '#overlay .modal .inv-import-meta { display:flex; justify-content:space-between; gap:10px; flex-wrap:wrap; margin:14px 0 10px; color:#e4e9df; font-size:12px; }',
+    '#overlay .modal .inv-import-meta span { color:#b9c7b8; }',
+    '#overlay .modal .inv-import-header-row { display:flex; align-items:center; justify-content:space-between; gap:12px; margin:12px 0; color:#d5dfd2; font-size:12px; }',
+    '#overlay .modal .inv-import-header-row select,#overlay .modal .inv-import-map-field select { min-width:0; width:100%; padding:9px 10px; border:1px solid #506454; border-radius:8px; background:#1d2d24!important; color:#e4e9df!important; }',
+    '#overlay .modal .inv-import-mapping { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; }',
+    '#overlay .modal .inv-import-map-field { display:grid; gap:5px; min-width:0; color:#b9c7b8; font-size:11px; }',
+    '#overlay .modal .inv-import-section-title { margin:18px 0 9px; color:#e4e9df; font-size:13px; }',
+    '#overlay .modal .inv-import-physical { display:flex; align-items:flex-start; gap:10px; margin-top:14px; padding:12px; border:1px solid #78653c; border-radius:9px; background:#332f22; color:#f0e4c4; cursor:pointer; }',
+    '#overlay .modal .inv-import-physical input { flex:none; margin-top:3px; accent-color:#c9b77f; }',
+    '#overlay .modal .inv-import-physical span { display:grid; gap:4px; }',
+    '#overlay .modal .inv-import-physical b { font-size:12px; color:#f0e4c4; }',
+    '#overlay .modal .inv-import-physical small { color:#d1c6a5; font-size:11px; line-height:1.45; }',
+    '#overlay .modal .inv-import-preview { max-width:100%; overflow:auto; border:1px solid #45594a; border-radius:8px; }',
+    '#overlay .modal .inv-import-preview table { min-width:620px; }',
+    '#overlay .modal .inv-import-preview th { background:#34493b!important; color:#edf0e8!important; }',
+    '#overlay .modal .inv-import-preview td { background:#26372d!important; color:#e4e9df!important; }',
+    '#overlay .modal .inv-import-preview tr:nth-child(even) td { background:#2b3d32!important; }',
+    '#overlay .modal .inv-import-corrections { margin-top:15px; }',
+    '#overlay .modal .inv-import-section-heading h4 { margin:0 0 4px; color:#f0d69a; font-size:12px; }',
+    '#overlay .modal .inv-import-section-heading p { margin:0 0 10px; font-size:11px; }',
+    '#overlay .modal .inv-import-correction { padding:11px; margin-top:8px; border:1px solid #45594a; border-radius:9px; background:#24362b; }',
+    '#overlay .modal .inv-import-row-title { margin-bottom:8px; color:#d7e0d2; font-size:11px; font-weight:700; }',
+    '#overlay .modal .inv-import-edit-grid { display:grid; grid-template-columns:repeat(5,minmax(0,1fr)); gap:8px; }',
+    '#overlay .modal .inv-import-edit-field { display:grid; gap:4px; min-width:0; color:#b9c7b8; font-size:10px; }',
+    '#overlay .modal .inv-import-edit-field input { min-width:0; width:100%; padding:8px 7px; background:#1c2b22!important; color:#edf0e8!important; border:1px solid #506454!important; border-radius:7px; }',
+    '#overlay .modal .inv-import-edit-field input::placeholder { color:#91a394!important; }',
+    '#overlay .modal .inv-import-ok { margin-top:12px; padding:10px; border-radius:8px; background:#243c2c; color:#c8e3c9; font-size:12px; }',
+    '#overlay .modal .inv-import-error { margin-top:10px; padding:10px; border-radius:8px; background:#452d2a; color:#ffd0c8; font-size:12px; }',
+    '#overlay .modal .inv-import-note { margin:12px 0 0; font-size:11px; }',
+    '#overlay .modal .inv-import-empty { margin-top:12px; padding:22px 12px; text-align:center; border:1px dashed #45594a; border-radius:9px; color:#b9c7b8; font-size:12px; }',
+    '@media(max-width:700px) { #overlay .modal .inv-import-mapping { grid-template-columns:1fr; } #overlay .modal .inv-import-edit-grid { grid-template-columns:repeat(2,minmax(0,1fr)); } #overlay .modal .inv-import-header-row { align-items:stretch; flex-direction:column; } }'
+  ].join('\n');
+  document.head.appendChild(style);
+}
+installInventoryReadabilityStyles();
+
+const inventoryImporter = createInventoryImporter({ db, collection, doc, writeBatch, serverTimestamp, getInventory: () => S.inventory, onComplete: () => scheduleRender(), esc, toast, openModal, closeModal });
+
 const H = {
   'cost-model': () => openCostModel(),
   'open-ops-analytics': d => openOpsAnalytics(d.domain || 'overview'),
@@ -2205,6 +2524,8 @@ const H = {
   'export-turf-cost-range': () => exportTurfCostRange(),
   'export-roi': () => exportROIReport(),
   'edit-part': d => editInventoryCost(d.id),
+  'open-inventory-import': () => inventoryImporter.open(),
+  'inventory-import-commit': () => inventoryImporter.commit(),
   'open-store-records': () => openStoreRecordsEditor(),
   'fnb-tab': d => { fnbModule.setTab(d.tab); renderAll(); },
   'fnb-save-order': () => fnbModule.saveOrder(),
