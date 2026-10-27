@@ -3171,6 +3171,54 @@ function renderTurfApplications() {
   }).join('') : '<tr><td colspan="7" class="empty">No application records match these filters.</td></tr>'}</tbody></table>`);
 }
 
+
+function renderTurfUnplannedIssues() {
+  const target = $('#turfUnplannedIssuesTbl');
+  if (!target) return;
+  const all = allTurfPlanRecords().filter(isUnplannedMaterialIssue);
+  const q = unplannedIssueSearch.trim().toLowerCase();
+  const rows = all.filter(p => {
+    const category = turfPlanCategory(p);
+    const status = turfRecordStatus(p);
+    const searchText = [
+      turfRecordProductName(p), p.targetArea, p.area, p.location, p.notes, p.reason,
+      p.planId, p.id, p.productId, p.issuedBy, p.issueType, p.status, category,
+      p._sourceCollection
+    ].join(' ').toLowerCase();
+    return (unplannedIssueCategory === 'All categories' || category === unplannedIssueCategory) &&
+      (unplannedIssueStatus === 'All statuses' || status === unplannedIssueStatus) &&
+      (!q || searchText.includes(q));
+  }).sort((a,b) => turfRecordDate(b).localeCompare(turfRecordDate(a)) ||
+    tsMs(b.issuedAt ?? b.timestamp ?? b.createdAt)-tsMs(a.issuedAt ?? a.timestamp ?? a.createdAt));
+  const count = $('#unplannedIssueCount');
+  if (count) count.textContent = rows.length + ' issue' + (rows.length===1?'':'s');
+  const categories = ['All categories','Fertilizers','Pesticides','Turf Enhancements','Other'];
+  const categoryFilter = $('#unplannedIssueCategoryFilter');
+  if (categoryFilter && categoryFilter.options.length !== categories.length) {
+    categoryFilter.innerHTML = categories.map(value => '<option>'+esc(value)+'</option>').join('');
+    categoryFilter.value = unplannedIssueCategory;
+  }
+  const body = !turfPlanSourcesLoaded()
+    ? '<tr><td colspan="9">Loading material issue records…</td></tr>'
+    : rows.length ? rows.map(p => {
+      const category = turfPlanCategory(p), status = turfRecordStatus(p);
+      const unit = p.unit || p.stockUnit || p.uom || p.unitOfMeasure || turfProductForPlan(p)?.unit || '';
+      const reference = p.planId || p.id || '—';
+      const timestamp = tsMs(p.issuedAt ?? p.issueTimestamp ?? p.timestamp ?? p.createdAt);
+      const issuer = p.issuedBy || p.performedBy || p.recordedBy || p.operatorName || '—';
+      const notes = p.notes || p.reason || '—';
+      return '<tr><td>'+esc(turfRecordDate(p) || '—')+(timestamp?'<div class="muted sm">'+esc(timeOf(timestamp))+'</div>':'')+
+        '</td><td><code>'+esc(reference)+'</code><div class="muted sm">'+esc(p.issueType || (p.isAdHoc===true?'UNPLANNED':'Legacy unplanned'))+'</div></td>'+
+        '<td><span class="badge '+turfCategoryClass(category)+'">'+esc(category)+'</span></td>'+
+        '<td><b>'+esc(turfRecordProductName(p) || 'Unspecified material')+'</b><div class="muted sm">'+esc(p.productId || p.itemId || p.inventoryId || '')+'</div></td>'+
+        '<td class="num"><b>'+fmt(turfRecordQuantity(p),2)+'</b> '+esc(unit)+'</td>'+
+        '<td>'+esc(p.targetZoneOrMachine || p.targetArea || p.area || p.location || 'Unassigned')+'</td>'+
+        '<td>'+esc(issuer)+'</td><td><span class="badge '+(status==='Issued'?'gold':status==='Applied'?'ok':'mute')+'">'+esc(status)+'</span></td>'+
+        '<td class="muted">'+esc(notes)+'</td></tr>';
+    }).join('') : '<tr><td colspan="9" class="empty">No unplanned material issues match these filters.</td></tr>';
+  setHTML(target, '<table><thead><tr><th>Issue date</th><th>Issue reference</th><th>Category</th><th>Material</th><th class="num">Issued qty</th><th>Area / destination</th><th>Issued by</th><th>Status</th><th>Notes</th></tr></thead><tbody>'+body+'</tbody></table>');
+}
+
 function turfEditablePlanRecord(plan) {
   return !!plan && turfRecordStatus(plan) === 'Planned' &&
     ['turf_plans','daily_application_plans'].includes(plan._sourceCollection) &&
@@ -3334,6 +3382,7 @@ function renderTurfCare() {
     return `<tr><td><b>${esc(itemName(i))}</b></td><td><span class="badge ${turfCategoryClass(i.category)}">${esc(turfCategoryLabel(i.category))}</span></td><td>${esc(i.unit || 'Nos')}</td><td class="num"><b>${fmt(stock,3)}</b></td><td class="num"><b>${fmt(effectiveReorderLevel(i),3)}</b><div class="muted sm">${autoReorderDetails(i).reliable?'Trend-based':'Provisional'}</div></td><td class="num">${num(i.unitCost)>0?money(i.unitCost,2):'—'}</td><td><span class="badge ${low?'warn':'ok'}">${low?'Reorder':'In stock'}</span></td><td class="right nowrap"><button class="btn btn-sm" data-act="edit-part" data-id="${esc(i.id)}" title="Edit product"><span class="material-symbols-rounded">edit</span></button></td></tr>`;
   }).join(''):'<tr><td colspan="8" class="empty">No turf products in this category. Add a product in the item master first.</td></tr>'}</tbody></table>`);
   renderTurfApplications();
+  renderTurfUnplannedIssues();
   renderTurfAreaPlanDashboard();
 }
 
