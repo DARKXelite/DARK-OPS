@@ -3289,7 +3289,7 @@ function renderTp() {
     const repeat = line.repeat !== false;
     const total = tpLineTotal(line, area);
     const canPlan = !!unit;
-    return '<article class="tp-product-row" data-unit="' + esc(unit) + '">' +
+    return '<article class="tp-product-row" data-search="' + esc(String(itemName(product)).toLowerCase()) + '" data-unit="' + esc(unit) + '">' +
       '<div class="tp-product-ident"><span class="tp-product-icon material-symbols-rounded">' + esc(category === 'Fertilizers' ? 'spa' : category === 'Pesticides' ? 'pest_control' : 'eco') + '</span>' +
       '<div class="tp-product-copy"><b>' + esc(itemName(product)) + '</b><span>' + esc(unit || 'Unit not set') + ' · Available stock: ' + fmt(stock, 2) + (num(product.unitCost) > 0 ? ' · ' + money(num(product.unitCost)) + '/' + esc(unit) : ' · Unit cost not set') + '</span>' + (stock <= effectiveReorderLevel(product) ? '<small class="tp-stock-hint is-low">Low stock · at or below reorder level</small>' : '<small class="tp-stock-hint">Stock is checked again when issuing</small>') + '</div></div>' +
       '<div class="tp-qty-control"><label>Qty (' + esc(unit || 'unit') + ')' +
@@ -3324,7 +3324,8 @@ function renderTp() {
     '<section class="tp-workspace"><div class="tp-category-tabs">' + categoryTabs + '</div>' +
     '<div class="tp-category-heading"><div><span class="tp-eyebrow">' + esc(area.toUpperCase()) + '</span><h3>' + esc(category) + '</h3><p>' + esc((TP_CATEGORIES.find(item => item.name === category) || {}).description || 'Select products and quantities.') + '</p></div>' +
     '<span class="tp-planned-count">' + existingCount + ' planned line' + (existingCount === 1 ? '' : 's') + ' in this range</span></div>' +
-    '<div class="tp-product-list">' + (rows || '<div class="tp-empty-state"><span class="material-symbols-rounded">inventory_2</span><b>No ' + esc(category.toLowerCase()) + ' found</b><p>Add products to this category in Products &amp; Stock first.</p></div>') + '</div>' +
+    '<label class="tp-product-search"><span class="material-symbols-rounded">search</span><input type="search" data-tp-search placeholder="Search ' + esc(category.toLowerCase()) + ' by product name…" autocomplete="off" aria-label="Search ' + esc(category) + ' products"><kbd>Filter</kbd></label>' +
+    '<div class="tp-product-list">' + (rows || '<div class="tp-empty-state"><span class="material-symbols-rounded">inventory_2</span><b>No ' + esc(category.toLowerCase()) + ' found</b><p>Add products to this category in Products &amp; Stock first.</p></div>') + '<div class="tp-search-empty" data-tp-search-empty hidden><b>No matching products</b><span>Try another product name.</span></div></div>' +
     '<label class="tp-notes-field"><span>Notes <small>(optional · this area and category)</small></span><textarea rows="2" placeholder="Purpose, rate reference, weather or operator instructions" data-tp-note data-area="' + esc(area) + '" data-category="' + esc(category) + '">' + esc(note) + '</textarea></label>' +
     '<div class="tp-category-footer"><div class="tp-save-explainer"><span class="material-symbols-rounded">info</span><span>Creates one dated plan per selected weekday. Stock is not deducted until an issue is recorded.</span></div>' +
     '<button type="button" class="btn btn-primary tp-save-tab" data-act="tp-save-tab"><span class="material-symbols-rounded">save</span>Save ' + esc(category) + '</button></div></section></div>';
@@ -3486,6 +3487,24 @@ async function saveTpCategoryTab() {
 document.addEventListener('input', event => {
   const target = event.target;
   if (!target || !target.closest) return;
+  const searchInput = target.closest('[data-tp-search]');
+  if (searchInput) {
+    const query = String(searchInput.value || '').trim().toLowerCase();
+    const list = searchInput.closest('.tp-workspace')?.querySelector('.tp-product-list');
+    if (!list) return;
+    const rows = [...list.querySelectorAll('.tp-product-row[data-search]')];
+    let visible = 0;
+    rows.forEach(row => {
+      const match = !query || String(row.dataset.search || '').includes(query);
+      row.hidden = !match;
+      if (match) visible++;
+    });
+    const noMatch = list.querySelector('[data-tp-search-empty]');
+    const categoryEmpty = list.querySelector('.tp-empty-state');
+    if (noMatch) noMatch.hidden = !(query && visible === 0);
+    if (categoryEmpty) categoryEmpty.hidden = !!query;
+    return;
+  }
   const qtyInput = target.closest('[data-tp-qty]');
   if (qtyInput) {
     const productId = qtyInput.dataset.product;
