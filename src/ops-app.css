@@ -3286,3 +3286,179 @@ textarea {
   font-size: 9px;
   line-height: 1.35;
 }
+
+
+/* Day Planner: neutral layered surfaces so green remains a signal, not wallpaper. */
+.modal.turf-planner-modal {
+  --bg: #111512;
+  --panel: #191E1A;
+  --surface: #202622;
+  --surface-2: #262D28;
+  --surface-3: #303832;
+  --surface-hover: #303832;
+  --border: #414A43;
+  --text: #F1F0E9;
+  --muted: #B2B8B0;
+  --gold: #E6BD75;
+  --gold-soft: rgba(230, 189, 117, .14);
+  --ok: #8CC9A0;
+  --warn: #F2BE62;
+}
+.modal.turf-planner-modal .tp-planner-toolbar {
+  background: linear-gradient(115deg, #202622 0%, #191E1A 72%);
+  border-bottom: 1px solid #414A43;
+}
+.modal.turf-planner-modal .tp-planner-title .tp-eyebrow,
+.modal.turf-planner-modal .tp-category-heading .tp-eyebrow {
+  color: #E6BD75;
+}
+.modal.turf-planner-modal .tp-area-sidebar {
+  background: #171C18;
+  border-color: #414A43;
+}
+.modal.turf-planner-modal .tp-area-button {
+  background: #202622;
+  border-color: #343D36;
+}
+.modal.turf-planner-modal .tp-area-button:hover {
+  background: #2A312B;
+  border-color: #59665A;
+}
+.modal.turf-planner-modal .tp-area-button.is-active {
+  background: #302B20;
+  border-color: #B9924F;
+  box-shadow: inset 3px 0 0 #E6BD75;
+}
+.modal.turf-planner-modal .tp-area-button.is-active .material-symbols-rounded,
+.modal.turf-planner-modal .tp-area-button.is-active b {
+  color: #F1D6A0;
+}
+.modal.turf-planner-modal .tp-category-tab {
+  background: #202622;
+  border-color: #3C453E;
+  color: #C9CEC7;
+}
+.modal.turf-planner-modal .tp-category-tab.is-active {
+  background: #E6BD75;
+  border-color: #E6BD75;
+  color: #201A10;
+  box-shadow: 0 2px 0 rgba(0,0,0,.18);
+}
+.modal.turf-planner-modal .tp-category-tab.is-active .material-symbols-rounded {
+  color: #201A10;
+}
+.modal.turf-planner-modal .tp-workspace {
+  background: #111512;
+}
+.modal.turf-planner-modal .tp-product-row {
+  background: #1B211D;
+  border-color: #343D36;
+}
+.modal.turf-planner-modal .tp-product-row:hover {
+  background: #222923;
+  border-color: #4D5A4F;
+}
+.modal.turf-planner-modal .tp-product-icon {
+  color: #E6BD75;
+  background: rgba(230,189,117,.10);
+  border-color: rgba(230,189,117,.24);
+}
+.modal.turf-planner-modal .tp-total-label b {
+  color: #9AD4A8;
+}
+.modal.turf-planner-modal .tp-qty-control input,
+.modal.turf-planner-modal .tp-notes-field textarea,
+.modal.turf-planner-modal .tp-date-range input {
+  background: #101411;
+  border-color: #465047;
+  color: #F1F0E9;
+}
+.modal.turf-planner-modal .tp-qty-control input:focus,
+.modal.turf-planner-modal .tp-notes-field textarea:focus,
+.modal.turf-planner-modal .tp-date-range input:focus {
+  border-color: #E6BD75;
+  box-shadow: 0 0 0 2px rgba(230,189,117,.15);
+  outline: none;
+}
+.modal.turf-planner-modal .tp-repeat-strip {
+  background: #1A201B;
+  border-color: #414A43;
+}
+.modal.turf-planner-modal .tp-weekday-chip input:checked + span {
+  background: #E6BD75;
+  border-color: #E6BD75;
+  color: #201A10;
+}
+.modal.turf-planner-modal .tp-save-tab {
+  background: #E6BD75;
+  border-color: #E6BD75;
+  color: #201A10;
+}
+.modal.turf-planner-modal .tp-save-tab:hover {
+  background: #F0D39B;
+  border-color: #F0D39B;
+}
+.modal.turf-planner-modal .tp-product-search {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin: 0 0 8px;
+  padding: 0 10px;
+  min-height: 38px;
+  border: 1px solid #465047;
+  border-radius: 9px;
+  background: #101411;
+  color: #E6BD75;
+}
+.modal.turf-planner-modal .tp-product-search > .material-symbols-rounded {
+  flex: 0 0 auto;
+  font-size: 19px;
+}
+.modal.turf-planner-modal .tp-product-search input {
+  flex: 1 1 auto;
+  width: 100%;
+  min-width: 0;
+  height: 36px !important;
+  min-height: 36px !important;
+  padding: 0 !important;
+  border: 0 !important;
+  outline: 0 !important;
+  box-shadow: none !important;
+  background: transparent !important;
+  color: #F1F0E9 !important;
+  font-size: 12px !important;
+}
+.modal.turf-planner-modal .tp-product-search input::placeholder {
+  color: #9DA69C;
+}
+.modal.turf-planner-modal .tp-product-search:focus-within {
+  border-color: #E6BD75;
+  box-shadow: 0 0 0 2px rgba(230,189,117,.12);
+}
+.modal.turf-planner-modal .tp-product-search kbd {
+  flex: 0 0 auto;
+  padding: 3px 6px;
+  border: 1px solid #414A43;
+  border-radius: 5px;
+  color: #B2B8B0;
+  font: 9px/1.2 inherit;
+}
+.modal.turf-planner-modal .tp-search-empty {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 22px 12px;
+  border: 1px dashed #414A43;
+  border-radius: 9px;
+  color: #F1F0E9;
+  text-align: center;
+}
+.modal.turf-planner-modal .tp-search-empty span {
+  color: #B2B8B0;
+  font-size: 10px;
+}
+.modal.turf-planner-modal .tp-search-empty[hidden],
+.modal.turf-planner-modal .tp-product-row[hidden],
+.modal.turf-planner-modal .tp-empty-state[hidden] {
+  display: none !important;
+}
