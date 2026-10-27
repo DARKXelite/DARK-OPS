@@ -1498,112 +1498,77 @@ main,.main-content,.page-content{padding-left:clamp(12px,1.35vw,22px)!important;
 
 
 /* Targeted readability repairs; preserve the existing forest/olive palette. */
-.local-expenses{margin-top:18px;padding:16px;border:1px solid #506653;border-radius:12px;background:#20372A;color:#E8E9DF}.local-expenses .card-h{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}.local-expenses .card-h h3{color:#F0E7D2!important;margin:0}.local-expenses .card-h p{margin:5px 0 0;color:#B6C2B5!important}.local-expense-kpis{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin:14px 0}.local-expense-kpis>div{padding:12px;border:1px solid #506653;border-radius:9px;background:#263E30;display:grid;gap:6px}.local-expense-kpis small{color:#C5D0C3!important}.local-expense-kpis b{color:#F3E6C9;font-size:19px}.local-expenses table{background:#263E30!important;color:#E8E9DF!important}.local-expenses thead th{background:#315B42!important;color:#FFF9EA!important}.local-expenses tbody tr,.local-expenses tbody tr:nth-child(even){background:#D8DFBD!important;color:#283522!important}.local-expenses tbody td{color:#283522!important;border-color:#AAB78A!important}.local-expenses tbody tr:nth-child(even){background:#CBD5AA!important}.local-expenses tbody .muted{color:#536047!important}.local-expenses .empty{color:#536047!important;background:#E5EACF!important}.expense-paid-toggle,.expense-stock-option{display:flex;align-items:center;gap:8px;color:#E8E9DF!important;font-size:12px}.expense-paid-toggle span{white-space:nowrap}.expense-paid-toggle input,.expense-stock-option input{accent-color:#D6C18F}.expense-online-tools{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:8px 0 12px}.local-expenses .badge.warn{background:#F1DCA8!important;color:#483A19!important}.local-expenses .badge.ok{background:#C8E3C9!important;color:#21452C!important}
-/* Fix common white-on-white headings, menu items and icon labels without recoloring branded controls. */
-/* Context-aware contrast: dark surfaces get light text; olive/light surfaces keep dark text. */
-.dropdown-menu,.popover,.kmenu,.menu-popover{background:#20372A!important;color:#E8E9DF!important;border-color:#506653!important}
-.dropdown-menu button,.popover button,.kmenu button,.menu-popover button{color:#E8E9DF!important}
-.dropdown-menu button:hover,.popover button:hover,.kmenu button:hover,.menu-popover button:hover{background:#354F3C!important;color:#FFF9EA!important}
-.card-h h3,.section-title{color:var(--text,#E8E9DF)!important}
-#v-registry .card-h h3,#v-registry .kpi-label,#v-registry .inv-category summary,#v-registry .inv-category summary b{color:#283522!important}
-#v-registry .card-h .muted,#v-registry .inv-category summary small{color:#536047!important}
-.modal h2,.modal h3{color:#F0E7D2!important}.modal label,.modal .field-label,.modal .form-label{color:#C9D4C7!important}.modal .muted,.modal small{color:#B6C2B5!important}.modal input::placeholder,.modal textarea::placeholder{color:#AAB9AA!important;opacity:1!important}
-.toolbar .btn:not(.btn-primary){color:var(--text,#E8E9DF)!important}.toolbar .btn:not(.btn-primary) .material-symbols-rounded{color:inherit!important}
-.local-expenses .card-h h3{color:#F0E7D2!important}.local-expenses .card-h p{color:#B6C2B5!important}
-@media(max-width:650px){.local-expense-kpis{grid-template-columns:1fr}.local-expenses{padding:10px}.local-expenses .table-wrap{max-width:100%;overflow-x:auto}}
-
-
-
-#v-expenses #localExpenseLedgerCard{background:#20372A!important;color:#E8E9DF!important;border:1px solid #405747!important}
-#v-expenses #localExpenseLedgerCard>.card-h h3{color:#F0E7D2!important}
-#v-expenses #localExpenseLedgerCard .local-expenses{background:#20372A!important;color:#E8E9DF!important}
-#v-expenses #localExpenseLedgerCard .local-expense-kpis>div{background:#263E30!important;border-color:#506653!important}
-#v-expenses #localExpenseLedgerCard .local-expense-kpis small{color:#C5D0C3!important}
-#v-expenses #localExpenseLedgerCard .local-expense-kpis b{color:#F3E6C9!important}
-#v-expenses #localExpenseLedgerCard .local-expenses table thead th{background:#315B42!important;color:#FFF9EA!important}
-#v-expenses #localExpenseLedgerCard .local-expenses table tbody tr{background:#D8DFBD!important}
-#v-expenses #localExpenseLedgerCard .local-expenses table tbody tr:nth-child(even){background:#CBD5AA!important}
-#v-expenses #localExpenseLedgerCard .local-expenses table tbody td{background:transparent!important;color:#283522!important;border-color:#AAB78A!important}
-#v-expenses #localExpenseLedgerCard .local-expenses table .muted{color:#536047!important}
-#v-expenses #localExpenseLedgerCard .expense-paid-toggle{color:#283522!important}
-#v-expenses #localExpenseLedgerCard .expense-paid-toggle span{color:#283522!important}
-#v-expenses #localExpenseLedgerCard .local-expenses .empty{color:#536047!important;background:#E5EACF!important}
-#v-expenses #localExpenseLedgerCard .local-expenses .btn:not(.btn-primary){color:#E8E9DF!important;background:#315B42!important;border-color:#54765F!important}
-@media(max-width:650px){#v-expenses #localExpenseLedgerCard .local-expense-kpis{grid-template-columns:1fr}#v-expenses #localExpenseLedgerCard .local-expenses{padding:10px}}
-
-
-
-/* Readability-only patch. No palette changes: each rule fixes text that sat on a surface of similar brightness. */
-.cmd-hint{color:rgba(255,255,255,.7)!important}
-/* Olive ledger surfaces: dark text; selected chip / table footer keep the brand forest green with light text */
-#v-fuel .chip,#v-registry .chip,#v-users .chip{background:#E8ECD2!important;color:#283522!important;border-color:#AAB78A!important}
-#v-fuel .chip.on,#v-registry .chip.on,#v-users .chip.on{background:#315B42!important;color:#FFF9EA!important;border-color:#315B42!important}
-#ledgerCard .rangebar label,#ledgerCard .dates label,#ledgerCard .roi-chart-note{color:#3F4D36!important}
-#ledgerCard .badge.mute{background:#C3CE9F!important;color:#283522!important;border-color:#AAB78A!important}
-#ledgerCard .badge.gold{background:#315B42!important;color:#F6E7C3!important;border-color:#315B42!important}
-#v-fuel table tfoot td,#v-registry table tfoot td,#v-users table tfoot td,#ledgerCard table tfoot td{background:#315B42!important;color:#FFF9EA!important;border-color:#54765F!important}
-#ledgerCard .dates input,#ledgerCard .toolbar select,#ledgerCard .dates select{background:#EDF0DC!important;color:#283522!important;border-color:#AAB78A!important}
-/* Inventory page: KPI tiles and card headings sit on dark green => light text; category rows are olive => dark text */
-#v-registry #storeKpis .kpi-label{color:#C5D0C3!important}
-#v-registry #storeKpis .kpi-value,#v-registry #storeKpis .kpi b{color:#F3E6C9!important}
-#v-registry>.card>.card-h h3{color:#F0E7D2!important}
-#v-registry .inv-category .inv-cat-icon{color:#315B42!important}
-#v-registry .inv-category .inv-cat-alert,#v-registry .inv-category .inv-cat-chevron,#v-registry .inv-category .inv-category-placeholder,#v-registry .inv-category summary small{color:#3F4D36!important}
-/* Modal header/footer are deliberately off-white (existing guard) => dark text on them */
-.modal .m-head h2{color:#1F3A2A!important}.modal .m-head p,.modal .m-head .muted{color:#4A5A4F!important}
-.modal .m-head .icon-btn,.modal .m-head .icon-btn .material-symbols-rounded{color:#1F3A2A!important;border-color:#B9C4B5!important}
-.modal .m-foot .btn:not(.btn-primary):not(.btn-danger){color:#1F3A2A!important;border-color:#9DB0A0!important;background:#EEF1E6!important}
-/* Toasts sit on an off-white surface (existing guard) => dark text */
-#toasts .toast,#toasts .toast span:not(.material-symbols-rounded){color:#1F3A2A!important}
-#toasts .toast .material-symbols-rounded{color:#1F7A45!important}
-#toasts .toast.err .material-symbols-rounded{color:#B3261E!important}
-#toasts .toast.warn .material-symbols-rounded{color:#8A5A00!important}
-/* Users master (olive rows) */
-#usersTbl .user-tools .muted,#usersTbl .user-count{color:#3F4D36!important}
-#usersTbl td .btn:not(.btn-danger){background:#E8ECD2!important;color:#283522!important;border-color:#AAB78A!important}
-#usersTbl td .btn-danger{background:#F3DAD2!important;color:#8A1F1F!important;border-color:#C98B80!important}
-#usersTbl td .btn-danger .material-symbols-rounded{color:#8A1F1F!important}
-#v-fuel .badge.ok,#v-users .badge.ok,#v-registry .badge.ok,.local-expenses .badge.ok{background:#315B42!important;color:#E3F5E8!important;border-color:#315B42!important}
-#v-users .badge.warn,#v-registry .badge.warn,.local-expenses .badge.warn{background:#F0DFA8!important;color:#5A4210!important;border-color:#D1B76A!important}
-/* Local expenses */
-.local-expense-kpis{grid-template-columns:repeat(4,minmax(0,1fr))!important}
-#v-expenses #localExpenseLedgerCard{background:transparent!important;border:0!important;padding:0!important;box-shadow:none!important}
-#v-expenses #localExpenseLedgerCard .local-expenses{margin-top:0}
-.expense-paid-toggle input[type=checkbox]{appearance:auto!important;-webkit-appearance:checkbox!important;width:18px!important;height:18px!important;min-height:0!important;padding:0!important;accent-color:#315B42;cursor:pointer;background:none!important}
-.expense-stock-option input[type=checkbox]{appearance:auto!important;width:16px!important;height:16px!important;min-height:0!important;accent-color:#E5C794}
-.modal.sm:has(.exp-rows-head){width:min(760px,100%)}
-.exp-rows-head,.exp-row{display:grid;grid-template-columns:minmax(0,1fr) 72px 92px 96px 38px;gap:8px;align-items:center}
-.exp-rows-head{font-size:10px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:#C9D4C7;margin:6px 0 6px}
-.exp-row{margin-bottom:8px}.exp-row .exi-match{grid-column:1/-1;margin:-3px 0 2px;display:flex;gap:12px;align-items:center;flex-wrap:wrap}
-.exp-row .exi-del{padding:0;min-height:39px;color:#E8E9DF!important}
-.exp-rows-foot{display:flex;justify-content:space-between;align-items:center;gap:10px;margin:4px 0 12px}
-.exp-total{color:#E8E9DF;font-size:13px}.exp-total b{color:#F6D58A;font-size:18px;margin-left:6px}
-.exp-lines{margin-top:4px;display:grid;gap:2px}.exp-line{display:flex;justify-content:space-between;gap:14px;font-size:11.5px}.exp-line i{font-style:normal}
-@media(max-width:650px){.exp-rows-head{display:none}.exp-row{grid-template-columns:1fr 1fr 1fr 38px}.exp-row .exi-name{grid-column:1/-1}.exp-row .exi-amt{grid-column:3}}
-.local-expense-kpis .collect{border-color:#E5C794!important}
-.local-expense-kpis .collect b{color:#F6D58A!important}
-.exp-filter{display:flex;gap:6px;flex-wrap:wrap;margin:0 0 12px}
-.local-expenses .chip{background:#263E30!important;color:#E8E9DF!important;border:1px solid #506653!important}
-.local-expenses .chip.on{background:#E5C794!important;color:#1B2A20!important;border-color:#E5C794!important}
-.local-expenses table tfoot td{background:#315B42!important;color:#FFF9EA!important;font-weight:700}
-.row3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px}
-.exp-match{min-height:18px;margin:-6px 0 12px;display:grid;gap:6px}
-.exp-match .exp-ok{color:#8FD6A0}
-.exp-lookup{padding:10px 12px;border:1px solid #506653;border-radius:9px;background:#263E30;color:#E8E9DF;margin:2px 0 10px;font-size:12.5px;display:grid;gap:4px}
-.exp-lookup a,.expense-online-tools a{color:#E5C794}
-.expense-online-tools{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:10px}
-.modal input[readonly]{opacity:.85}
-@media(max-width:900px){.local-expense-kpis{grid-template-columns:repeat(2,minmax(0,1fr))!important}}
-@media(max-width:650px){.local-expense-kpis{grid-template-columns:1fr!important}.row3{grid-template-columns:1fr}}
-
-
-
+.local-expenses {
+  margin-top:18px;padding:16px;border:1px solid var(--card-border);border-radius:12px;
+  background:var(--surface);color:var(--text);
+}
+.local-expenses .card-h { display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap; }
+.local-expenses .card-h h3 { color:var(--text);margin:0; }
+.local-expenses .card-h p { margin:5px 0 0;color:var(--muted); }
+.local-expense-kpis { display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin:14px 0; }
+.local-expense-kpis>div { padding:12px;border:1px solid var(--card-border);border-radius:9px;background:var(--surface-2);display:grid;gap:6px; }
+.local-expense-kpis small { color:var(--muted); }
+.local-expense-kpis b { color:var(--text);font-size:19px; }
+.local-expense-kpis .collect { border-color:var(--brand); }
+.local-expense-kpis .collect b { color:var(--brand); }
+.local-expenses table { background:var(--table-bg);color:var(--table-text); }
+.local-expenses thead th { background:var(--table-head);color:var(--table-head-text); }
+.local-expenses tbody tr { background:var(--table-row);color:var(--table-text); }
+.local-expenses tbody tr:nth-child(even) { background:var(--table-row-alt); }
+.local-expenses tbody tr:hover { background:var(--table-hover); }
+.local-expenses tbody td { color:var(--table-text);border-color:var(--table-line); }
+.local-expenses tbody .muted,.local-expenses .empty { color:var(--muted); }
+.local-expenses .empty { background:var(--surface-2); }
+.local-expenses .chip { background:var(--surface-2);color:var(--text);border:1px solid var(--control-border); }
+.local-expenses .chip.on { background:var(--brand);color:var(--header-text);border-color:var(--brand); }
+.local-expenses table tfoot td { background:var(--table-head);color:var(--table-head-text);font-weight:700; }
+.expense-paid-toggle,.expense-stock-option { display:flex;align-items:center;gap:8px;color:var(--text);font-size:12px; }
+.expense-paid-toggle span { white-space:nowrap; }
+.expense-paid-toggle input,.expense-stock-option input { accent-color:var(--brand); }
+.expense-online-tools { display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:8px 0 12px; }
+.exp-rows-head,.exp-row { display:grid;grid-template-columns:minmax(0,1fr) 72px 92px 96px 38px;gap:8px;align-items:center; }
+.exp-rows-head { font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin:6px 0; }
+.exp-row { margin-bottom:8px; }
+.exp-row .exi-match { grid-column:1/-1;margin:-3px 0 2px;display:flex;gap:12px;align-items:center;flex-wrap:wrap; }
+.exp-row .exi-del { padding:0;min-height:40px;color:var(--text); }
+.exp-rows-foot { display:flex;justify-content:space-between;align-items:center;gap:10px;margin:4px 0 12px; }
+.exp-total { color:var(--text);font-size:13px; }
+.exp-total b { color:var(--brand);font-size:18px;margin-left:6px; }
+.exp-lines { margin-top:4px;display:grid;gap:2px; }
+.exp-line { display:flex;justify-content:space-between;gap:14px;font-size:12px; }
+.exp-line i { font-style:normal; }
+.exp-filter { display:flex;gap:6px;flex-wrap:wrap;margin:0 0 12px; }
+.row3 { display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px; }
+.exp-match { min-height:18px;margin:-6px 0 12px;display:grid;gap:6px; }
+.exp-match .exp-ok { color:var(--ok); }
+.exp-lookup { padding:10px 12px;border:1px solid var(--card-border);border-radius:9px;background:var(--surface-2);color:var(--text);margin:2px 0 10px;font-size:12px;display:grid;gap:4px; }
+.exp-lookup a,.expense-online-tools a { color:var(--brand); }
+.modal input[readonly] { opacity:.85; }
+.modal .m-head h2 { color:var(--text); }
+.modal .m-head p,.modal .m-head .muted,.modal label,.modal .field-label,.modal .form-label,.modal .muted,.modal small { color:var(--muted); }
+.modal .m-head .icon-btn,.modal .m-head .icon-btn .material-symbols-rounded { color:var(--text);border-color:var(--control-border); }
+.modal .m-foot .btn:not(.btn-primary):not(.btn-danger) { color:var(--text);border-color:var(--control-border);background:var(--surface-2); }
+#toasts .toast,#toasts .toast span:not(.material-symbols-rounded) { color:var(--text); }
+#toasts .toast .material-symbols-rounded { color:var(--ok); }
+#toasts .toast.err .material-symbols-rounded { color:var(--bad); }
+#toasts .toast.warn .material-symbols-rounded { color:var(--warn); }
 #v-fuel .toolbar [data-v="expenses"] .material-symbols-rounded,
-#v-fuel .toolbar [data-act="add-local-expense"] .material-symbols-rounded{font-size:18px;vertical-align:middle;margin-right:4px}
-#v-fuel .toolbar [data-v="expenses"]{border-color:rgba(229,199,148,.28);color:#E8E9DF}
-@media(max-width:650px){#v-fuel .toolbar{gap:8px;flex-wrap:wrap}#v-fuel .toolbar .grow{display:none}#v-fuel .toolbar [data-v="expenses"],#v-fuel .toolbar [data-act="add-local-expense"]{flex:1 1 calc(50% - 8px);justify-content:center}}
-
-
+#v-fuel .toolbar [data-act="add-local-expense"] .material-symbols-rounded { font-size:18px;vertical-align:middle;margin-right:4px; }
+#v-fuel .toolbar [data-v="expenses"] { border-color:var(--card-border);color:var(--header-text); }
+@media(max-width:900px) { .local-expense-kpis { grid-template-columns:repeat(2,minmax(0,1fr)); } }
+@media(max-width:650px) {
+  .local-expense-kpis { grid-template-columns:1fr; }
+  .local-expenses { padding:10px; }
+  .local-expenses .table-wrap { max-width:100%;overflow-x:auto; }
+  .exp-rows-head { display:none; }
+  .exp-row { grid-template-columns:1fr 1fr 1fr 40px; }
+  .exp-row .exi-name { grid-column:1/-1; }
+  .exp-row .exi-amt { grid-column:3; }
+  .row3 { grid-template-columns:1fr; }
+  #v-fuel .toolbar { gap:8px;flex-wrap:wrap; }
+  #v-fuel .toolbar .grow { display:none; }
+  #v-fuel .toolbar [data-v="expenses"],#v-fuel .toolbar [data-act="add-local-expense"] { flex:1 1 calc(50% - 8px);justify-content:center; }
+}
 
 /* TURF OPS focused layout: remove the redundant global page title and its single-tab strip.
    Other sections retain their current heading and navigation. */
