@@ -22,7 +22,7 @@ jobs:
           java-version: "21"
       - name: Install dependencies
         id: install
-        run: npm ci --no-fund
+        run: npm install --no-fund
       # Keep vulnerability reporting visible without letting existing dependency debt
       # suppress independent regression tests, the Firestore emulator suite, or the build.
       - name: Audit dependency tree
