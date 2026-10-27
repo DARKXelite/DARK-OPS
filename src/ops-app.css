@@ -1263,7 +1263,7 @@ tfoot td.num { color: #E0C895; }
 #v-turfcare .turf-plan-item.pesticide{--plan-accent:#d7a18b;border-left-color:#8e6858!important}
 #v-turfcare .turf-plan-item.enhancer{--plan-accent:#b3addf;border-left-color:#77729b!important}
 #v-turfcare .turf-plan-inline-dot{width:4px;height:18px;border-radius:4px;background:var(--plan-accent,#9ac7a0);opacity:.92;grid-column:1}
-#v-turfcare .turf-plan-title{grid-area:auto!important;grid-row:1!important;grid-column:2!important;min-width:0!important;display:block!important;font-size:10.5px!important;font-weight:700!important;line-height:1.2!important;white-space:nowrap!important;overflow:hidden!important;text-overflow:ellipsis!important;overflow-wrap:normal!important;color:#e9eee8!important}
+#v-turfcare .turf-plan-title{grid-area:auto!important;grid-row:1!important;grid-column:2!important;min-width:0!important;display:block!important;font-size:10.5px!important;font-weight:700!important;line-height:1.2!important;white-space:nowrap!important;overflow:hidden!important;text-overflow:ellipsis!important;overflow-wrap:normal!important;color:var(--bg)!important}
 #v-turfcare .turf-plan-inline-qty{grid-area:auto!important;grid-row:1!important;grid-column:3!important;font-size:10px;font-weight:800;color:#e8d4a8;white-space:nowrap;font-variant-numeric:tabular-nums}
 #v-turfcare .turf-plan-item>.badge{grid-area:auto!important;grid-row:1!important;grid-column:4!important;max-width:none!important;white-space:nowrap!important;font-size:8px!important;line-height:1.2!important;letter-spacing:.02em!important;padding:4px 6px!important;border-radius:6px!important}
 #v-turfcare .turf-plan-item>.badge.warn{color:#f0c777;background:rgba(222,170,72,.10);border-color:rgba(222,170,72,.16)}
