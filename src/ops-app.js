@@ -669,9 +669,10 @@ function renderOverview() {
     {key:'pesticide', label:'Pesticides', ids:['opsPesticideStats','opsPesticideTrend','opsPesticideRecent']},
     {key:'enhancer', label:'Turf Enhancers', ids:['opsEnhancerStats','opsEnhancerTrend','opsEnhancerRecent']}
   ];
-  const allPlans = allTurfPlanRecords().filter(p => { const d=turfRecordDate(p); return d && d <= t && categoryForPlan(p); });
+  const allPlans = allTurfPlanRecords().filter(p => { const d=turfRecordDate(p); return d && d <= t && categoryForPlan(p) && !isUnplannedMaterialIssue(p); });
   const weekPlans = allPlans.filter(p => turfRecordDate(p) >= weekStart);
-  const monthTurfRows = monthPlans.filter(p => categoryForPlan(p));
+  const monthScheduledPlans = monthPlans.filter(p => !isUnplannedMaterialIssue(p));
+  const monthTurfRows = monthScheduledPlans.filter(p => categoryForPlan(p));
   const appliedTurfRows = monthTurfRows.filter(p => ['Applied','Issued'].includes(turfRecordStatus(p))); 
   const overdueTurfRows = allPlans.filter(p => turfRecordStatus(p) === 'Planned' && turfRecordDate(p) < t);
   setHTML($('#opsFuelDomainStats'), [
@@ -686,14 +687,14 @@ function renderOverview() {
   ].map(k=>`<div class="ops-domain-kpi"><span>${esc(k.label)}</span><b>${esc(k.value)}</b><small>${esc(k.foot)}</small></div>`).join(''));
 
   // Planned-versus-issued reconciliation by product and scheduled date. Quantities remain grouped by unit.
-  const compareRows = monthPlans.filter(p => categoryForPlan(p) && turfRecordStatus(p) !== 'Cancelled' && turfRecordDate(p) === today());
+  const todayTurfRows = monthPlans.filter(p => categoryForPlan(p) && turfRecordStatus(p) !== 'Cancelled' && turfRecordDate(p) === today());
+  const compareRows = todayTurfRows.filter(p => !isUnplannedMaterialIssue(p));
   const hasPlannedQuantity = p => ['targetQty','plannedQty','requestedQty','plannedQuantity','targetQuantity'].some(k => p[k] !== undefined && p[k] !== null && p[k] !== '');
-  // Keep the planned amount visible even when the same plan record transitions to Issued/Applied.
+  // Keep the planned amount visible even when the same scheduled record transitions to Issued/Applied.
   const plannedRows = compareRows.filter(p => hasPlannedQuantity(p) || turfRecordStatus(p) === 'Planned');
   const issuedRows = compareRows.filter(p => ['Issued','Applied'].includes(turfRecordStatus(p)) || num(p.issuedQty ?? p.issuedQuantity ?? p.issueQty ?? p.issueQuantity ?? p.quantityIssued ?? p.qtyIssued ?? p.quantityOut ?? p.qtyOut) > 0);
   const unitLabel = p => String(p.unit ?? p.stockUnit ?? p.unitOfMeasure ?? (turfProductForPlan(p)||{}).unit ?? 'unit not set').trim();
-  const plannedKeys = new Set(plannedRows.map(p=>`${turfRecordDate(p)}|${turfRecordProductName(p).toLowerCase()}`));
-  const outsidePlan = issuedRows.filter(isUnplannedMaterialIssue);
+  const outsidePlan = todayTurfRows.filter(p => isUnplannedMaterialIssue(p) && ['Issued','Applied'].includes(turfRecordStatus(p)));
 
   // Compare quantities product-by-product so different stock units are never combined into a misleading total.
   const productCompare = new Map();
@@ -2787,6 +2788,9 @@ let turfSection = 'workboard';
 let turfAppCategory = 'All categories';
 let turfAppStatus = 'All statuses';
 let turfAppSearch = '';
+let unplannedIssueSearch = '';
+let unplannedIssueCategory = 'All categories';
+let unplannedIssueStatus = 'All statuses';
 let turfProductCategory = 'All categories';
 
 /* ================= AUTH + RBAC BOOT ================= */
@@ -3130,7 +3134,7 @@ function turfCategoryClass(category) {
   return 'fertilizer';
 }
 function setTurfSection(section) {
-  turfSection = ['workboard','applications','products'].includes(section) ? section : 'workboard';
+  turfSection = ['workboard','applications','unplanned','products'].includes(section) ? section : 'workboard';
   renderTurfCare();
 }
 function renderTurfCategoryCards(targetId, products) {
@@ -3226,7 +3230,7 @@ function renderTurfCare() {
   if (weekStartEl && weekStartEl.value !== currentTurfWeekStart) weekStartEl.value = currentTurfWeekStart;
 
   // Keep the three workspaces focused. All panels still use the same live Firestore data.
-  ['workboard','applications','products'].forEach(name => {
+  ['workboard','applications','unplanned','products'].forEach(name => {
     const pane = $('#turf'+name.charAt(0).toUpperCase()+name.slice(1)+'Pane');
     if (pane) pane.hidden = turfSection !== name;
   });
@@ -3238,12 +3242,15 @@ function renderTurfCare() {
   if ($('#turfLogSearch') && $('#turfLogSearch').value !== turfAppSearch) $('#turfLogSearch').value = turfAppSearch;
   if ($('#turfAppCategoryFilter')) $('#turfAppCategoryFilter').value = turfAppCategory;
   if ($('#turfAppStatusFilter')) $('#turfAppStatusFilter').value = turfAppStatus;
+  if ($('#unplannedIssueSearch')) $('#unplannedIssueSearch').value = unplannedIssueSearch;
+  if ($('#unplannedIssueCategoryFilter')) $('#unplannedIssueCategoryFilter').value = unplannedIssueCategory;
+  if ($('#unplannedIssueStatusFilter')) $('#unplannedIssueStatusFilter').value = unplannedIssueStatus;
   if ($('#turfProductCategoryFilter')) $('#turfProductCategoryFilter').value = turfProductCategory;
 
   const turfItems = S.inventory.filter(i => isTurfCategory(i.category));
   const lowStock = turfItems.filter(i => num(i.stockQuantity) <= effectiveReorderLevel(i));
   const todayStr = today();
-  const allPlans = allTurfPlanRecords().filter(p => isTurfCategory(turfPlanCategory(p)));
+  const allPlans = allTurfPlanRecords().filter(p => isTurfCategory(turfPlanCategory(p)) && !isUnplannedMaterialIssue(p));
   const plannedThisWeek = allPlans.filter(p => turfRecordDate(p) >= currentTurfWeekStart && turfRecordDate(p) <= addDays(currentTurfWeekStart,6) && turfRecordStatus(p) === 'Planned');
   const monthStartStr = monthStart(todayStr);
   const issuedAppliedMTD = allPlans.filter(p => turfRecordDate(p) >= monthStartStr && turfRecordDate(p) <= todayStr && turfRecordStatus(p)==='Issued').length;
