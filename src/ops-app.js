@@ -1811,14 +1811,14 @@ const STORE_CATS = ['Fuel','Fertilizers','Pesticides','Turf Enhancements','Spare
 const itemName = i => i.partName || i.itemName || i.name || i.productName || 'Unnamed item';
 const inventoryCategoryOpen = new Set();
 function inventoryRowsMarkup(items) {
-  const importToolbar = $('#v-registry .toolbar');
-  if (importToolbar && !$('#openInventoryImportButton')) importToolbar.insertAdjacentHTML('beforeend', '<button id="openInventoryImportButton" class="btn" data-act="open-inventory-import"><span class="material-symbols-rounded">upload_file</span> Import stock</button>');
   return `<div class="table-wrap inv-category-table"><table><thead><tr><th>Item name</th><th>Unit</th><th class="num">On hand</th><th class="num">Auto reorder at</th><th class="num">Last unit rate</th><th class="num">Stock value</th><th>Status</th><th></th></tr></thead><tbody>${items.length ? items.map(i=>{
     const qty=inventoryOnHand(i), reorder=effectiveReorderLevel(i), policy=autoReorderDetails(i), low=qty<=reorder;
     return `<tr><td><b>${esc(itemName(i))}</b></td><td>${esc(i.unit||'Unit not set')}</td><td class="num"><b>${fmt(qty,3)}</b></td><td class="num"><b>${fmt(reorder,3)}</b><div class="muted sm">${policy.reliable?'Trend-based':'Provisional floor'}</div></td><td class="num">${num(i.unitCost)?money(i.unitCost,2):'—'}</td><td class="num">${money(qty*num(i.unitCost),2)}</td><td><span class="badge ${low?'warn':'ok'}">${low?'Reorder':'In stock'}</span></td><td><button class="btn btn-sm" data-act="edit-part" data-id="${esc(i.id)}">Edit</button></td></tr>`;
   }).join(''):'<tr><td colspan="8" class="empty">No items in this category.</td></tr>'}</tbody></table></div>`;
 }
 function renderRegistry() {
+  const importToolbar = $('#v-registry .toolbar');
+  if (importToolbar && !$('#openInventoryImportButton')) importToolbar.insertAdjacentHTML('beforeend', '<button id="openInventoryImportButton" class="btn" data-act="open-inventory-import"><span class="material-symbols-rounded">upload_file</span> Import stock</button>');
   const items=S.inventory.slice();
   const low=items.filter(i=>inventoryOnHand(i)<=effectiveReorderLevel(i)).length;
   const total=items.reduce((v,i)=>v+inventoryOnHand(i)*Math.max(0,num(i.unitCost)),0);
