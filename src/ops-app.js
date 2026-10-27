@@ -2929,6 +2929,7 @@ onAuthStateChanged(auth, async user => {
   if (gate) gate.hidden = true;
   if (!user) {
     resetOtpUI();
+    listenerErrors.clear();
     if (pendingAuthError && error) error.textContent = pendingAuthError;
     pendingAuthError = "";
     sessionStorage.removeItem("tpDraftV4");
