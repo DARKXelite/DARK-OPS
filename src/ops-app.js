@@ -3572,6 +3572,8 @@ document.addEventListener('input', event => {
 document.addEventListener('change', event => {
   const target = event.target;
   if (!target || !target.closest) return;
+  const qtyInput = target.closest('[data-tp-qty]');
+  if (qtyInput) { renderTp(); return; }
   const dateInput = target.closest('[data-tp-date]');
   if (dateInput) {
     if (!dateInput.value) return;
