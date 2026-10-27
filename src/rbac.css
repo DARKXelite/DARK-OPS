@@ -97,3 +97,9 @@
 #login .login-field-help { display:block!important;color:#F4F5F2!important;font-size:12px!important;line-height:1.45!important;margin:7px 0 0!important; }
 #login .login-assurance { display:block!important;color:#F4F5F2!important;font-size:12px!important;line-height:1.45!important; }
 #login .login-logo { filter:brightness(0) invert(1)!important; }
+
+#login .phone-control,#login .otp-input { border-color:rgba(244,245,242,.72)!important; }
+#login .phone-control:focus-within,#login .otp-input:focus-visible {
+  border-color:#F4F5F2!important;
+  box-shadow:0 0 0 3px rgba(244,245,242,.2)!important;
+}
