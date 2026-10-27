@@ -3345,6 +3345,7 @@ function renderTp() {
     '<label><span>Valid through</span><input type="date" min="' + esc(tpState.date) + '" value="' + esc(tpState.validUntil) + '" data-tp-until></label></div></div>' +
     '<div class="tp-repeat-strip"><div class="tp-repeat-heading"><span class="material-symbols-rounded">event_repeat</span><div><b>Repeat on</b><small>' + plannedDates.length + ' scheduled date' + (plannedDates.length === 1 ? '' : 's') + '</small></div></div>' +
     '<div class="tp-weekday-options">' + weekdaysHtml + '</div><span class="tp-repeat-help">Only selected weekdays between the start and end dates are scheduled.</span></div>' +
+    otherDaysPanel +
     '<div class="tp-planner-layout"><aside class="tp-area-sidebar"><div class="tp-sidebar-heading"><span>COURSE AREAS</span><small>' + TP_AREAS.length + ' areas</small></div>' + areasHtml +
     '<div class="tp-sidebar-foot"><span class="material-symbols-rounded">golf_course</span><div><b>Greens mode</b><small>Per-green quantity × 18</small></div></div></aside>' +
     '<section class="tp-workspace"><div class="tp-category-tabs">' + categoryTabs + '</div>' +
