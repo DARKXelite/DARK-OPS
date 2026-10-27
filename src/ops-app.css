@@ -3441,7 +3441,7 @@ body.layer-open { overflow: hidden; }
   color: var(--header-text) !important;
   border-color: var(--brand) !important;
 }
-#login .loginPhone:focus-visible, #login #loginPhone:focus-visible,
+#login #loginPhone:focus-visible,
 #login .otp-input:focus-visible {
   outline: 3px solid #F4F5F2;
   outline-offset: 2px;
