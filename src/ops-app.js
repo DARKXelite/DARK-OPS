@@ -2109,12 +2109,43 @@ function switchView(v) {
   renderAll();
 }
 let raf = 0; const scheduleRender = () => { if (!raf) raf = requestAnimationFrame(() => { raf = 0; renderAll(); }); };
-function renderAll() { try { (RENDER[cur] || (() => {}))(); updateBadges(); if (curModalRender) curModalRender(); } catch (e) { console.error(e); } }
+function renderAll() { try { (RENDER[cur] || (() => {}))(); updateBadges(); if (curModalRender) curModalRender(); renderListenerErrorBanners(); } catch (e) { console.error(e); } }
 
 /* ================= FIRESTORE LISTENERS ================= */
 let unsubs = new Map();
 let listenersStarted = false;
 const listenerEpochs = new Map();
+const listenerErrors = new Map();
+function renderListenerErrorBanners() {
+  const view = $("#v-" + cur);
+  if (!view) return;
+  view.querySelectorAll(".listener-error-banner").forEach(node => node.remove());
+  (VIEW_COLLECTIONS[cur] || []).forEach(k => {
+    const failure = listenerErrors.get(k);
+    if (!failure) return;
+    const banner = document.createElement("div");
+    banner.className = "listener-error-banner";
+    banner.setAttribute("role", "alert");
+    banner.style.cssText = "display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin:0 0 14px;padding:12px 14px;border:1px solid var(--bad);border-radius:9px;background:var(--bad-soft);color:var(--bad)";
+    const message = document.createElement("span");
+    message.textContent = "Could not load " + (CONFIG.COL[k] || k) + ": " + failure.message;
+    const retry = document.createElement("button");
+    retry.type = "button";
+    retry.className = "btn btn-sm";
+    retry.textContent = "Retry";
+    retry.setAttribute("aria-label", "Retry loading " + (CONFIG.COL[k] || k));
+    retry.addEventListener("click", () => {
+      listenerErrors.delete(k);
+      stopOneListener(k);
+      LOADED[k] = false;
+      S[k] = [];
+      syncListenersForView();
+      scheduleRender();
+    });
+    banner.append(message, retry);
+    view.prepend(banner);
+  });
+}
 const VIEW_COLLECTIONS = {
   overview: ['fuel','machines','shifts','inventory','plans','dailyPlans','maintenance','logs'],
   fleet: ['machines','live','fuel','shifts'],
@@ -2167,6 +2198,7 @@ function syncListenersForView() {
     S[k] = [];
     const unsubscribe = onSnapshot(collection(db, CONFIG.COL[k]), snap => {
       if (listenerEpochs.get(k) !== epoch) return;
+      listenerErrors.delete(k);
       const firstSnapshot = !LOADED[k];
       const changes = snap.docChanges();
       changes.forEach(change => {
@@ -2192,8 +2224,8 @@ function syncListenersForView() {
       if (listenerEpochs.get(k) !== epoch) return;
       console.error(k, err);
       LOADED[k] = true;
+      listenerErrors.set(k, { message: err.code || err.message || "Unknown Firestore error" });
       setConn('err');
-      toast(`Cannot read “${CONFIG.COL[k]}”: ${err.code || err.message}`, 'err');
       if (collectionAffectsCurrentView(k)) scheduleRender();
     });
     unsubs.set(k, unsubscribe);
