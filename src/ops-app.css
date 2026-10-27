@@ -3524,7 +3524,7 @@ body.layer-open { overflow: hidden; }
 .turf-plan-meta,.turf-batch-product-info small,.oa-table td,.turf-plan-manager-table td {
   font-size:max(12px,1em)!important;
 }
-.turf-plan-title,.turf-batch-product-info>b { font-size:max(12px,1em)!important;line-height:1.35!important; }
+.turf-plan-title,.turf-batch-product-info>b,#v-turfcare .turf-plan-title,#v-turfcare .turf-plan-meta,#v-turfcare .turf-plan-foot .badge { font-size:max(12px,1em)!important;line-height:1.35!important; }
 .oa-table th,.turf-plan-manager-table th,.turf-variance-table th { font-size:max(11px,1em)!important; }
 .turf-variance-filters label,.turf-plan-schedule-grid label,.turf-weekday-picks label,
 .turf-weekday-picks legend,.turf-category-label,.turf-plan-foot .badge {
@@ -3532,7 +3532,7 @@ body.layer-open { overflow: hidden; }
 }
 label,legend,.field-label,.form-label { font-size:max(11px,1em); }
 @media(pointer:coarse) {
-  .turf-plan-actions .btn,.turf-planner-head-actions .btn,
+  #v-turfcare .turf-plan-actions .btn,#v-turfcare .turf-planner-head-actions .btn,
   #overlay #modal.turf-batch-modal #mFoot .btn {
     min-height:40px!important;height:auto!important;font-size:12px!important;
   }
