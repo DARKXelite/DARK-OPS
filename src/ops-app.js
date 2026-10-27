@@ -2505,6 +2505,25 @@ function installInventoryReadabilityStyles() {
   document.head.appendChild(style);
 }
 installInventoryReadabilityStyles();
+function installInventoryTableContrastOverrides() {
+  if (document.getElementById('inventoryTableContrastOverrides')) return;
+  const style = document.createElement('style');
+  style.id = 'inventoryTableContrastOverrides';
+  style.textContent = [
+    'body:not(.auth-locked) .main #v-registry table { background:#26372d!important; color:#e4e9df!important; border-color:#45594a!important; }',
+    'body:not(.auth-locked) .main #v-registry table thead th { background:#34493b!important; color:#edf0e8!important; border-color:#4a5e4e!important; }',
+    'body:not(.auth-locked) .main #v-registry table tbody tr td { background:#26372d!important; color:#e4e9df!important; border-color:#45594a!important; }',
+    'body:not(.auth-locked) .main #v-registry table tbody tr:nth-child(even) td { background:#2b3d32!important; color:#e4e9df!important; }',
+    'body:not(.auth-locked) .main #v-registry table tbody tr:hover td { background:#354b3d!important; color:#f1f2eb!important; }',
+    'body:not(.auth-locked) .main #v-registry table td b { color:#f1f2eb!important; }',
+    'body:not(.auth-locked) .main #v-registry table td .muted, body:not(.auth-locked) .main #v-registry table td small { color:#b9c7b8!important; }',
+    'body:not(.auth-locked) .main #v-registry .inv-category>summary, body:not(.auth-locked) .main #v-registry .inv-category>summary b { color:#e4e9df!important; }',
+    'body:not(.auth-locked) .main #v-registry .inv-category>summary small { color:#b9c7b8!important; }',
+    'body:not(.auth-locked) .main #v-registry .inv-category-placeholder { color:#b9c7b8!important; }'
+  ].join('\n');
+  document.head.appendChild(style);
+}
+installInventoryTableContrastOverrides();
 
 const inventoryImporter = createInventoryImporter({ db, collection, doc, writeBatch, serverTimestamp, getInventory: () => S.inventory, onComplete: () => scheduleRender(), esc, toast, openModal, closeModal });
 
