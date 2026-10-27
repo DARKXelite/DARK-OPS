@@ -2558,7 +2558,8 @@ const H = {
   'turf-delete-plan': d => deleteTurfPlan(d.id, d.source),
   'turf-save-plan-edit': () => saveTurfPlanEdit(),
   'turf-category-products': d => { turfProductCategory = d.category || 'All categories'; setTurfSection('products'); },
-  'export-turf-applications': () => { const rows=allTurfPlanRecords().filter(p=>isTurfCategory(turfPlanCategory(p))).sort((a,b)=>turfRecordDate(a).localeCompare(turfRecordDate(b))); downloadCSV('turf-application-records.csv', [['Date','Category','Product','Quantity','Unit','Treated area','Status','Notes','Created at'], ...rows.map(p=>[turfRecordDate(p),turfPlanCategory(p),turfRecordProductName(p),turfRecordQuantity(p),p.unit||p.stockUnit||p.uom||'',p.targetArea||p.area||p.location||'',turfRecordStatus(p),p.notes||p.reason||'',p.createdAt ? new Date(tsMs(p.createdAt)).toISOString() : ''])]); },
+  'export-turf-applications': () => { const rows=allTurfPlanRecords().filter(p=>isTurfCategory(turfPlanCategory(p))&&!isUnplannedMaterialIssue(p)).sort((a,b)=>turfRecordDate(a).localeCompare(turfRecordDate(b))); downloadCSV('turf-application-records.csv', [['Date','Category','Product','Quantity','Unit','Treated area','Status','Notes','Created at'], ...rows.map(p=>[turfRecordDate(p),turfPlanCategory(p),turfRecordProductName(p),turfRecordQuantity(p),p.unit||p.stockUnit||p.uom||'',p.targetArea||p.area||p.location||'',turfRecordStatus(p),p.notes||p.reason||'',p.createdAt ? new Date(tsMs(p.createdAt)).toISOString() : ''])]); },
+  'export-unplanned-issues': () => { const rows=allTurfPlanRecords().filter(isUnplannedMaterialIssue).sort((a,b)=>turfRecordDate(a).localeCompare(turfRecordDate(b))); downloadCSV('unplanned-material-issues.csv', [['Date','Plan ID','Issue type','Ad hoc','Status','Category','Material','Product ID','Quantity','Unit','Area','Issued by','Issued at','Notes','Source collection'], ...rows.map(p=>[turfRecordDate(p),p.planId||p.id||'',p.issueType||'',p.isAdHoc===true?'Yes':p.isAdHoc===false?'No':'',turfRecordStatus(p),turfPlanCategory(p),turfRecordProductName(p),p.productId||p.itemId||p.inventoryId||'',turfRecordQuantity(p),p.unit||p.stockUnit||p.uom||'',p.targetZoneOrMachine||p.targetArea||p.area||p.location||'',p.issuedBy||p.performedBy||p.recordedBy||'',p.issuedAt?new Date(tsMs(p.issuedAt)).toISOString():'',p.notes||p.reason||'',p._sourceCollection||''])]); },
   'rec-tab': d => { recordsTab = d.tab; renderRecords(); },
   'export-records': () => {
     if (recordsTab === 'maintenance') downloadCSV('maintenance.csv', [['Date','Type','Machine','Hours','Parts','By','Notes'], ...(S.maintenance||[]).map(r => [r.date, r.type, r.machineName||r.machineId, r.hoursAtEvent, JSON.stringify(r.partsUsed||[]), r.performedBy, r.notes])]);
@@ -2736,6 +2737,8 @@ const C = {
   'turf-week': v => { if(v) { currentTurfWeekStart = getSunday(v); renderTurfCare(); } },
   'turf-app-category': v => { turfAppCategory = v; renderTurfApplications(); },
   'turf-app-status': v => { turfAppStatus = v; renderTurfApplications(); },
+  'unplanned-issue-category': v => { unplannedIssueCategory = v; renderTurfUnplannedIssues(); },
+  'unplanned-issue-status': v => { unplannedIssueStatus = v; renderTurfUnplannedIssues(); },
   'turf-product-category': v => { turfProductCategory = v; renderTurfCare(); },
   'spray-product': v => { const product = S.inventory.find(i => i.id === v && isTurfCategory(i.category)); const unit = $('#spUnit'); if (unit) unit.value = turfProductUnit(product) || 'Unit not set'; },
   'tp-product': (v, d) => { const product = S.inventory.find(i => i.id === v && isTurfCategory(i.category)); const unit = $('#tpUnit_' + d.day); if (unit) unit.value = turfProductUnit(product) || 'Unit not set'; calcTot(d.day); },
@@ -2778,7 +2781,7 @@ document.addEventListener('input', e => {
     box.innerHTML = m ? `<span class="exp-ok">In inventory: ${esc(itemName(m))} · stock ${fmt(num(m.stockQuantity), 2)} ${esc(m.unit || '')}</span><label class="expense-stock-option"><input class="exi-stock" type="checkbox"> Add qty to stock</label>` : '<span>New item — will ask to add to master</span>';
   }
 });
-document.addEventListener('input', e => { const el = e.target.closest('[data-inp]'); if (el && ['inQty','inRate','inCustomGst'].includes(el.id)) { previewInward(); } else if (el && el.dataset.inp === 'fleetq') { F.q = el.value; renderFleet(); } else if (el && el.dataset.inp === 'tp-qty') { calcTot(el.dataset.day); } else if (el && el.dataset.inp === 'turf-log-search') { turfAppSearch = el.value; renderTurfApplications(); } });
+document.addEventListener('input', e => { const el = e.target.closest('[data-inp]'); if (el && ['inQty','inRate','inCustomGst'].includes(el.id)) { previewInward(); } else if (el && el.dataset.inp === 'fleetq') { F.q = el.value; renderFleet(); } else if (el && el.dataset.inp === 'tp-qty') { calcTot(el.dataset.day); } else if (el && el.dataset.inp === 'turf-log-search') { turfAppSearch = el.value; renderTurfApplications(); } else if (el && el.dataset.inp === 'unplanned-issue-search') { unplannedIssueSearch = el.value; renderTurfUnplannedIssues(); } });
 $('#overlay').addEventListener('mousedown', e => { if (e.target.id === 'overlay') closeModal(); });
 $('#drawerOv').addEventListener('mousedown', e => { if (e.target.id === 'drawerOv') closeDrawer(); });
 document.addEventListener('keydown', e => { if (e.key === 'Escape') { closeModal(); closeDrawer(); } });
