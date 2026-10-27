@@ -28,6 +28,9 @@ jobs:
       - name: Audit dependency tree
         run: npm audit --audit-level=high
         continue-on-error: true
+      - name: Validate optional contrast audit
+        run: node --check scripts/contrast-audit.mjs && node scripts/contrast-audit.mjs
+
       - name: Run unit and security regression tests
         run: npm test
       - name: Run Firestore Rules emulator suite
