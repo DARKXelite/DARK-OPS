@@ -3446,3 +3446,75 @@ body.layer-open { overflow: hidden; }
   outline: 3px solid #F4F5F2;
   outline-offset: 2px;
 }
+
+/* The Day Planner is a modal component, not a second application theme. */
+.modal.turf-planner-modal, .modal.turf-planner-confirm-modal {
+  background:var(--surface);color:var(--text);border-color:var(--card-border);
+}
+.modal.turf-planner-modal .tp-planner-layout,
+.modal.turf-planner-modal .tp-area-sidebar,
+.modal.turf-planner-modal .tp-workspace,
+.modal.turf-planner-modal .tp-product-row,
+.modal.turf-planner-modal .tp-repeat-strip,
+.modal.turf-planner-modal .tp-saved-list,
+.modal.turf-planner-modal .tp-saved-entry,
+.modal.turf-planner-modal .tp-floating-save,
+.modal.turf-planner-modal .tp-inline-review,
+.modal.turf-planner-modal .tp-repeat-panel,
+.modal.turf-planner-modal .tp-repeat-item,
+.modal.turf-planner-confirm-modal .tp-review-table-wrap {
+  background:var(--surface-2);color:var(--text);border-color:var(--card-border);
+}
+.modal.turf-planner-modal .tp-product-row:hover,
+.modal.turf-planner-modal .tp-area-button:hover,
+.modal.turf-planner-modal .tp-category-tab:hover,
+.modal.turf-planner-modal .tp-repeat-date:hover {
+  background:var(--surface-hover);color:var(--text);border-color:var(--control-border);
+}
+.modal.turf-planner-modal .tp-area-button,
+.modal.turf-planner-modal .tp-category-tab,
+.modal.turf-planner-modal .tp-repeat-date,
+.modal.turf-planner-modal .tp-scope-control {
+  background:var(--surface);color:var(--text);border-color:var(--card-border);
+}
+.modal.turf-planner-modal .tp-category-tab.is-active,
+.modal.turf-planner-modal .tp-area-button.is-active,
+.modal.turf-planner-modal .tp-save-tab,
+.modal.turf-planner-modal .tp-floating-save .btn-primary {
+  background:var(--brand);color:var(--header-text);border-color:var(--brand);
+}
+.modal.turf-planner-modal .tp-product-icon {
+  color:var(--brand);background:var(--surface-hover);border-color:var(--card-border);
+}
+.modal.turf-planner-modal .tp-total-label b,
+.modal.turf-planner-modal .tp-floating-save>span b,
+.modal.turf-planner-modal .tp-saved-list summary,
+.modal.turf-planner-confirm-modal .tp-review-table th { color:var(--brand); }
+.modal.turf-planner-modal .tp-product-row b,
+.modal.turf-planner-modal .tp-saved-entry b,
+.modal.turf-planner-modal .tp-product-row span,
+.modal.turf-planner-modal .tp-repeat-actions,
+.modal.turf-planner-modal .tp-floating-save>span,
+.modal.turf-planner-modal .tp-search-empty,
+.modal.turf-planner-modal .tp-product-search kbd { color:var(--muted); }
+.modal.turf-planner-modal .tp-qty-control input,
+.modal.turf-planner-modal .tp-notes-field textarea,
+.modal.turf-planner-modal .tp-date-range input,
+.modal.turf-planner-modal .tp-repeat-qty-edit input,
+.modal.turf-planner-modal .tp-product-search {
+  background:var(--surface);color:var(--text);border-color:var(--control-border);
+}
+.modal.turf-planner-modal .tp-product-search input {
+  background:transparent!important;color:var(--text)!important;border:0!important;
+}
+.modal.turf-planner-modal .tp-product-search input:focus-visible,
+.modal.turf-planner-modal .tp-qty-control input:focus-visible,
+.modal.turf-planner-modal .tp-notes-field textarea:focus-visible,
+.modal.turf-planner-modal .tp-date-range input:focus-visible {
+  outline:3px solid var(--focus)!important;outline-offset:2px!important;box-shadow:0 0 0 2px var(--surface)!important;
+}
+.modal.turf-planner-modal .tp-weekday-chip input:checked+span {
+  background:var(--brand);color:var(--header-text);border-color:var(--brand);
+}
+.modal.turf-planner-modal .tp-floating-save { background:var(--surface);border-top-color:var(--card-border); }
+.modal.turf-planner-confirm-modal .tp-review-table td { color:var(--text); }
