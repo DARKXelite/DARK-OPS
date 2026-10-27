@@ -3515,3 +3515,22 @@ th { font-size: max(11px, 1em); }
   line-height: 1;
   overflow: hidden;
 }
+
+/* Layer behavior: overlays must sit above the fixed header and prevent background scrolling. */
+body.layer-open { overflow: hidden; }
+.drawer-ov, #drawerOv { z-index: 1101; }
+.drawer { background: var(--surface); color: var(--text); border-color: var(--card-border); }
+.sidebar, .side-nav, .sidenav, .left-nav, .nav-rail {
+  background: var(--sidebar-bg) !important;
+  color: var(--sidebar-text) !important;
+}
+.topbar, .top-header {
+  background: var(--header-bg) !important;
+  color: var(--header-text) !important;
+  border-color: var(--brand) !important;
+}
+#login .loginPhone:focus-visible, #login #loginPhone:focus-visible,
+#login .otp-input:focus-visible {
+  outline: 3px solid #F4F5F2;
+  outline-offset: 2px;
+}
