@@ -104,7 +104,7 @@
 <!-- COMMAND PALETTE -->
 <div class="overlay" id="cmdOverlay" style="z-index:3900;backdrop-filter:blur(8px);background:rgba(0,0,0,0.6)"></div>
 <div id="cmdPal" class="cmd-pal">
-  <div style="display:flex;align-items:center;padding-right:24px"><input type="text" id="cmdInp" class="cmd-inp" placeholder="Search machines, users, tools... (Cmd+K)" autocomplete="off"><span class="material-symbols-rounded" style="color:var(--muted)">search</span></div>
+  <div style="display:flex;align-items:center;padding-right:24px"><input type="text" id="cmdInp" class="cmd-inp" placeholder="Search machines, users, tools... (Cmd+K)" autocomplete="off" aria-label="Search accessible modules and records"><span class="material-symbols-rounded" style="color:var(--muted)">search</span></div>
   <div id="cmdRes" class="cmd-res"></div>
 </div>
 <div class="main">
@@ -113,7 +113,7 @@
     <div class="th-right">
       <span id="dateChip" class="th-date"></span>
       <span class="th-brand">CLOVER GREENS RESORT &amp; GOLF</span>
-      <button class="cmd-hint" onclick="toggleCmdPal()">Cmd + K</button><button class="icon-btn" data-act="signout" id="signoutBtn" title="Sign out" aria-label="Sign out" hidden><span class="material-symbols-rounded">logout</span></button>
+      <button class="cmd-hint" type="button">Cmd + K</button><button class="icon-btn" data-act="signout" id="signoutBtn" title="Sign out" aria-label="Sign out" hidden><span class="material-symbols-rounded">logout</span></button>
     </div>
   </header>
 
