@@ -3,16 +3,7 @@
 /* Locally embedded user-supplied fonts: portable in the standalone HTML */
 @font-face{font-family:'Acumin';src:local('Arial');font-style:normal;font-weight:100 900;font-display:swap}
 @font-face{font-family:'Houstiq';src:url(data:font/woff2;base64,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) format('woff2');font-style:normal;font-weight:400;font-display:swap}
-:root{
-  color-scheme:dark;
-  --bg:#070D0A;--surface:rgba(25,61,45,.35);--surface-2:rgba(255,255,255,.05);--surface-hover:rgba(30,74,54,.55);
-  --border:rgba(229,199,148,.18);--text:#F9F7F2;--muted:#B8B3A8;
-  --brand:#E5C794;--brand-2:#E5C794;--btn:#265942;--brand-soft:rgba(229,199,148,.12);
-  --gold:#E5C794;--gold-soft:rgba(229,199,148,.2);
-  --ok:#5FD39A;--warn:#F0B34A;--bad:#ff6b6b;
-  --ok-soft:rgba(34,82,60,.8);--warn-soft:rgba(240,179,74,.16);--bad-soft:rgba(255,107,107,.15);
-  --shadow:0 10px 30px rgba(0,0,0,.4);--radius:14px;--sherwood:#1D4533;--panel:#0F1C16;
-}
+
 *{box-sizing:border-box}
 html,body{margin:0;padding:0}
 body{font-family:'Acumin','Plus Jakarta Sans',system-ui,sans-serif;background:var(--bg);color:var(--text);font-size:14px;line-height:1.45;font-variant-numeric:tabular-nums;-webkit-font-smoothing:antialiased}
@@ -519,20 +510,7 @@ body.map-mode.has-live::before{box-shadow:inset 0 0 100px rgba(229,199,148,.07);
    DARKVERSE UI POLISH — presentation-only overrides
    Preserves existing views, state, and event handlers.
    ============================================================ */
-:root{
-  --bg:#050806;
-  --panel:#0b120e;
-  --surface:rgba(15,28,21,.72);
-  --surface-2:rgba(255,255,255,.035);
-  --surface-hover:rgba(229,199,148,.065);
-  --border:rgba(229,199,148,.16);
-  --text:#F5F4EE;
-  --muted:#A8B1A7;
-  --brand:#E5C794;
-  --gold:#E5C794;
-  --radius:16px;
-  --shadow:0 14px 36px rgba(0,0,0,.24);
-}
+
 html{scroll-behavior:smooth;scroll-padding-top:88px}
 body{font-size:13px;line-height:1.55;letter-spacing:0;background-color:var(--bg)}
 body::after{background:radial-gradient(ellipse 70% 38% at 50% 0%,rgba(229,199,148,.055),transparent 72%),linear-gradient(180deg,rgba(8,18,12,.12),transparent 45%)}
@@ -1063,16 +1041,7 @@ body::after{display:none!important;content:none!important}
 @media(max-width:760px){#v-turfcare .turf-week-layout{grid-template-columns:1fr!important}.turf-batch-entry-row{grid-template-columns:18px minmax(0,1fr) 85px}.turf-batch-entry-row .turf-batch-area{grid-column:2/-1}.dock-pill{right:10px!important;bottom:10px!important}.dock-pill .nav-btn{width:36px;height:38px;min-width:36px!important}}
 
 /* CLOVER GREENS BRAND PALETTE: Sherwood Green / Romance / Dorado / Chamois */
-:root{
- color-scheme:light;
- --bg:#F4F5F2; --panel:#FFFFFF; --surface:#FFFFFF; --surface-2:#F7F7F4; --surface-hover:#EEF2ED;
- --border:rgba(29,77,51,.16); --text:#243D30; --muted:#77736D;
- --brand:#1D4D33; --brand-2:#1D4D33; --btn:#1D4D33; --brand-soft:rgba(29,77,51,.09);
- --gold:#E5C794; --gold-soft:rgba(229,199,148,.24);
- --ok:#2D7650; --warn:#9B7135; --bad:#B64A43;
- --ok-soft:rgba(45,118,80,.11); --warn-soft:rgba(155,113,53,.12); --bad-soft:rgba(182,74,67,.10);
- --shadow:0 5px 18px rgba(44,54,46,.07); --radius:12px; --sherwood:#1D4D33; --sidebar:#1D4D33; --panel:#FFFFFF;
-}
+
 body,html{background:var(--bg)!important;color:var(--text)!important}
 .sidebar{background:#1D4D33!important;color:#F4F5F2!important}
 .brand-mark{background:#E5C794!important;color:#1D4D33!important}
@@ -1096,7 +1065,7 @@ hr{border-color:var(--border)!important}
 
 
 /* Table contrast refinement: muted warm-green surfaces, never stark white */
-:root{--table-bg:#172820;--table-row:#1B3026;--table-row-alt:#20362B;--table-head:#294436;--table-hover:#304B3B;--table-line:#3A5144;--table-text:#F0F1EB;--table-muted:#C1CBC1}
+
 .table-wrap{border:1px solid var(--table-line);border-radius:10px;overflow:auto;background:var(--table-bg)}
 table{background:var(--table-bg);color:var(--table-text)}
 thead th{background:var(--table-head)!important;color:#E7D7B8!important;border-bottom:1px solid var(--table-line)!important}
@@ -1165,30 +1134,7 @@ td .badge.mute{background:#35483D;color:#D8E0D8}
    CLOVER GREENS OPS · restrained visual polish
    Presentation-only: preserve layout, navigation, and workflows.
    ============================================================ */
-:root {
-  --bg: #080F0B;
-  --panel: #101B14;
-  --surface: rgba(17, 34, 25, .82);
-  --surface-2: rgba(255, 255, 255, .035);
-  --surface-hover: rgba(215, 188, 138, .075);
-  --border: rgba(203, 193, 164, .17);
-  --text: #F2F4ED;
-  --muted: #B1BBB0;
-  --brand: #D8BD8C;
-  --brand-2: #E3CFA5;
-  --btn: #285940;
-  --brand-soft: rgba(216, 189, 140, .12);
-  --gold: #D8BD8C;
-  --gold-soft: rgba(216, 189, 140, .16);
-  --ok: #7CC99C;
-  --warn: #E8B966;
-  --bad: #F08080;
-  --ok-soft: rgba(52, 112, 76, .30);
-  --warn-soft: rgba(232, 185, 102, .13);
-  --bad-soft: rgba(240, 128, 128, .13);
-  --radius: 14px;
-  --shadow: 0 10px 26px rgba(0, 0, 0, .24);
-}
+
 
 /* A warmer forest charcoal instead of near-black OLED black. */
 body {
@@ -1555,7 +1501,7 @@ main,.main-content,.page-content{padding-left:clamp(12px,1.35vw,22px)!important;
 @media(max-width:620px){.turf-plan-schedule-grid{grid-template-columns:1fr 1fr}.turf-plan-schedule-grid label:first-child{grid-column:1/-1}.ops-turf-area-task{grid-template-columns:minmax(0,1fr) auto;gap:6px}.ops-turf-area-task b{grid-column:1/-1}}
 
 /* Global table contrast audit: consistent, low-glare warm surfaces across every module. */
-:root{--table-head-bg:#244a37;--table-row-bg:#f1f3ee;--table-row-alt:#e8ede6;--table-row-hover:#dce7dc;--table-line:#cbd5ca;--table-head-text:#fffaf0;}
+
 .table-wrap table, table{border-collapse:separate;border-spacing:0;background:#f1f3ee;color:#28382e;border-color:var(--table-line);}
 .table-wrap table thead th, table thead th{background:#244a37!important;color:#fffaf0!important;border-color:#3c5f4c!important;font-weight:650;letter-spacing:.015em;}
 .table-wrap table tbody tr, table tbody tr{background:#f1f3ee!important;color:#28382e;}
@@ -1746,75 +1692,11 @@ body.turf-board-mode #v-turfcare .turf-weekly-card {
 
 
 
-/* No-white-surface pass: remove abrupt white panels while preserving the Sherwood palette. */
-:root{--surface:#e9eee8;--surface-2:#e1e8e0;--surface-3:#d7e0d6;--panel:#e9eee8;--card:#e9eee8;--border:#c4d0c3;--text:#243d30;--muted:#586b5e;}
-html,body,#app,#root,.app,.main,.main-content,.page,.page-content,.content,.content-area,.workspace,.dashboard,.view,.tab-content{background-color:#e5ebe4!important;color:var(--text)!important}
-.card,.panel,.stat-card,.kmenu,.drawer,.login-card,.modal,.modal-content,.dropdown-menu,.popover,.table-wrap,.table-container,.table-responsive,.data-table-wrap,.settings-panel,.form-panel,.section-card,.list-panel,.filter-panel,.empty-state,.toast,.menu-popover,.calendar-popover{background-color:#e9eee8!important;color:var(--text)!important;border-color:#c4d0c3!important}
-table,.table,.data-table,.grid-table{background-color:#e3eae2!important;color:#243d30!important;border-color:#c4d0c3!important}
-thead,thead tr,.table thead,.data-table thead,.grid-table thead{background-color:#315642!important;color:#f4f3ec!important}
-thead th,.table thead th,.data-table thead th,.grid-table thead th{background-color:#315642!important;color:#f4f3ec!important;border-color:#476b55!important}
-tbody tr,tbody tr td,.table tbody tr,.table tbody td,.data-table tbody tr,.data-table tbody td,.grid-table tbody tr,.grid-table tbody td{background-color:#e3eae2!important;color:#243d30!important;border-color:#c7d2c5!important}
-tbody tr:nth-child(even),tbody tr:nth-child(even) td,.table tbody tr:nth-child(even),.table tbody tr:nth-child(even) td,.data-table tbody tr:nth-child(even),.data-table tbody tr:nth-child(even) td,.grid-table tbody tr:nth-child(even),.grid-table tbody tr:nth-child(even) td{background-color:#dce5db!important}
-tbody tr:hover td,.table tbody tr:hover td,.data-table tbody tr:hover td,.grid-table tbody tr:hover td{background-color:#cddccc!important;color:#1e3829!important}
-input,select,textarea,.modal input,.modal select,.modal textarea,.table-wrap table input,.table-wrap table select,.table-wrap table textarea,.form-control{background-color:#dfe7de!important;color:#243d30!important;border-color:#b9c9b8!important;color-scheme:light}
-select option{background-color:#dfe7de!important;color:#243d30!important}
-input::placeholder,textarea::placeholder{color:#687a6b!important;opacity:1!important}
-hr,.divider,.table td,.table th{border-color:#c4d0c3!important}
-.modal-backdrop,.overlay,.drawer-backdrop{background:rgba(20,37,27,.58)!important}
-/* Keep deliberate text-on-dark/brand surfaces intact. */
-button.primary,.btn-primary,.nav,.sidebar,.topbar,.dock-pill,.dock-nav,.badge,.status-badge{color:inherit}
 @media(prefers-reduced-motion:reduce){*{scroll-behavior:auto!important;transition-duration:0.01ms!important;animation-duration:0.01ms!important}}
 
 
 
 /* Corrective theme pass: stop later legacy rules from turning the UI white. */
-:root{
- --bg:#17271F!important; --panel:#20372A!important; --surface:#263E30!important;
- --surface-2:#2B4434!important; --surface-3:#324B3A!important; --card:#20372A!important;
- --border:#405747!important; --text:#E8E9DF!important; --muted:#B6C2B5!important;
- --table-bg:#192C22!important; --table-row:#20372A!important; --table-row-alt:#263E30!important;
- --table-head:#304B39!important; --table-hover:#354F3C!important; --table-line:#405747!important;
- --table-text:#E8E9DF!important; --table-muted:#B6C2B5!important;
-}
-html,body,#app,#root,.app,.app-shell,.main,.main-content,.page,.page-content,main,
-#main,.workspace,.content,.content-area,.view,.view-container,[class*="workspace"],
-[class*="page-content"] {background-color:#17271F!important;color:#E8E9DF!important;}
-.card,.panel,.stat-card,.kmenu,.drawer,.login-card,.modal,.modal-content,.dropdown-menu,
-.popover,.table-wrap,.table-container,.tile,.widget,.section-card,.settings-card,
-.user-card,.form-card,.accordion,.accordion-item,.tab-panel,.content-panel,
-[class*="-card"],[class*="-panel"] {background-color:#20372A!important;color:#E8E9DF!important;border-color:#405747!important;}
-table,.table,.data-table,.grid-table {background-color:#192C22!important;color:#E8E9DF!important;}
-thead th,.table thead th,.data-table thead th,.grid-table thead th,
-tfoot td,.table tfoot td,.data-table tfoot td {background-color:#304B39!important;color:#E8D8B7!important;border-color:#405747!important;}
-tbody tr,.table tbody tr,.data-table tbody tr,.grid-table tbody tr {background-color:#20372A!important;}
-tbody tr:nth-child(even),.table tbody tr:nth-child(even),.data-table tbody tr:nth-child(even),.grid-table tbody tr:nth-child(even){background-color:#263E30!important;}
-tbody td,.table tbody td,.data-table tbody td,.grid-table tbody td {background-color:transparent!important;color:#E8E9DF!important;border-color:#405747!important;}
-tbody tr:hover td,.table tbody tr:hover td,.data-table tbody tr:hover td,.grid-table tbody tr:hover td {background-color:#354F3C!important;color:#F2F0E5!important;}
-input:not([type="checkbox"]):not([type="radio"]),select,textarea,.form-control,
-.modal input,.modal select,.modal textarea,.table-wrap input,.table-wrap select,.table-wrap textarea,
-.user-search,.user-role-filter select {background-color:#263E30!important;color:#E8E9DF!important;border-color:#506653!important;color-scheme:dark;}
-select option {background-color:#263E30!important;color:#E8E9DF!important;}
-input::placeholder,textarea::placeholder {color:#AAB9AA!important;opacity:1!important;}
-label,.label,.field-label,.form-label,small,.muted,.text-muted {color:#B6C2B5;}
-.user-search input {background:transparent!important;color:#E8E9DF!important;}
-.user-search,.user-role-filter select {border-color:#405747!important;}
-.empty-state,.empty,.no-data,.table-empty {background-color:#20372A!important;color:#B6C2B5!important;}
-.modal-backdrop,.overlay,.drawer-backdrop {background:rgba(7,15,10,.72)!important;}
-/* Preserve the Sherwood brand and Chamois accent; no broad white surfaces. */
-.btn-primary,button.primary,.nav,.sidebar,.topbar,.dock-pill {background-color:#1D4D33;}
-
-
-
-/* Final palette guard: no white list, report, table, popover, or select surfaces. */
-:root{color-scheme:dark;--bg:#17271F;--panel:#20372A;--surface:#263E30;--surface-2:#2B4434;--surface-3:#324B3A;--border:#405747;--text:#E8E9DF;--muted:#B6C2B5;}
-html,body,#app,#root,main,.app,.app-shell,.main,.main-content,.page,.page-content,.content,.content-area,.workspace,.dashboard,.view,.view-container,.tab-content,[role="tabpanel"]{background-color:#17271F!important;color:#E8E9DF!important}
-.card,.panel,.tile,.widget,.section,.section-card,.content-panel,.list-panel,.filter-panel,.report-panel,.report-card,.table-wrap,.table-container,.table-responsive,.list-container,.list-row,.list-item,.record-list,.results-list,.search-results,.dropdown-menu,.menu-popover,.popover,.tooltip,.calendar-popover,.modal,.modal-content,.modal-body,.drawer,.drawer-content,.accordion,.accordion-item,.tab-panel,.empty,.empty-state,.no-data,.table-empty{background-color:#20372A!important;color:#E8E9DF!important;border-color:#405747!important}
-table,table *{border-color:#405747!important}table{background:#192C22!important;color:#E8E9DF!important}thead,thead tr,thead th,tfoot,tfoot td{background:#304B39!important;color:#E8D8B7!important}tbody tr{background:#20372A!important}tbody tr:nth-child(even){background:#263E30!important}tbody td{background:transparent!important;color:#E8E9DF!important}tbody tr:hover,tbody tr:hover td{background:#354F3C!important;color:#F2F0E5!important}
-ul,ol,li,[role="list"],[role="listitem"],[role="option"],.list-group,.list-group-item,.dropdown-item{background-color:#20372A!important;color:#E8E9DF!important;border-color:#405747!important}
-input:not([type=checkbox]):not([type=radio]):not([type=range]),select,textarea,option,.form-control,.form-select{background-color:#263E30!important;color:#E8E9DF!important;border-color:#506653!important;color-scheme:dark}select option{background:#263E30!important;color:#E8E9DF!important}
-input::placeholder,textarea::placeholder{color:#AAB9AA!important;opacity:1!important}label,.label,.field-label,.form-label,small,.muted,.text-muted{color:#B6C2B5}
-/* Do not recolor deliberate light text on brand buttons; keep status badges legible. */
-.btn-primary,button.primary{background-color:#1D4D33!important;color:#F4F3EC!important}.badge,.status-badge{color:inherit}
 
 
 /* Runtime-safe Turf Ops board-first rules: do not depend on the body class toggle. */
@@ -2644,7 +2526,7 @@ body.auth-locked .main{visibility:hidden}
 
 
 /* UNIFIED OPERATIONAL ANALYTICS — low-glare olive surfaces, shared report components */
-:root{
+.ops-analytics-modal {
   --oa-bg:#17271F;
   --oa-panel:#20372A;
   --oa-row:#253D2E;
@@ -2853,208 +2735,6 @@ body .drawer .table-wrap table tbody tr:hover td{background:#354F3C!important}
   .oa-analytics-launch{margin-left:0}
   .ops-dashboard-period{flex-wrap:wrap}
   .ops-dashboard-period .ops-analytics-launch{margin-left:auto}
-}
-
-
-/* ============================================================
-   COLOR CONSISTENCY AUDIT — single dark-olive application palette
-   Fixes legacy light-theme overrides that left pale surfaces paired
-   with dark-theme text (and dark surfaces paired with pale-theme text).
-   Login/weather illustrations and the separately themed analytics modal
-   intentionally retain their own palettes.
-   ============================================================ */
-:root {
-  --sidebar: #0F1C16;
-  --panel: #0F1C16;
-  --table-bg: #172820;
-  --table-row: #1B3026;
-  --table-row-alt: #20362B;
-  --table-row-hover: #304B3B;
-  --table-head: #294436;
-  --table-line: #3A5144;
-  --table-text: #F0F1EB;
-  --table-muted: #C1CBC1;
-}
-
-/* App chrome and everyday containers */
-body:not(.auth-locked) .main .card,
-body:not(.auth-locked) .main .panel,
-body:not(.auth-locked) .main .stat-card,
-body:not(.auth-locked) .main .kmenu,
-body:not(.auth-locked) .main .drawer,
-body:not(.auth-locked) .main .dropdown-menu,
-body:not(.auth-locked) .main .popover,
-body:not(.auth-locked) #overlay .modal,
-body:not(.auth-locked) #overlay .modal-content,
-body:not(.auth-locked) #overlay .table-wrap,
-body:not(.auth-locked) #overlay .table-container,
-body:not(.auth-locked) .drawer .table-wrap {
-  background-color: var(--panel) !important;
-  color: var(--text) !important;
-  border-color: var(--border) !important;
-}
-body:not(.auth-locked) .topbar,
-body:not(.auth-locked) .top-header {
-  background: rgba(7, 13, 10, .94) !important;
-  color: var(--text) !important;
-  border-color: var(--border) !important;
-}
-body:not(.auth-locked) .brand b,
-body:not(.auth-locked) .topbar h1,
-body:not(.auth-locked) .card-h h3,
-body:not(.auth-locked) .section-title,
-body:not(.auth-locked) .modal h2,
-body:not(.auth-locked) .modal h3,
-body:not(.auth-locked) .main h1,
-body:not(.auth-locked) .main h2,
-body:not(.auth-locked) .main h3,
-body:not(.auth-locked) .main h4,
-body:not(.auth-locked) .main .section-t {
-  color: var(--text) !important;
-}
-body:not(.auth-locked) .main .muted,
-body:not(.auth-locked) .main .hint,
-body:not(.auth-locked) .main small,
-body:not(.auth-locked) #overlay .modal .muted,
-body:not(.auth-locked) #overlay .modal .hint {
-  color: var(--muted);
-}
-
-/* Inputs: remove legacy white fields inside the otherwise dark application */
-body:not(.auth-locked) .main input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
-body:not(.auth-locked) .main select,
-body:not(.auth-locked) .main textarea,
-body:not(.auth-locked) #overlay .modal input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
-body:not(.auth-locked) #overlay .modal select,
-body:not(.auth-locked) #overlay .modal textarea,
-body:not(.auth-locked) .drawer input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
-body:not(.auth-locked) .drawer select,
-body:not(.auth-locked) .drawer textarea {
-  background: #0B1510 !important;
-  color: var(--text) !important;
-  border-color: rgba(229, 199, 148, .28) !important;
-  color-scheme: dark;
-}
-body:not(.auth-locked) .main select option,
-body:not(.auth-locked) #overlay .modal select option,
-body:not(.auth-locked) .drawer select option {
-  background: #0F1C16 !important;
-  color: var(--text) !important;
-}
-body:not(.auth-locked) .main input::placeholder,
-body:not(.auth-locked) .main textarea::placeholder,
-body:not(.auth-locked) #overlay .modal input::placeholder,
-body:not(.auth-locked) #overlay .modal textarea::placeholder {
-  color: #9BA99F !important;
-  opacity: 1;
-}
-
-/* Utility/search/filter controls that previously kept pale-theme text */
-body:not(.auth-locked) .user-search,
-body:not(.auth-locked) .user-role-filter,
-body:not(.auth-locked) .user-role-filter select,
-body:not(.auth-locked) .search,
-body:not(.auth-locked) .search input {
-  color: var(--text) !important;
-}
-body:not(.auth-locked) .user-search,
-body:not(.auth-locked) .user-role-filter select {
-  background: #0B1510 !important;
-  border-color: var(--border) !important;
-}
-body:not(.auth-locked) .user-search input {
-  background: transparent !important;
-}
-body:not(.auth-locked) .main .btn:not(.btn-primary):not(.btn-danger),
-body:not(.auth-locked) #overlay .modal .btn:not(.btn-primary):not(.btn-danger),
-body:not(.auth-locked) .drawer .btn:not(.btn-primary):not(.btn-danger),
-body:not(.auth-locked) .main button.secondary,
-body:not(.auth-locked) .main .btn-secondary {
-  background: rgba(255,255,255,.055) !important;
-  color: var(--text) !important;
-  border-color: var(--border) !important;
-}
-body:not(.auth-locked) .main .btn-primary,
-body:not(.auth-locked) #overlay .modal .btn-primary {
-  background: #265942 !important;
-  color: #FFFFFF !important;
-  border-color: rgba(229,199,148,.42) !important;
-}
-
-/* All standard operational tables use one surface/text pairing.
-   Status badges and explicit semantic colors remain independently styled. */
-body:not(.auth-locked) .main table,
-body:not(.auth-locked) #overlay .modal:not(.ops-analytics-modal) table,
-body:not(.auth-locked) .drawer table {
-  background: var(--table-bg) !important;
-  color: var(--table-text) !important;
-  border-color: var(--table-line) !important;
-}
-body:not(.auth-locked) .main table thead th,
-body:not(.auth-locked) #overlay .modal:not(.ops-analytics-modal) table thead th,
-body:not(.auth-locked) .drawer table thead th {
-  background: var(--table-head) !important;
-  color: #F0F1EB !important;
-  border-color: var(--table-line) !important;
-}
-body:not(.auth-locked) .main table tbody tr,
-body:not(.auth-locked) #overlay .modal:not(.ops-analytics-modal) table tbody tr,
-body:not(.auth-locked) .drawer table tbody tr {
-  background: var(--table-row) !important;
-  color: var(--table-text) !important;
-}
-body:not(.auth-locked) .main table tbody tr:nth-child(even),
-body:not(.auth-locked) #overlay .modal:not(.ops-analytics-modal) table tbody tr:nth-child(even),
-body:not(.auth-locked) .drawer table tbody tr:nth-child(even) {
-  background: var(--table-row-alt) !important;
-}
-body:not(.auth-locked) .main table tbody tr:hover,
-body:not(.auth-locked) #overlay .modal:not(.ops-analytics-modal) table tbody tr:hover,
-body:not(.auth-locked) .drawer table tbody tr:hover {
-  background: var(--table-row-hover) !important;
-  color: var(--table-text) !important;
-}
-body:not(.auth-locked) .main table td,
-body:not(.auth-locked) #overlay .modal:not(.ops-analytics-modal) table td,
-body:not(.auth-locked) .drawer table td {
-  background-color: transparent;
-  color: var(--table-text) !important;
-  border-color: var(--table-line) !important;
-}
-body:not(.auth-locked) .main table td b,
-body:not(.auth-locked) #overlay .modal:not(.ops-analytics-modal) table td b,
-body:not(.auth-locked) .drawer table td b {
-  color: #F7F6EF !important;
-}
-body:not(.auth-locked) .main table .muted,
-body:not(.auth-locked) #overlay .modal:not(.ops-analytics-modal) table .muted,
-body:not(.auth-locked) .drawer table .muted {
-  color: #C1CBC1 !important;
-}
-body:not(.auth-locked) .main table tfoot td,
-body:not(.auth-locked) #overlay .modal:not(.ops-analytics-modal) table tfoot td,
-body:not(.auth-locked) .drawer table tfoot td {
-  background: #20362B !important;
-  color: #F0F1EB !important;
-}
-
-/* Modals and toasts follow the surface they actually render on */
-body:not(.auth-locked) #overlay .modal .m-head,
-body:not(.auth-locked) #overlay .modal .m-foot {
-  background: #14231A !important;
-  color: var(--text) !important;
-  border-color: var(--border) !important;
-}
-body:not(.auth-locked) #overlay .modal .m-head h2,
-body:not(.auth-locked) #overlay .modal .m-head p,
-body:not(.auth-locked) #overlay .modal .m-head .muted,
-body:not(.auth-locked) #overlay .modal .m-head .icon-btn {
-  color: var(--text) !important;
-}
-body:not(.auth-locked) #toasts .toast {
-  background: #14231A !important;
-  color: var(--text) !important;
-  border-color: var(--border) !important;
 }
 
 
@@ -3628,29 +3308,47 @@ textarea {
    Contrast targets follow WCAG AA; brand decoration is intentionally not used as a surface color. */
 :root {
   color-scheme: light;
-  --bg:#E9EEE8;
-  --surface:#F4F5F2;
-  --surface-2:#EAF0E9;
-  --surface-hover:#DDE7DD;
-  --border:#8B9B8C;
-  --text:#26352B;
-  --muted:#59645B;
-  --brand:#1D4D33;
-  --brand-2:#1D4D33;
-  --btn:#1D4D33;
-  --brand-soft:#E4EDE5;
-  --gold:#1D4D33;
-  --gold-soft:#E4EDE5;
-  --ok:#166534;
-  --warn:#854D0E;
-  --bad:#B42318;
-  --ok-soft:#E8F5EC;
-  --warn-soft:#FFF4D6;
-  --bad-soft:#FDECEC;
-  --shadow:0 2px 10px rgba(16,24,40,.08);
-  --radius:10px;
-  --sherwood:#E4EDE5;
-  --panel:#EAF0E9;
+  --bg: #E9EEE8;
+  --surface: #F4F5F2;
+  --surface-2: #EAF0E9;
+  --surface-hover: #DDE7DD;
+  --text: #1F2D25;
+  --muted: #4B5A50;
+  --brand: #1D4D33;
+  --brand-2: #1D4D33;
+  --btn: #1D4D33;
+  --brand-soft: #EAF0E9;
+  --gold: #E5C794;
+  --gold-soft: rgba(229,199,148,.18);
+  --ok: #166534;
+  --ok-soft: #E8F5EC;
+  --warn: #7A4A0C;
+  --warn-soft: #FFF4D6;
+  --bad: #B42318;
+  --bad-soft: #FDECEC;
+  --placeholder: #5E6F63;
+  --control-border: #6F8374;
+  --card-border: #B9C6BA;
+  --focus: #1D4D33;
+  --sidebar-bg: #1D4D33;
+  --sidebar-text: #F4F5F2;
+  --header-bg: #1D4D33;
+  --header-text: #F4F5F2;
+  --table-head: #244A37;
+  --table-head-text: #F4F5F2;
+  --table-bg: #F4F5F2;
+  --table-row: #F4F5F2;
+  --table-row-alt: #E8EDE6;
+  --table-hover: #DDE7DD;
+  --table-line: #B9C6BA;
+  --table-text: var(--text);
+  --table-muted: var(--muted);
+  --panel: #F4F5F2;
+  --card: #F4F5F2;
+  --surface-3: #E8EDE6;
+  --sherwood: #1D4D33;
+  --shadow: 0 2px 10px rgba(16,24,40,.08);
+  --radius: 10px;
 }
 html,body { background:#E9EEE8!important;color:#26352B!important;color-scheme:light!important; }
 body { -webkit-font-smoothing:antialiased; }
@@ -3874,12 +3572,7 @@ details > summary:focus-visible { outline:3px solid #1D4D33!important; }
 
 
 /* Day Planner accents: match the site's established olive-green utility palette. */
-:root {
-  --planner-olive: #536047;
-  --planner-olive-deep: #283522;
-  --planner-olive-soft: #D8DFBD;
-  --planner-olive-pale: #EEF0E4;
-}
+.turf-inline-planner { --planner-olive: #536047; --planner-olive-deep: #283522; --planner-olive-soft: #D8DFBD; --planner-olive-pale: #EEF0E4; }
 .turf-inline-planner > summary,
 #tpContainer .tp-area-sidebar,
 #tpContainer .tp-repeat-panel,
@@ -3955,3 +3648,36 @@ details > summary:focus-visible { outline:3px solid #1D4D33!important; }
 #tpContainer .tp-inline-chevron {
   color: #536047;
 }
+
+
+/* Single light theme contract. Legacy theme roots removed; component layout rules remain. */
+html, body { background: var(--bg); color: var(--text); color-scheme: light; }
+.sidebar, .side-nav, .sidenav, .left-nav, .nav-rail {
+  background: var(--sidebar-bg);
+  color: var(--sidebar-text);
+}
+.topbar, .top-header {
+  background: var(--header-bg);
+  color: var(--header-text);
+  border-color: var(--brand);
+}
+.card, .panel, .stat-card, .kmenu, .login-card, .modal, .modal-content,
+.dropdown-menu, .popover, .table-wrap, .table-container {
+  background: var(--surface);
+  color: var(--text);
+  border-color: var(--card-border);
+}
+input:not([type=checkbox]):not([type=radio]):not([type=range]),
+select, textarea, [contenteditable=true] {
+  background: var(--surface);
+  color: var(--text);
+  border-color: var(--control-border);
+}
+input::placeholder, textarea::placeholder { color: var(--placeholder); opacity: 1; }
+select option, select optgroup { background: var(--surface); color: var(--text); }
+table { background: var(--table-bg); color: var(--table-text); border-color: var(--table-line); }
+thead th, tfoot td { background: var(--table-head); color: var(--table-head-text); border-color: var(--table-line); }
+tbody tr { background: var(--table-row); }
+tbody tr:nth-child(even) { background: var(--table-row-alt); }
+tbody td { color: var(--table-text); border-color: var(--table-line); }
+tbody tr:hover td { background: var(--table-hover); color: var(--text); }
