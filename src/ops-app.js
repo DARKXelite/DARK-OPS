@@ -58,8 +58,14 @@ const fmt = (n, d=1) => Number(n || 0).toLocaleString('en-IN', { maximumFraction
 const money = (n, d=0) => '₹' + Number(n || 0).toLocaleString('en-IN', { minimumFractionDigits: d, maximumFractionDigits: d === 0 ? 0 : 2 });
 const pad = n => String(n).padStart(2, '0');
 const ymd = d => `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
-const today = () => ymd(new Date());
-const addDays = (s, n) => { const d = new Date(s + 'T00:00:00'); d.setDate(d.getDate() + n); return ymd(d); };
+function today() {
+  const d = new Date();
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+const addDays = (s, n) => { const d = new Date(s + 'T12:00:00'); d.setDate(d.getDate() + n); return ymd(d); };
 const monthStart = s => s.slice(0, 8) + '01';
 const MON = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 const dShort = s => s ? `${+s.slice(8,10)} ${MON[+s.slice(5,7)-1]}` : '';
@@ -939,8 +945,8 @@ function renderTurfCostAnalytics(from, to) {
   if (!from || !to) return '';
   if (from > to) { const swap = from; from = to; to = swap; }
   const { allRows, priced, unpriced, total, products } = buildTurfCostAnalytics(from, to);
-  const startMs = new Date(from + 'T00:00:00').getTime();
-  const spanDays = Math.max(1, Math.floor((new Date(to + 'T00:00:00').getTime() - startMs) / 86400000) + 1);
+  const startMs = new Date(from + 'T12:00:00').getTime();
+  const spanDays = Math.max(1, Math.floor((new Date(to + 'T12:00:00').getTime() - startMs) / 86400000) + 1);
   const bucketSize = Math.max(1, Math.ceil(spanDays / 28));
   const buckets = [];
   for (let offset = 0; offset < spanDays; offset += bucketSize) {
@@ -949,7 +955,7 @@ function renderTurfCostAnalytics(from, to) {
     buckets.push({ label: bucketSize === 1 ? dShort(bucketFrom) : `${dShort(bucketFrom)}–${dShort(bucketTo)}`, value: 0 });
   }
   priced.forEach(row => {
-    const offset = Math.max(0, Math.floor((new Date(row.date + 'T00:00:00').getTime() - startMs) / 86400000));
+    const offset = Math.max(0, Math.floor((new Date(row.date + 'T12:00:00').getTime() - startMs) / 86400000));
     const index = Math.min(buckets.length - 1, Math.floor(offset / bucketSize));
     if (buckets[index]) buckets[index].value += row.cost;
   });
@@ -2277,7 +2283,7 @@ const H = {
 
     try {
       const b = writeBatch(db);
-      const baseDate = new Date(tpState.start + "T00:00:00");
+      const baseDate = new Date(tpState.start + "T12:00:00");
 
       for (let w = 0; w < tpState.weeks; w++) {
         const weekStartStr = ymd(new Date(baseDate.getTime() + w * 7 * 86400000));
@@ -2631,7 +2637,7 @@ $("#signoutBtn").addEventListener("click", async () => {
 
 
 function getSunday(d) {
-  const dt = new Date(d + "T00:00:00");
+  const dt = new Date(d + "T12:00:00");
   const day = dt.getDay();
   const diff = dt.getDate() - day;
   return ymd(new Date(dt.setDate(diff)));
