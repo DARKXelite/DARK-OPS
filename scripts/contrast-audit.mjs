@@ -42,7 +42,7 @@ try {
   await page.locator("#audit-input").focus();
   const report = await page.evaluate(() => {
     const rgb = value => {
-      const m = value.match(/rgba?\\(([^)]+)\\)/);
+      const m = value.match(/rgba?\(([^)]+)\\)/);
       if (!m) return null;
       const parts = m[1].split(",").map(x => Number.parseFloat(x.trim()));
       if (parts.length < 3 || parts.slice(0, 3).some(x => !Number.isFinite(x))) return null;
@@ -61,7 +61,7 @@ try {
       for (let node = el; node; node = node.parentElement) {
         const c = getComputedStyle(node).backgroundColor;
         const v = rgb(c);
-        if (v && !/rgba\\([^)]*,\\s*0\\s*\\)$/.test(c)) return v;
+        if (v && !/rgba\([^)]*,\s*0\s*\\)$/.test(c)) return v;
       }
       return rgb("rgb(255, 255, 255)");
     };
