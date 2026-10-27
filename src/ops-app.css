@@ -3559,3 +3559,12 @@ textarea {
   .modal.turf-planner-modal .tp-other-days > summary { gap: 7px; padding: 11px; }
   .modal.turf-planner-modal .tp-other-days-count { font-size: 10px; white-space: normal; text-align: right; }
 }
+
+.modal.turf-planner-modal .tp-other-day-name small {
+  display: block;
+  margin-top: 3px;
+  color: var(--gold, #E6BD75);
+  font-size: 10px;
+  font-weight: 500;
+}
+.modal.turf-planner-modal .tp-other-day-item.is-draft > .material-symbols-rounded { color: var(--gold, #E6BD75); }
