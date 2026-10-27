@@ -3211,14 +3211,14 @@ function tpLineForProduct(product) {
   const key = tpLineKey(tpState.area, tpState.category, product.id);
   if (Object.prototype.hasOwnProperty.call(tpState.lines, key)) return tpState.lines[key];
   const existing = tpExistingProductPlans(tpState.area, tpState.category, product.id);
-  if (!existing.length) return { qty: '', perGreen: false };
+  if (!existing.length) return { qty: '', perGreen: false, repeat: true };
   const plan = existing[0];
   // Read legacy planner fields when present, but write only the application's established plan fields.
   const legacyPerGreen = num(plan.perGreenQty ?? plan.quantityPerGreen);
   const perGreen = tpState.area === 'Greens' && (legacyPerGreen > 0 || String(plan.scope || '').toLowerCase() === 'per_area');
   const total = num(plan.targetQty ?? plan.quantity ?? plan.qty);
   const qty = legacyPerGreen > 0 ? legacyPerGreen : perGreen ? total / 18 : total;
-  return { qty, perGreen };
+  return { qty, perGreen, repeat: tpIsRepeatSeries(plan) };
 }
 function tpLineTotal(line, area) {
   const qty = Math.max(0, num(line && line.qty));
@@ -3286,6 +3286,7 @@ function renderTp() {
     const stock = Math.max(0, num(product.stockQuantity));
     const qtyValue = line.qty === '' || line.qty === null || line.qty === undefined ? '' : String(line.qty);
     const perGreen = area === 'Greens' && !!line.perGreen;
+    const repeat = line.repeat !== false;
     const total = tpLineTotal(line, area);
     const canPlan = !!unit;
     return '<article class="tp-product-row" data-unit="' + esc(unit) + '">' +
@@ -3297,6 +3298,7 @@ function renderTp() {
       (area === 'Greens' ? '<label class="tp-per-green"><input type="checkbox" data-tp-per-green data-product="' + esc(product.id) + '"' + (perGreen ? ' checked' : '') + (canPlan ? '' : ' disabled') + '><span><b>Per green</b><small>× 18 greens</small></span></label>' : '<span class="tp-scope-fixed">Whole area</span>') +
       '<div class="tp-total-label"><small>' + (perGreen ? '18-green total' : 'Total required') + '</small><b data-tp-total>' + (num(line.qty) > 0 ? fmt(total, 2) + ' ' + esc(unit) : '—') + '</b></div></div>' +
       '<span class="tp-rate-label" data-tp-rate-label>' + (perGreen ? fmt(num(line.qty), 2) + ' ' + esc(unit) + ' × 18 greens' : 'Total quantity for this area') + '</span>' +
+      (tpSelectedDates().length > 1 ? '<label class="tp-repeat-item"><input type="checkbox" data-tp-repeat data-product="' + esc(product.id) + '"' + (repeat ? ' checked' : '') + '><span><b>Repeat this item</b><small>On selected weekdays through this date range</small></span></label>' : '') +
       (!canPlan ? '<small class="tp-unit-warning">Set a unit of measure in Products &amp; Stock before planning this item.</small>' : '') +
       '</article>';
   }).join('');
@@ -3353,7 +3355,7 @@ async function saveTpCategoryTab() {
       if (!unit) { toast('Set the stock unit for ' + itemName(product) + ' in Products & Stock first.', 'err'); return; }
       const perGreen = area === 'Greens' && !!line.perGreen;
       const totalQty = qty * (perGreen ? 18 : 1);
-      desiredLines.set(String(product.id), { product, qty, unit, perGreen, totalQty });
+      desiredLines.set(String(product.id), { product, qty, unit, perGreen, totalQty, repeat: line.repeat !== false });
       if (totalQty > num(product.stockQuantity)) {
         toast('Planned quantity for ' + itemName(product) + ' exceeds current stock. The plan can still be saved, but replenishment may be needed.', 'warn');
       }
@@ -3399,8 +3401,9 @@ async function saveTpCategoryTab() {
     const note = String(tpState.notes[noteKey] || '').trim();
     const storedArea = area === 'Fairways' ? 'Fairway' : area;
     const desiredByDateProduct = new Map();
-    for (const date of dates) {
-      for (const line of desiredLines.values()) {
+    for (const line of desiredLines.values()) {
+      const lineDates = line.repeat ? dates : dates.slice(0, 1);
+      for (const date of lineDates) {
         desiredByDateProduct.set(date + '::' + line.product.id, { date, ...line });
       }
     }
@@ -3428,9 +3431,9 @@ async function saveTpCategoryTab() {
           targetArea: storedArea,
           area: storedArea,
           scope: line.perGreen ? 'per_area' : 'overall',
-          validFrom: from,
-          validUntil: until,
-          repeatWeekdays: weekdays,
+          validFrom: line.repeat ? from : null,
+          validUntil: line.repeat ? until : null,
+          repeatWeekdays: line.repeat ? weekdays : [],
           notes: note || 'Planned via Turf Treatment Planner',
           status: 'Planned'
         };
@@ -3458,9 +3461,7 @@ async function saveTpCategoryTab() {
         targetArea: storedArea,
         area: storedArea,
         scope: line.perGreen ? 'per_area' : 'overall',
-        validFrom: from,
-        validUntil: until,
-        repeatWeekdays: weekdays,
+        ...(line.repeat ? { validFrom: from, validUntil: until, repeatWeekdays: weekdays } : {}),
         notes: note || 'Planned via Turf Treatment Planner',
         status: 'Planned',
         createdAt: Date.now()
@@ -3529,6 +3530,14 @@ document.addEventListener('change', event => {
     tpState.weekdays = [...selected].sort((a, b) => a - b);
     tpState.weekdaysTouched = true;
     renderTp();
+    return;
+  }
+  const repeatInput = target.closest('[data-tp-repeat]');
+  if (repeatInput) {
+    const productId = repeatInput.dataset.product;
+    const key = tpLineKey(tpState.area, tpState.category, productId);
+    const previous = tpState.lines[key] || tpLineForProduct({ id: productId });
+    tpState.lines[key] = { ...previous, repeat: repeatInput.checked };
     return;
   }
   const perGreenInput = target.closest('[data-tp-per-green]');
