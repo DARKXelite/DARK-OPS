@@ -3465,3 +3465,97 @@ textarea {
 .modal.turf-planner-modal .tp-empty-state[hidden] {
   display: none !important;
 }
+
+
+/* Day Planner: compact collapsible review of saved allocations on other dates. */
+.modal.turf-planner-modal .tp-other-days {
+  margin: 0 0 16px;
+  border: 1px solid var(--border, #414A43);
+  border-radius: 12px;
+  background: var(--panel, #191E1A);
+  overflow: hidden;
+}
+.modal.turf-planner-modal .tp-other-days > summary,
+.modal.turf-planner-modal .tp-other-day > summary {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px;
+  cursor: pointer;
+  list-style: none;
+  color: var(--text, #F1F0E9);
+}
+.modal.turf-planner-modal .tp-other-days > summary::-webkit-details-marker,
+.modal.turf-planner-modal .tp-other-day > summary::-webkit-details-marker { display: none; }
+.modal.turf-planner-modal .tp-other-days > summary > .material-symbols-rounded:first-child {
+  color: var(--gold, #E6BD75);
+  font-size: 21px;
+}
+.modal.turf-planner-modal .tp-other-days-title {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  flex-direction: column;
+  gap: 3px;
+}
+.modal.turf-planner-modal .tp-other-days-title b { font-size: 12px; }
+.modal.turf-planner-modal .tp-other-days-title small {
+  color: var(--muted, #B2B8B0);
+  font-size: 11px;
+}
+.modal.turf-planner-modal .tp-other-days-count,
+.modal.turf-planner-modal .tp-other-day-count {
+  color: var(--muted, #B2B8B0);
+  font-size: 11px;
+  white-space: nowrap;
+}
+.modal.turf-planner-modal .tp-other-chevron {
+  color: var(--muted, #B2B8B0);
+  transition: transform .18s ease;
+}
+.modal.turf-planner-modal details[open] > summary .tp-other-chevron { transform: rotate(180deg); }
+.modal.turf-planner-modal .tp-other-days-content {
+  padding: 0 10px 10px;
+  border-top: 1px solid var(--border, #414A43);
+}
+.modal.turf-planner-modal .tp-other-day {
+  margin-top: 8px;
+  border: 1px solid var(--border, #414A43);
+  border-radius: 9px;
+  background: var(--surface, #202622);
+  overflow: hidden;
+}
+.modal.turf-planner-modal .tp-other-day > summary { padding: 10px 12px; }
+.modal.turf-planner-modal .tp-other-day > summary > .material-symbols-rounded:first-child {
+  color: var(--gold, #E6BD75);
+  font-size: 18px;
+}
+.modal.turf-planner-modal .tp-other-day > summary b { flex: 1; font-size: 12px; }
+.modal.turf-planner-modal .tp-other-day-items {
+  padding: 2px 12px 8px;
+  border-top: 1px solid var(--border, #414A43);
+}
+.modal.turf-planner-modal .tp-other-day-item {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 8px 0;
+  border-bottom: 1px solid rgba(177, 187, 177, .12);
+  font-size: 12px;
+}
+.modal.turf-planner-modal .tp-other-day-item:last-child { border-bottom: 0; }
+.modal.turf-planner-modal .tp-other-day-item > .material-symbols-rounded {
+  color: var(--muted, #B2B8B0);
+  font-size: 17px;
+}
+.modal.turf-planner-modal .tp-other-day-name { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.modal.turf-planner-modal .tp-other-day-item b {
+  color: var(--gold, #E6BD75);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+@media (max-width: 600px) {
+  .modal.turf-planner-modal .tp-other-days > summary { gap: 7px; padding: 11px; }
+  .modal.turf-planner-modal .tp-other-days-count { font-size: 10px; white-space: normal; text-align: right; }
+}
