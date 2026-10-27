@@ -1783,7 +1783,7 @@ function renderZonePanel() {
   const hz = $('#hudZones'); if (hz) hz.textContent = `${S.zones.length} ZONES`;
   const order = { Course: 0, Green: 1, Fairway: 2, Rough: 3, Tee: 4, Other: 5 };
   const zones = [...S.zones].sort((a, b) => (order[a.zoneType] ?? 9) - (order[b.zoneType] ?? 9) || (a.zoneName || '').localeCompare(b.zoneName || ''));
-  setHTML($('#zoneList'), zones.length ? zones.map(z => `<div class="list-row"><div><b>${esc(z.zoneName || 'Zone')}</b><div class="muted sm"><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${ZCOL[z.zoneType] || '#E5C794'};margin-right:5px"></span>${esc(z.zoneType || '-')}</div></div><button class="btn btn-danger btn-sm" data-act="del" data-col="zones" data-id="${esc(z.id)}" data-label="${esc(z.zoneName || 'this zone')}"><span class="material-symbols-rounded">delete</span></button></div>`).join('') : '<div class="empty">Draw Course boundary first</div>');
+  setHTML($('#zoneList'), zones.length ? zones.map(z => `<div class="list-row"><div><b>${esc(z.zoneName || 'Zone')}</b><div class="muted sm"><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${ZCOL[z.zoneType] || '#E5C794'};margin-right:5px"></span>${esc(z.zoneType || '-')}</div></div><button class="btn btn-danger btn-sm" data-act="del" data-col="zones" data-id="${esc(z.id)}" data-label="${esc(z.zoneName || 'this zone')}" aria-label="Delete zone ${esc(z.zoneName || 'this zone')}" title="Delete zone"><span class="material-symbols-rounded" aria-hidden="true">delete</span></button></div>`).join('') : '<div class="empty">Draw Course boundary first</div>');
 }
 function zoneForm() {
   if (!drawCoords || drawCoords.length < 3) {
@@ -2009,7 +2009,7 @@ function previewInward(){const el=$('#inPreview');if(!el)return;const q=Math.max
 function renderIncidents() {
   if (!LOADED.logs) { setHTML($('#incList'), '<div class="skeleton" style="height:90px"></div>'); return; }
   const rows = [...S.logs].sort((a, b) => ((a.repairStatus === 'Resolved') - (b.repairStatus === 'Resolved')) || tsMs(b.createdAt) - tsMs(a.createdAt));
-  setHTML($('#incList'), rows.length ? rows.map(l => { const done = l.repairStatus === 'Resolved'; return `<div class="card" style="margin-bottom:12px;display:flex;justify-content:space-between;gap:14px;align-items:center;flex-wrap:wrap"><div style="min-width:240px;flex:1"><div class="muted sm"><b>${esc(l.machineId || 'General')}</b> · ${esc(l.logType || 'Issue')}${l.reportedDate ? ' · ' + dLong(l.reportedDate) : ''}</div><div style="font-weight:600;margin-top:2px">${esc(l.issueDescription || '')}</div><div class="record-meta">${num(l.estimatedDowntimeHours)>0?`Estimated downtime ${fmt(l.estimatedDowntimeHours,1)} h · ${COST.downtimePerHour>0?money(num(l.estimatedDowntimeHours)*COST.downtimePerHour)+' estimated exposure':'set hourly exposure rate in Cost model'}`:'Downtime estimate not recorded'}</div></div><div style="display:flex;gap:8px;align-items:center"><span class="badge ${done ? 'ok' : 'bad'}">${done ? 'Resolved' : esc(l.repairStatus || 'Pending')}</span><button class="btn btn-sm" data-act="inc-toggle" data-id="${esc(l.id)}">${done ? 'Reopen' : 'Mark resolved'}</button><button class="btn btn-danger btn-sm" data-act="del" data-col="logs" data-id="${esc(l.id)}" data-label="this incident"><span class="material-symbols-rounded">delete</span></button></div></div>`; }).join('') : '<div class="card empty">No incident tickets. ??</div>');
+  setHTML($('#incList'), rows.length ? rows.map(l => { const done = l.repairStatus === 'Resolved'; return `<div class="card" style="margin-bottom:12px;display:flex;justify-content:space-between;gap:14px;align-items:center;flex-wrap:wrap"><div style="min-width:240px;flex:1"><div class="muted sm"><b>${esc(l.machineId || 'General')}</b> · ${esc(l.logType || 'Issue')}${l.reportedDate ? ' · ' + dLong(l.reportedDate) : ''}</div><div style="font-weight:600;margin-top:2px">${esc(l.issueDescription || '')}</div><div class="record-meta">${num(l.estimatedDowntimeHours)>0?`Estimated downtime ${fmt(l.estimatedDowntimeHours,1)} h · ${COST.downtimePerHour>0?money(num(l.estimatedDowntimeHours)*COST.downtimePerHour)+' estimated exposure':'set hourly exposure rate in Cost model'}`:'Downtime estimate not recorded'}</div></div><div style="display:flex;gap:8px;align-items:center"><span class="badge ${done ? 'ok' : 'bad'}">${done ? 'Resolved' : esc(l.repairStatus || 'Pending')}</span><button class="btn btn-sm" data-act="inc-toggle" data-id="${esc(l.id)}">${done ? 'Reopen' : 'Mark resolved'}</button><button class="btn btn-danger btn-sm" data-act="del" data-col="logs" data-id="${esc(l.id)}" data-label="this incident" aria-label="Delete incident" title="Delete incident"><span class="material-symbols-rounded" aria-hidden="true">delete</span></button></div></div>`; }).join('') : '<div class="card empty">No incident tickets. ??</div>');
 }
 
 
@@ -2469,7 +2469,7 @@ function createInventoryImporter(options) {
         });
         await batch.commit();
       }
-      closeModal();
+      closeModal(true);
       onComplete?.();
       toast('Inventory import complete · ' + creates.length + ' created · ' + updates.length + ' updated' + (physicalStock ? ' · physical stock applied' : ' · existing stock preserved') + (duplicates ? ' · ' + duplicates + ' duplicate rows skipped' : '') + (ambiguous ? ' · ' + ambiguous + ' ambiguous rows skipped' : ''));
       state = null;
@@ -2704,7 +2704,7 @@ const H = {
       }
       await b.commit();
       toast("Weekly plan saved successfully!");
-      closeModal();
+      closeModal(true);
       currentTurfWeekStart = tpState.start;
       renderTurfCare();
     } catch(e) {
@@ -2780,7 +2780,7 @@ const H = {
       toast('Bill saved · '+money(total,2));
       const seen=new Set(), queue=[];
       clean.forEach((i,idx)=>{const k=normName(i.itemName);if(!i.inInventory&&!seen.has(k)){seen.add(k);queue.push(idx);}});
-      if(queue.length){closeModal();runNewItemQueue(ref.id,clean,queue,queue.length);return false;}
+      if(queue.length){closeModal(true);runNewItemQueue(ref.id,clean,queue,queue.length);return false;}
     }}); $$('#exRows .exi-name')[0]?.focus(); },
   'exp-filter': d => { expFilter = d.f || 'all'; renderLocalExpenseLedger(); },
   'delete-local-expense': d => openForm({title:'Delete local expense',submit:'Delete',danger:true,html:'This expense record will be permanently deleted.',onSubmit:async()=>{await deleteDoc(doc(db,CONFIG.COL.expenses,d.id));toast('Expense deleted');}}),
@@ -2922,7 +2922,7 @@ onAuthStateChanged(auth, async user => {
     resetOtpUI();
     sessionStorage.removeItem("tpDraftV4");
     history.replaceState(null, "", location.pathname + location.search);
-    closeModal(); closeDrawer();
+    closeModal(true); closeDrawer();
     if (cmdOpen) toggleCmdPal(false);
     Object.keys(CONFIG.COL).forEach(k => { LOADED[k] = false; S[k] = []; });
     S._v++;
@@ -3449,7 +3449,7 @@ async function saveTurfBatch() {
   if(dates.length*rows.length>500){toast('This schedule creates more than 500 tasks. Narrow the date range or weekdays.','err');releaseSave();return;}
   try{
     for(const dateStr of dates){const dateObj=new Date(`${dateStr}T12:00:00`);for(const r of rows) await addDoc(collection(db,CONFIG.COL.plans),{weekStart:currentTurfWeekStart,date:dateStr,dayIndex:dateObj.getDay(),productId:r.product.id,productName:itemName(r.product),category:r.product.category||'Fertilizers',targetQty:r.qty,unit:r.unit,targetArea:area,area,validFrom:from,validUntil:until,repeatWeekdays:weekdays,notes,status:'Planned',createdAt:Date.now()});}
-    closeModal();toast(`${rows.length} product${rows.length===1?'':'s'} scheduled for ${dates.length} date${dates.length===1?'':'s'} in ${area}.`);renderTurfCare();
+    closeModal(true);toast(`${rows.length} product${rows.length===1?'':'s'} scheduled for ${dates.length} date${dates.length===1?'':'s'} in ${area}.`);renderTurfCare();
   }catch(e){console.error(e);toast('Schedule save failed. Some tasks may have saved; refresh and verify before retrying.','err');releaseSave();}
 }
 function renderTurfAreaPlanDashboard(){
@@ -3692,7 +3692,7 @@ function renderTp(){
  return '<article class="tp-product-row" data-search="'+esc(String(itemName(p)).toLowerCase())+'" data-unit="'+esc(unit)+'"><div class="tp-product-ident"><span class="tp-product-icon material-symbols-rounded">inventory_2</span><div class="tp-product-copy"><b>'+esc(itemName(p))+'</b><span>'+esc(unit||'Unit not set')+' · Stock '+fmt(num(p.stockQuantity),2)+(hasExisting?' · Already planned':'')+'</span></div></div><div class="tp-qty-control"><label>Qty ('+esc(unit||'unit')+')<input type="number" min="0" step="any" value="'+esc(qty===''?'':String(qty))+'" data-tp-qty data-product="'+esc(p.id)+'" '+(!unit?'disabled':'')+'></label></div><div class="tp-scope-control">'+(tpState.area==='Greens'?'<label class="tp-per-green"><input type="checkbox" data-tp-per-green data-product="'+esc(p.id)+'"'+(per?' checked':'')+'><span><b>Per green</b><small>× 18 greens</small></span></label>':'<span class="tp-scope-fixed">Whole area</span>')+'<div class="tp-total-label"><small>Total</small><b data-tp-total>'+(num(qty)>0?fmt(total,2)+' '+esc(unit):'—')+'</b></div></div><button type="button" class="tp-repeat-trigger'+(dates.length?' is-active':'')+'" data-act="tp-repeat-toggle" data-product="'+esc(p.id)+'"><span class="material-symbols-rounded">event_repeat</span><span>Repeat'+(dates.length?' · '+dates.length:'')+'</span></button>'+(isOpen?tpRenderCalendar(p.id):'')+'</article>';
  }).join('');
  const saved=tpMatchingPlanRecords(tpState.area,tpState.category).filter(p=>turfRecordDate(p)===tpState.date);
- const savedHtml=saved.map(p=>'<div class="tp-saved-entry'+(tpState.deletedPlanIds.includes(p.id)?' is-deleted':'')+'"><span>'+esc(p.productName||p.itemName||'Inventory item')+'</span><b>'+fmt(num(p.targetQty??p.quantity??p.qty),2)+' '+esc(p.unit||'')+'</b><button data-act="tp-delete-entry" data-id="'+esc(p.id)+'">'+(tpState.deletedPlanIds.includes(p.id)?'Undo':'×')+'</button></div>').join('');
+ const savedHtml=saved.map(p=>'<div class="tp-saved-entry'+(tpState.deletedPlanIds.includes(p.id)?' is-deleted':'')+'"><span>'+esc(p.productName||p.itemName||'Inventory item')+'</span><b>'+fmt(num(p.targetQty??p.quantity??p.qty),2)+' '+esc(p.unit||'')+'</b><button data-act="tp-delete-entry" data-id="'+esc(p.id)+'" aria-label="'+(tpState.deletedPlanIds.includes(p.id)?'Undo delete':'Delete saved entry')+'">'+(tpState.deletedPlanIds.includes(p.id)?'Undo':'×')+'</button></div>').join('');
  const pending=Object.values(tpState.lines).reduce((n,l)=>n+(l.touchedDates||[]).length,0)+tpState.deletedPlanIds.length;
  const reviewHtml=tpState.reviewOpen?'<section class="tp-inline-review"><div class="tp-inline-review-head"><b>Review changes</b><span>Check each row before saving.</span></div><div class="tp-review-table-wrap"><table class="tp-review-table"><thead><tr><th>Date</th><th>Item</th><th>Area</th><th>Quantity</th></tr></thead><tbody>'+tpBuildChanges().map(x=>'<tr><td>'+esc(x.date)+'</td><td>'+esc(itemName(x.product))+'</td><td>'+esc(x.area)+'</td><td>'+fmt(x.total,2)+' '+esc(x.unit)+'</td></tr>').join('')+tpState.deletedPlanIds.map(id=>(S.plans||[]).find(p=>p.id===id)).filter(Boolean).map(p=>'<tr class="tp-review-delete"><td>'+esc(turfRecordDate(p))+'</td><td>'+esc(p.productName||p.itemName||'Reservation')+'</td><td>'+esc(p.targetArea||p.area||'')+'</td><td>Delete</td></tr>').join('')+'</tbody></table></div><div class="tp-inline-review-actions"><button type="button" class="btn" data-act="tp-review-back">Back to planner</button><button type="button" class="btn btn-primary" data-act="tp-confirm-save">Confirm &amp; save</button></div></section>':'';
  c.innerHTML='<div class="tp-planner-toolbar"><label class="tp-date-single"><span class="material-symbols-rounded">calendar_today</span><input type="date" min="'+esc(today())+'" value="'+esc(tpState.date)+'" data-tp-date aria-label="Plan date"></label><span class="tp-draft-status">'+pending+' pending · '+saved.length+' saved</span></div><div class="tp-planner-layout"><aside class="tp-area-sidebar">'+areaTabs+'</aside><section class="tp-workspace"><div class="tp-category-tabs">'+tabs+'</div><label class="tp-product-search"><span class="material-symbols-rounded">search</span><input type="search" data-tp-search placeholder="Search items…"><kbd>Filter</kbd></label>'+(savedHtml?'<details class="tp-saved-list" open><summary>Saved reservations · '+saved.length+'</summary><div>'+savedHtml+'</div></details>':'')+'<div class="tp-product-list">'+(rows||'<div class="tp-empty-state">No items in this category.</div>')+'<div data-tp-search-empty hidden>No matching items.</div></div></section></div>'+reviewHtml+'<div class="tp-floating-save"><span><b>'+pending+'</b> pending</span><button type="button" class="btn btn-primary" data-act="tp-save-open" '+(pending?'':'disabled')+'><span class="material-symbols-rounded">save</span>Review &amp; Save</button></div>';
