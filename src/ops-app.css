@@ -3568,3 +3568,57 @@ textarea {
   font-weight: 500;
 }
 .modal.turf-planner-modal .tp-other-day-item.is-draft > .material-symbols-rounded { color: var(--gold, #E6BD75); }
+
+
+/* Day Planner v3: compact date-first controls, inline repeat calendar and persistent save bar. */
+.modal.turf-planner-modal .d-sub { display:none !important; }
+.modal.turf-planner-modal .tp-planner-toolbar { display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 14px; }
+.modal.turf-planner-modal .tp-date-single { display:flex;align-items:center;gap:8px;min-width:0;padding:7px 10px;border:1px solid #465047;border-radius:9px;background:#101411;color:#E6BD75; }
+.modal.turf-planner-modal .tp-date-single input { min-height:30px!important;padding:3px!important;border:0!important;background:transparent!important;color:#F1F0E9!important;font-size:13px!important; }
+.modal.turf-planner-modal .tp-draft-status { color:#B2B8B0;font-size:11px;white-space:nowrap; }
+.modal.turf-planner-modal .tp-planner-layout { align-items:start; }
+.modal.turf-planner-modal .tp-area-sidebar { position:sticky;top:0; }
+.modal.turf-planner-modal .tp-area-button { min-height:40px;padding:8px 10px; }
+.modal.turf-planner-modal .tp-area-copy small,.modal.turf-planner-modal .tp-sidebar-heading,.modal.turf-planner-modal .tp-sidebar-foot { display:none!important; }
+.modal.turf-planner-modal .tp-category-heading,.modal.turf-planner-modal .tp-category-footer,.modal.turf-planner-modal .tp-notes-field,.modal.turf-planner-modal .tp-repeat-strip,.modal.turf-planner-modal .tp-date-range,.modal.turf-planner-modal .tp-planner-title { display:none!important; }
+.modal.turf-planner-modal .tp-product-row { grid-template-columns:minmax(0,1fr) 100px minmax(110px,auto);gap:9px;padding:10px; }
+.modal.turf-planner-modal .tp-repeat-trigger { display:flex;align-items:center;justify-content:center;gap:5px;grid-column:1/-1;justify-self:start;padding:5px 9px;border:1px solid #465047;border-radius:8px;background:#202622;color:#E6BD75;font-size:11px;cursor:pointer; }
+.modal.turf-planner-modal .tp-repeat-trigger.is-active { background:#302B20;border-color:#B9924F; }
+.modal.turf-planner-modal .tp-repeat-trigger .material-symbols-rounded { font-size:17px; }
+.modal.turf-planner-modal .tp-repeat-panel { grid-column:1/-1;padding:12px;border:1px solid #465047;border-radius:10px;background:#121713; }
+.modal.turf-planner-modal .tp-repeat-cal-head { display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;color:#F1F0E9; }
+.modal.turf-planner-modal .tp-repeat-cal-head button { width:30px;height:30px;border:1px solid #414A43;border-radius:7px;background:#202622;color:#E6BD75;font-size:22px;cursor:pointer; }
+.modal.turf-planner-modal .tp-cal-grid { display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:4px; }
+.modal.turf-planner-modal .tp-cal-weekday { padding:4px 0;color:#9DA69C;text-align:center;font-size:10px;font-weight:700; }
+.modal.turf-planner-modal .tp-cal-day { position:relative;min-height:32px;border:1px solid transparent;border-radius:7px;background:#202622;color:#E9ECE7;font-size:11px;cursor:pointer; }
+.modal.turf-planner-modal .tp-cal-day.is-current { border-color:#E6BD75; }
+.modal.turf-planner-modal .tp-cal-day.is-selected { background:#E6BD75;color:#201A10;font-weight:700; }
+.modal.turf-planner-modal .tp-cal-day i { position:absolute;right:4px;top:4px;width:4px;height:4px;border-radius:50%;background:#8CC9A0; }
+.modal.turf-planner-modal .tp-repeat-panel > small { display:block;margin-top:9px;color:#B2B8B0;font-size:10px;line-height:1.4; }
+.modal.turf-planner-modal .tp-repeat-qty-edit { display:flex;align-items:end;gap:8px;margin-top:10px;padding:9px;border:1px solid #414A43;border-radius:8px;background:#202622; }
+.modal.turf-planner-modal .tp-repeat-qty-edit label { display:flex;flex:1;align-items:center;gap:8px;color:#E6BD75;font-size:11px; }
+.modal.turf-planner-modal .tp-repeat-qty-edit input { width:90px;min-height:32px!important;background:#101411!important;border:1px solid #465047!important;color:#F1F0E9!important; }
+.modal.turf-planner-modal .tp-repeat-actions { display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:10px;color:#B2B8B0;font-size:11px; }
+.modal.turf-planner-modal .tp-saved-list { margin:0 0 10px;border:1px solid #414A43;border-radius:9px;background:#191E1A; }
+.modal.turf-planner-modal .tp-saved-list summary { padding:9px 11px;color:#E6BD75;font-size:11px;font-weight:700;cursor:pointer; }
+.modal.turf-planner-modal .tp-saved-entry { display:flex;align-items:center;gap:8px;padding:7px 10px;border-top:1px solid #343D36;color:#E9ECE7;font-size:11px; }
+.modal.turf-planner-modal .tp-saved-entry span { flex:1;min-width:0; }
+.modal.turf-planner-modal .tp-saved-entry b { color:#9AD4A8;white-space:nowrap; }
+.modal.turf-planner-modal .tp-saved-entry button { border:0;border-radius:6px;background:#303832;color:#F1F0E9;padding:4px 8px;cursor:pointer; }
+.modal.turf-planner-modal .tp-saved-entry.is-deleted { opacity:.45;text-decoration:line-through; }
+.modal.turf-planner-modal .tp-floating-save { position:sticky;bottom:0;z-index:8;display:flex;align-items:center;justify-content:space-between;gap:12px;margin:12px -14px -14px;padding:10px 14px;border-top:1px solid #465047;background:rgba(17,21,18,.97);box-shadow:0 -8px 22px rgba(0,0,0,.24); }
+.modal.turf-planner-modal .tp-floating-save > span { color:#B2B8B0;font-size:11px; }
+.modal.turf-planner-modal .tp-floating-save > span b { color:#E6BD75;font-size:15px; }
+.modal.turf-planner-confirm-modal .tp-review-table-wrap { max-width:100%;overflow:auto; }
+.modal.turf-planner-confirm-modal .tp-review-table { width:100%;border-collapse:collapse;font-size:11px; }
+.modal.turf-planner-confirm-modal .tp-review-table th,.modal.turf-planner-confirm-modal .tp-review-table td { padding:9px 8px;border-bottom:1px solid var(--border);text-align:left; }
+.modal.turf-planner-confirm-modal .tp-review-table th { color:var(--gold);white-space:nowrap; }
+.modal.turf-planner-confirm-modal .tp-review-table td { color:var(--text); }
+@media(max-width:700px) {
+ .modal.turf-planner-modal .tp-planner-layout { display:block; }
+ .modal.turf-planner-modal .tp-area-sidebar { position:static;display:flex;gap:6px;overflow:auto;margin-bottom:8px;padding:4px; }
+ .modal.turf-planner-modal .tp-area-button { flex:0 0 auto; }
+ .modal.turf-planner-modal .tp-product-row { grid-template-columns:minmax(0,1fr) 88px; }
+ .modal.turf-planner-modal .tp-scope-control { grid-column:1/-1; }
+ .modal.turf-planner-modal .tp-floating-save { margin-left:-10px;margin-right:-10px; }
+}
