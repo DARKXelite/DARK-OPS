@@ -1385,6 +1385,7 @@ function oaUnplannedLines() {
       time: timeOf(tsMs(p.issuedAt ?? p.issueTimestamp ?? p.timestamp ?? p.createdAt)),
       category: turfPlanCategory(p),
       name: turfRecordProductName(p) || (product ? itemName(product) : 'Unspecified material'),
+      productId: String(p.productId || p.productID || p.itemId || p.inventoryId || product?.id || ''),
       area: String(p.targetZoneOrMachine || p.targetArea || p.area || p.location || 'Unassigned').trim() || 'Unassigned',
       qty: Math.max(0, turfRecordQuantity(p)),
       unit: String(p.unit || p.stockUnit || p.uom || p.unitOfMeasure || product?.unit || 'Unit not set'),
@@ -1422,7 +1423,7 @@ function oaRenderTurfUnplanned() {
       else day.unpriced++;
     }
   });
-  const materialRows = [...materials.values()].sort((a,b)=>b.qty-a.qty||a.name.localeCompare(b.name)).map(row =>
+  const materialRows = [...materials.values()].sort((a,b)=>a.unit.localeCompare(b.unit)||b.qty-a.qty||a.name.localeCompare(b.name)).map(row =>
     '<tr><td><b>'+esc(row.name)+'</b><div class="oa-dim">'+esc(row.category)+'</div></td><td>'+esc(row.unit)+'</td><td class="num">'+row.records+'</td><td class="num"><b>'+fmt(row.qty,2)+'</b></td><td class="num">'+row.issued+' / '+row.applied+'</td><td>'+esc([...row.areas].sort().join(', '))+'</td><td>'+esc(row.lastDate)+'</td></tr>'
   ).join('');
   const dayRows = [...days.values()].sort((a,b)=>b.date.localeCompare(a.date)).map(day => {
