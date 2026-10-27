@@ -75,7 +75,7 @@
 #login .login-card{position:relative!important;width:100%!important;max-width:390px!important;box-sizing:border-box!important;margin:0 auto!important;padding:28px!important;border:1px solid rgba(255,255,255,.20)!important;border-radius:26px!important;background:rgba(244,247,241,.10)!important;color:#fbfaf4!important;box-shadow:0 28px 90px rgba(12,28,20,.25),inset 0 1px 0 rgba(255,255,255,.20)!important;backdrop-filter:blur(30px) saturate(145%)!important;-webkit-backdrop-filter:blur(30px) saturate(145%)!important}
 #login .login-brand{display:flex!important;justify-content:center!important;margin:0 0 24px!important}
 #login .login-logo{width:58px!important;height:58px!important;object-fit:contain!important}
-#login .login-brand-name,#login .login-brand-sub,#login .login-eyebrow,#login .login-title,#login .login-description,#login .login-label,#login .login-field-help,#login .login-assurance,#login .login-access-note{display:none!important}
+#login .login-brand-name,#login .login-brand-sub,#login .login-access-note{display:none!important}
 #login .login-field{margin:0!important}
 #login .phone-control{display:flex!important;align-items:center!important;min-height:54px!important;border:1px solid rgba(255,255,255,.22)!important;border-radius:15px!important;background:rgba(9,31,21,.20)!important;overflow:hidden!important}
 #login .phone-country{color:#f5f0e4!important;border-color:rgba(255,255,255,.15)!important;background:transparent!important}
@@ -88,3 +88,18 @@
 #login .login-recaptcha{position:absolute!important;left:-10000px!important;top:auto!important;width:1px!important;height:1px!important;overflow:hidden!important}
 #login #loginOtpStep .login-back{display:block!important;margin-bottom:16px!important}
 @media(max-width:480px){#login .login-layout{padding:18px!important}#login .login-card{padding:23px!important;border-radius:23px!important}}
+
+/* Keep the phone/OTP instructions visible and readable on the dark glass card. */
+#login .login-eyebrow { display:block!important;color:#F4F5F2!important;font-size:11px!important;line-height:1.4!important;letter-spacing:.12em!important;margin:0 0 8px!important; }
+#login .login-title { display:block!important;color:#FFFFFF!important;font-size:24px!important;line-height:1.2!important;margin:0 0 8px!important; }
+#login .login-description { display:block!important;color:#F4F5F2!important;font-size:13px!important;line-height:1.5!important;margin:0 0 18px!important; }
+#login .login-label { display:block!important;color:#FFFFFF!important;font-size:12px!important;font-weight:700!important;margin:0 0 7px!important; }
+#login .login-field-help { display:block!important;color:#F4F5F2!important;font-size:12px!important;line-height:1.45!important;margin:7px 0 0!important; }
+#login .login-assurance { display:block!important;color:#F4F5F2!important;font-size:12px!important;line-height:1.45!important; }
+#login .login-logo { filter:brightness(0) invert(1)!important; }
+
+#login .phone-control,#login .otp-input { border-color:rgba(244,245,242,.72)!important; }
+#login .phone-control:focus-within,#login .otp-input:focus-visible {
+  border-color:#F4F5F2!important;
+  box-shadow:0 0 0 3px rgba(244,245,242,.2)!important;
+}

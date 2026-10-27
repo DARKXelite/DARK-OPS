@@ -77,8 +77,14 @@ const timeOf = ms => ms ? new Date(ms).toLocaleTimeString('en-IN', { hour: '2-di
 const ago = ms => { if (!ms) return 'just now'; const s = Math.max(0, (Date.now() - ms) / 1000); return s < 60 ? `${Math.round(s)}s ago` : s < 3600 ? `${Math.round(s/60)}m ago` : `${Math.round(s/3600)}h ago`; };
 function normDate(v, ts) {
   if (typeof v === 'string') {
-    let m = v.match(/^(\d{4})-(\d{2})-(\d{2})/); if (m) return `${m[1]}-${m[2]}-${m[3]}`;
-    m = v.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})/); if (m) return `${m[3]}-${pad(m[2])}-${pad(m[1])}`;
+    let m = v.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (m) return `${m[1]}-${m[2]}-${m[3]}`;
+    if (/^\d{4}-\d{2}-\d{2}T/.test(v)) {
+      const parsed = new Date(v);
+      if (!Number.isNaN(parsed.getTime())) return ymd(parsed);
+    }
+    m = v.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})/);
+    if (m) return `${m[3]}-${pad(m[2])}-${pad(m[1])}`;
   } else if (v && v.toDate) return ymd(v.toDate());
   else if (typeof v === 'number') return ymd(new Date(v < 1e12 ? v * 1000 : v));
   const t = tsMs(ts); return t ? ymd(new Date(t)) : '';
@@ -235,27 +241,66 @@ function toast(msg, type = 'ok') {
   $('#toasts').appendChild(t); setTimeout(() => { t.style.opacity = '0'; setTimeout(() => t.remove(), 250); }, type === 'err' ? 6000 : 3500);
 }
 function setConn(state) { document.documentElement.dataset.firebaseState = state || 'connecting'; const dot=$('#connDot'); if(dot) dot.className='dot '+state; const label=$('#connText'); if(label) label.textContent=state==='ok'?'Connected':state==='err'?'Connection error':'Connecting'; }
-function openModal({ title, sub = '', body = '', footer = '', size = '' }) {
-  $('#modal').className = 'modal ' + size; $('#modal').setAttribute('role', 'dialog'); $('#modal').setAttribute('aria-modal', 'true'); $('#modal').setAttribute('aria-label', title || 'Dialog'); $('#mTitle').textContent = title; $('#mSub').textContent = sub;
-  $('#mBody').innerHTML = body; $('#mBody')._h = null; $('#mFoot').innerHTML = footer; $('#mFoot').style.display = footer ? 'flex' : 'none';
-  $('#overlay').classList.add('open');
+let modalReturnFocus = null;
+let drawerReturnFocus = null;
+const layerBackgroundState = new Map();
+function syncLayerState() {
+  const open = ["#overlay", "#drawerOv", "#cmdOverlay"].some(sel => $(sel)?.classList.contains("open"));
+  document.body.classList.toggle("layer-open", open);
+  const layerIds = new Set(["overlay", "drawerOv", "cmdOverlay", "cmdPal", "toasts"]);
+  [...document.body.children].forEach(child => {
+    if (layerIds.has(child.id)) return;
+    if (open) {
+      if (!layerBackgroundState.has(child)) layerBackgroundState.set(child, child.inert);
+      child.inert = true;
+    } else if (layerBackgroundState.has(child)) {
+      child.inert = layerBackgroundState.get(child);
+      layerBackgroundState.delete(child);
+    }
+  });
 }
-function closeModal() { $('#overlay').classList.remove('open'); curModalRender = null; }
+function openModal({ title, sub = '', body = '', footer = '', size = '' }) {
+  if (!$('#overlay').classList.contains('open')) modalReturnFocus = document.activeElement;
+  $('#modal').className = 'modal ' + size; $('#modal').setAttribute('role', 'dialog'); $('#modal').setAttribute('aria-modal', 'true'); $('#modal').setAttribute('aria-label', title || 'Dialog'); $('#modal').setAttribute('tabindex', '-1'); $('#modal').dataset.dirty = 'false'; $('#mTitle').textContent = title; $('#mSub').textContent = sub;
+  $('#mBody').innerHTML = body; $('#mBody')._h = null; $('#mFoot').innerHTML = footer; $('#mFoot').style.display = footer ? 'flex' : 'none';
+  $('#overlay').classList.add('open'); syncLayerState();
+  requestAnimationFrame(() => { const first = $('#modal').querySelector('button:not([disabled]),input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])'); (first || $('#modal')).focus({ preventScroll: true }); });
+}
+function closeModal(force = false) {
+  if (!force && $('#modal').dataset.dirty === 'true' && !window.confirm('Discard unsaved changes?')) return;
+  $('#overlay').classList.remove('open'); syncLayerState(); curModalRender = null;
+  const target = modalReturnFocus; modalReturnFocus = null;
+  if (target?.isConnected && typeof target.focus === 'function') target.focus();
+}
 function openForm({ title, html, submit = 'Save', danger = false, onSubmit }) {
   curModalRender = null;
   openModal({ title, size: 'sm', body: html, footer: `<button class="btn" data-act="close-modal">Cancel</button><button class="btn ${danger ? 'btn-danger fill' : 'btn-primary'}" id="mSubmit">${esc(submit)}</button>` });
   const btn = $('#mSubmit');
-  btn.onclick = async () => { btn.disabled = true; try { const ok = await onSubmit(); if (ok !== false) closeModal(); } catch (e) { console.error(e); toast(e.message || 'Something went wrong', 'err'); } btn.disabled = false; };
+  btn.onclick = async () => { btn.disabled = true; try { const ok = await onSubmit(); if (ok !== false) closeModal(true); } catch (e) { console.error(e); toast(e.message || 'Something went wrong', 'err'); } btn.disabled = false; };
   const first = $('#mBody input,#mBody select'); if (first) setTimeout(() => first.focus(), 30);
 }
 function confirmDelete(col, id, label) {
   openForm({ title: 'Delete record', html: `<p style="margin:0">Permanently delete <b>${esc(label)}</b>? This cannot be undone.</p>`, submit: 'Delete', danger: true,
     onSubmit: async () => { await deleteDoc(doc(db, CONFIG.COL[col] || col, id)); toast(`${label} deleted`); } });
 }
-function openDrawer(title, sub, body) { $('#dTitle').textContent = title; $('#dSub').textContent = sub; $('#dBody').innerHTML = body; $('#drawerOv').classList.add('open'); }
-function closeDrawer() { $('#drawerOv').classList.remove('open'); }
+function openDrawer(title, sub, body) {
+  if (!$('#drawerOv').classList.contains('open')) drawerReturnFocus = document.activeElement;
+  $('#dTitle').textContent = title; $('#dSub').textContent = sub; $('#dBody').innerHTML = body;
+  $('.drawer').setAttribute('role', 'dialog'); $('.drawer').setAttribute('aria-modal', 'true'); $('.drawer').setAttribute('aria-label', title || 'Details'); $('.drawer').setAttribute('tabindex', '-1');
+  $('#drawerOv').classList.add('open'); syncLayerState();
+  requestAnimationFrame(() => { const first = $('.drawer').querySelector('button:not([disabled]),input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])'); (first || $('.drawer')).focus({ preventScroll: true }); });
+}
+function closeDrawer() {
+  $('#drawerOv').classList.remove('open'); syncLayerState();
+  const target = drawerReturnFocus; drawerReturnFocus = null;
+  if (target?.isConnected && typeof target.focus === 'function') target.focus();
+}
 function downloadCSV(name, rows) {
-  const csv = rows.map(r => r.map(c => `"${String(c ?? '').replace(/"/g, '""')}"`).join(',')).join('\n');
+  const csv = rows.map(r => r.map(c => {
+    const raw = String(c ?? '');
+    const safe = /^[\t\r\n ]*[=+\-@]/.test(raw) ? "'" + raw : raw;
+    return `"${safe.replace(/"/g, '""')}"`;
+  }).join(',')).join('\n');
   const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8' })); a.download = name;
   document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 1500);
 }
@@ -1753,7 +1798,7 @@ function renderZonePanel() {
   const hz = $('#hudZones'); if (hz) hz.textContent = `${S.zones.length} ZONES`;
   const order = { Course: 0, Green: 1, Fairway: 2, Rough: 3, Tee: 4, Other: 5 };
   const zones = [...S.zones].sort((a, b) => (order[a.zoneType] ?? 9) - (order[b.zoneType] ?? 9) || (a.zoneName || '').localeCompare(b.zoneName || ''));
-  setHTML($('#zoneList'), zones.length ? zones.map(z => `<div class="list-row"><div><b>${esc(z.zoneName || 'Zone')}</b><div class="muted sm"><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${ZCOL[z.zoneType] || '#E5C794'};margin-right:5px"></span>${esc(z.zoneType || '-')}</div></div><button class="btn btn-danger btn-sm" data-act="del" data-col="zones" data-id="${esc(z.id)}" data-label="${esc(z.zoneName || 'this zone')}"><span class="material-symbols-rounded">delete</span></button></div>`).join('') : '<div class="empty">Draw Course boundary first</div>');
+  setHTML($('#zoneList'), zones.length ? zones.map(z => `<div class="list-row"><div><b>${esc(z.zoneName || 'Zone')}</b><div class="muted sm"><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${ZCOL[z.zoneType] || '#E5C794'};margin-right:5px"></span>${esc(z.zoneType || '-')}</div></div><button class="btn btn-danger btn-sm" data-act="del" data-col="zones" data-id="${esc(z.id)}" data-label="${esc(z.zoneName || 'this zone')}" aria-label="Delete zone ${esc(z.zoneName || 'this zone')}" title="Delete zone"><span class="material-symbols-rounded" aria-hidden="true">delete</span></button></div>`).join('') : '<div class="empty">Draw Course boundary first</div>');
 }
 function zoneForm() {
   if (!drawCoords || drawCoords.length < 3) {
@@ -1979,7 +2024,7 @@ function previewInward(){const el=$('#inPreview');if(!el)return;const q=Math.max
 function renderIncidents() {
   if (!LOADED.logs) { setHTML($('#incList'), '<div class="skeleton" style="height:90px"></div>'); return; }
   const rows = [...S.logs].sort((a, b) => ((a.repairStatus === 'Resolved') - (b.repairStatus === 'Resolved')) || tsMs(b.createdAt) - tsMs(a.createdAt));
-  setHTML($('#incList'), rows.length ? rows.map(l => { const done = l.repairStatus === 'Resolved'; return `<div class="card" style="margin-bottom:12px;display:flex;justify-content:space-between;gap:14px;align-items:center;flex-wrap:wrap"><div style="min-width:240px;flex:1"><div class="muted sm"><b>${esc(l.machineId || 'General')}</b> · ${esc(l.logType || 'Issue')}${l.reportedDate ? ' · ' + dLong(l.reportedDate) : ''}</div><div style="font-weight:600;margin-top:2px">${esc(l.issueDescription || '')}</div><div class="record-meta">${num(l.estimatedDowntimeHours)>0?`Estimated downtime ${fmt(l.estimatedDowntimeHours,1)} h · ${COST.downtimePerHour>0?money(num(l.estimatedDowntimeHours)*COST.downtimePerHour)+' estimated exposure':'set hourly exposure rate in Cost model'}`:'Downtime estimate not recorded'}</div></div><div style="display:flex;gap:8px;align-items:center"><span class="badge ${done ? 'ok' : 'bad'}">${done ? 'Resolved' : esc(l.repairStatus || 'Pending')}</span><button class="btn btn-sm" data-act="inc-toggle" data-id="${esc(l.id)}">${done ? 'Reopen' : 'Mark resolved'}</button><button class="btn btn-danger btn-sm" data-act="del" data-col="logs" data-id="${esc(l.id)}" data-label="this incident"><span class="material-symbols-rounded">delete</span></button></div></div>`; }).join('') : '<div class="card empty">No incident tickets. ??</div>');
+  setHTML($('#incList'), rows.length ? rows.map(l => { const done = l.repairStatus === 'Resolved'; return `<div class="card" style="margin-bottom:12px;display:flex;justify-content:space-between;gap:14px;align-items:center;flex-wrap:wrap"><div style="min-width:240px;flex:1"><div class="muted sm"><b>${esc(l.machineId || 'General')}</b> · ${esc(l.logType || 'Issue')}${l.reportedDate ? ' · ' + dLong(l.reportedDate) : ''}</div><div style="font-weight:600;margin-top:2px">${esc(l.issueDescription || '')}</div><div class="record-meta">${num(l.estimatedDowntimeHours)>0?`Estimated downtime ${fmt(l.estimatedDowntimeHours,1)} h · ${COST.downtimePerHour>0?money(num(l.estimatedDowntimeHours)*COST.downtimePerHour)+' estimated exposure':'set hourly exposure rate in Cost model'}`:'Downtime estimate not recorded'}</div></div><div style="display:flex;gap:8px;align-items:center"><span class="badge ${done ? 'ok' : 'bad'}">${done ? 'Resolved' : esc(l.repairStatus || 'Pending')}</span><button class="btn btn-sm" data-act="inc-toggle" data-id="${esc(l.id)}">${done ? 'Reopen' : 'Mark resolved'}</button><button class="btn btn-danger btn-sm" data-act="del" data-col="logs" data-id="${esc(l.id)}" data-label="this incident" aria-label="Delete incident" title="Delete incident"><span class="material-symbols-rounded" aria-hidden="true">delete</span></button></div></div>`; }).join('') : '<div class="card empty">No incident tickets. ??</div>');
 }
 
 
@@ -2083,12 +2128,43 @@ function switchView(v) {
   renderAll();
 }
 let raf = 0; const scheduleRender = () => { if (!raf) raf = requestAnimationFrame(() => { raf = 0; renderAll(); }); };
-function renderAll() { try { (RENDER[cur] || (() => {}))(); updateBadges(); if (curModalRender) curModalRender(); } catch (e) { console.error(e); } }
+function renderAll() { try { (RENDER[cur] || (() => {}))(); updateBadges(); if (curModalRender) curModalRender(); renderListenerErrorBanners(); } catch (e) { console.error(e); } }
 
 /* ================= FIRESTORE LISTENERS ================= */
 let unsubs = new Map();
 let listenersStarted = false;
 const listenerEpochs = new Map();
+const listenerErrors = new Map();
+function renderListenerErrorBanners() {
+  const view = $("#v-" + cur);
+  if (!view) return;
+  view.querySelectorAll(".listener-error-banner").forEach(node => node.remove());
+  (VIEW_COLLECTIONS[cur] || []).forEach(k => {
+    const failure = listenerErrors.get(k);
+    if (!failure) return;
+    const banner = document.createElement("div");
+    banner.className = "listener-error-banner";
+    banner.setAttribute("role", "alert");
+    banner.style.cssText = "display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin:0 0 14px;padding:12px 14px;border:1px solid var(--bad);border-radius:9px;background:var(--bad-soft);color:var(--bad)";
+    const message = document.createElement("span");
+    message.textContent = "Could not load " + (CONFIG.COL[k] || k) + ": " + failure.message;
+    const retry = document.createElement("button");
+    retry.type = "button";
+    retry.className = "btn btn-sm";
+    retry.textContent = "Retry";
+    retry.setAttribute("aria-label", "Retry loading " + (CONFIG.COL[k] || k));
+    retry.addEventListener("click", () => {
+      listenerErrors.delete(k);
+      stopOneListener(k);
+      LOADED[k] = false;
+      S[k] = [];
+      syncListenersForView();
+      scheduleRender();
+    });
+    banner.append(message, retry);
+    view.prepend(banner);
+  });
+}
 const VIEW_COLLECTIONS = {
   overview: ['fuel','machines','shifts','inventory','plans','dailyPlans','maintenance','logs'],
   fleet: ['machines','live','fuel','shifts'],
@@ -2120,14 +2196,24 @@ function syncListenersForView() {
   setConn('');
   const desired = new Set(VIEW_COLLECTIONS[cur] || []);
   Object.keys(CONFIG.COL).forEach(k => {
-    const permitted = RBAC.can(permissionForCollection(CONFIG.COL[k], false));
+    const requiredPermission = permissionForCollection(CONFIG.COL[k], false);
+    const permitted = RBAC.can(requiredPermission);
+    if (!RBAC.can(requiredPermission)) {
+      if (unsubs.has(k)) stopOneListener(k);
+      // Unauthorised collections never subscribe and their stale rows are cleared.
+      S[k] = [];
+      LOADED[k] = true;
+      if (k === 'zones') drawZones();
+      if (k === 'logs' || k === 'live') updateBadges(k);
+      return;
+    }
     const shouldListen = desired.has(k) && permitted;
     if (!shouldListen) {
       if (unsubs.has(k)) stopOneListener(k);
-      // Clear data not active on this screen, so a role/view transition never keeps
-      // displaying a stale collection snapshot. Unauthorised collections never subscribe.
+      // Clear data not active on this screen, so a view transition never keeps
+      // displaying a stale collection snapshot.
       S[k] = [];
-      LOADED[k] = !permitted;
+      LOADED[k] = false;
       if (k === 'zones') drawZones();
       if (k === 'logs' || k === 'live') updateBadges(k);
       return;
@@ -2141,6 +2227,7 @@ function syncListenersForView() {
     S[k] = [];
     const unsubscribe = onSnapshot(collection(db, CONFIG.COL[k]), snap => {
       if (listenerEpochs.get(k) !== epoch) return;
+      listenerErrors.delete(k);
       const firstSnapshot = !LOADED[k];
       const changes = snap.docChanges();
       changes.forEach(change => {
@@ -2166,8 +2253,8 @@ function syncListenersForView() {
       if (listenerEpochs.get(k) !== epoch) return;
       console.error(k, err);
       LOADED[k] = true;
+      listenerErrors.set(k, { message: err.code || err.message || "Unknown Firestore error" });
       setConn('err');
-      toast(`Cannot read “${CONFIG.COL[k]}”: ${err.code || err.message}`, 'err');
       if (collectionAffectsCurrentView(k)) scheduleRender();
     });
     unsubs.set(k, unsubscribe);
@@ -2407,7 +2494,7 @@ function createInventoryImporter(options) {
         });
         await batch.commit();
       }
-      closeModal();
+      closeModal(true);
       onComplete?.();
       toast('Inventory import complete · ' + creates.length + ' created · ' + updates.length + ' updated' + (physicalStock ? ' · physical stock applied' : ' · existing stock preserved') + (duplicates ? ' · ' + duplicates + ' duplicate rows skipped' : '') + (ambiguous ? ' · ' + ambiguous + ' ambiguous rows skipped' : ''));
       state = null;
@@ -2442,88 +2529,71 @@ function installInventoryReadabilityStyles() {
   const style = document.createElement('style');
   style.id = 'inventoryReadabilityStyles';
   style.textContent = [
-    '#v-registry { --inv-surface:#202f27; --inv-row:#26372d; --inv-row-alt:#2b3d32; --inv-line:#45594a; --inv-text:#e4e9df; --inv-muted:#b7c4b5; }',
-    '#v-registry .card { background:var(--inv-surface)!important; color:var(--inv-text)!important; border-color:var(--inv-line)!important; box-shadow:none!important; }',
-    '#v-registry .card-h h3,#v-registry .kpi-label,#v-registry .inv-category summary,#v-registry .inv-category summary b { color:var(--inv-text)!important; }',
-    '#v-registry .card-h .muted,#v-registry .inv-category summary small,#v-registry .inv-category-placeholder,#v-registry .muted { color:var(--inv-muted)!important; }',
-    '#v-registry .kpi { background:#26372d!important; color:var(--inv-text)!important; border-color:var(--inv-line)!important; box-shadow:none!important; }',
-    '#v-registry .kpi-value { color:#f0f1e9!important; }',
-    '#v-registry .inv-category { background:var(--inv-row)!important; border-color:var(--inv-line)!important; }',
-    '#v-registry .inv-category>summary:hover { background:#304438!important; }',
-    '#v-registry .inv-cat-icon { background:#304438!important; border-color:#506454!important; color:#c7d4bd!important; }',
-    '#v-registry .inv-cat-alert { background:#2d4034!important; border-color:#506454!important; color:#d1dacd!important; }',
-    '#v-registry .inv-category-body { border-color:var(--inv-line)!important; }',
-    '#v-registry table { background:var(--inv-row)!important; color:var(--inv-text)!important; border-color:var(--inv-line)!important; }',
-    '#v-registry table thead th { background:#34493b!important; color:#edf0e8!important; border-color:#4a5e4e!important; }',
-    '#v-registry table tbody tr,#v-registry table tbody tr td { background:var(--inv-row)!important; color:var(--inv-text)!important; border-color:var(--inv-line)!important; }',
-    '#v-registry table tbody tr:nth-child(even),#v-registry table tbody tr:nth-child(even) td { background:var(--inv-row-alt)!important; }',
-    '#v-registry table tbody tr:hover,#v-registry table tbody tr:hover td { background:#354b3d!important; }',
-    '#v-registry table td b { color:#f1f2eb!important; }',
-    '#v-registry table .muted,#v-registry table small { color:#b9c7b8!important; }',
-    '#v-registry .toolbar .btn:not(.btn-primary) { background:#293b30!important; color:#e4e9df!important; border-color:#506454!important; }',
-    '#v-registry .toolbar .btn:not(.btn-primary):hover { background:#354b3d!important; }',
-    '#overlay .modal .inv-importer { color:#e4e9df; }',
-    '#overlay .modal .inv-importer p { color:#b9c7b8; font-size:12px; line-height:1.55; }',
-    '#overlay .modal .inv-import-file { display:flex; align-items:center; gap:12px; position:relative; overflow:hidden; padding:14px; border:1px dashed #607766; border-radius:10px; background:#263a2e; cursor:pointer; }',
-    '#overlay .modal .inv-import-file>.material-symbols-rounded { color:#c7d4bd; font-size:26px; }',
+    '#v-registry { --inv-surface:var(--surface); --inv-row:var(--surface); --inv-row-alt:var(--table-row-alt); --inv-line:var(--card-border); --inv-text:var(--text); --inv-muted:var(--muted); }',
+    '#v-registry .card { background:var(--surface)!important; color:var(--text)!important; border-color:var(--card-border)!important; box-shadow:var(--shadow)!important; }',
+    '#v-registry .card-h h3,#v-registry .kpi-label,#v-registry .inv-category summary,#v-registry .inv-category summary b { color:var(--text)!important; }',
+    '#v-registry .card-h .muted,#v-registry .inv-category summary small,#v-registry .inv-category-placeholder,#v-registry .muted { color:var(--muted)!important; }',
+    '#v-registry .kpi { background:var(--surface-2)!important; color:var(--text)!important; border-color:var(--card-border)!important; box-shadow:none!important; }',
+    '#v-registry .kpi-value { color:var(--text)!important; }',
+    '#v-registry .inv-category { background:var(--surface-2)!important; border-color:var(--card-border)!important; }',
+    '#v-registry .inv-category>summary:hover { background:var(--surface-hover)!important; }',
+    '#v-registry .inv-cat-icon { background:var(--surface-hover)!important; border-color:var(--card-border)!important; color:var(--brand)!important; }',
+    '#v-registry .inv-cat-alert { background:var(--warn-soft)!important; border-color:var(--warn)!important; color:var(--warn)!important; }',
+    '#v-registry .inv-category-body { border-color:var(--card-border)!important; }',
+    '#v-registry table { background:var(--table-bg)!important; color:var(--table-text)!important; border-color:var(--table-line)!important; }',
+    '#v-registry table thead th { background:var(--table-head)!important; color:var(--table-head-text)!important; border-color:var(--table-line)!important; }',
+    '#v-registry table tbody tr,#v-registry table tbody tr td { background:var(--table-row)!important; color:var(--table-text)!important; border-color:var(--table-line)!important; }',
+    '#v-registry table tbody tr:nth-child(even),#v-registry table tbody tr:nth-child(even) td { background:var(--table-row-alt)!important; }',
+    '#v-registry table tbody tr:hover,#v-registry table tbody tr:hover td { background:var(--table-hover)!important; }',
+    '#v-registry table td b { color:var(--text)!important; }',
+    '#v-registry table .muted,#v-registry table small { color:var(--table-muted)!important; }',
+    '#v-registry .toolbar .btn:not(.btn-primary) { background:var(--surface-2)!important; color:var(--brand)!important; border-color:var(--control-border)!important; }',
+    '#v-registry .toolbar .btn:not(.btn-primary):hover { background:var(--surface-hover)!important; }',
+    '#overlay .modal .inv-importer { color:var(--text); }',
+    '#overlay .modal .inv-importer p { color:var(--muted); font-size:12px; line-height:1.55; }',
+    '#overlay .modal .inv-import-file { display:flex; align-items:center; gap:12px; position:relative; overflow:hidden; padding:14px; border:1px dashed var(--control-border); border-radius:10px; background:var(--surface-2); cursor:pointer; }',
+    '#overlay .modal .inv-import-file>.material-symbols-rounded { color:var(--brand); font-size:26px; }',
     '#overlay .modal .inv-import-file span:nth-child(2) { display:grid; gap:4px; }',
-    '#overlay .modal .inv-import-file b { color:#edf0e8; font-size:13px; overflow-wrap:anywhere; }',
-    '#overlay .modal .inv-import-file small { color:#b9c7b8; font-size:11px; }',
+    '#overlay .modal .inv-import-file b { color:var(--text); font-size:13px; overflow-wrap:anywhere; }',
+    '#overlay .modal .inv-import-file small { color:var(--muted); font-size:12px; }',
     '#overlay .modal .inv-import-file input { position:absolute; inset:0; width:100%; height:100%; opacity:0; cursor:pointer; }',
-    '#overlay .modal .inv-import-meta { display:flex; justify-content:space-between; gap:10px; flex-wrap:wrap; margin:14px 0 10px; color:#e4e9df; font-size:12px; }',
-    '#overlay .modal .inv-import-meta span { color:#b9c7b8; }',
-    '#overlay .modal .inv-import-header-row { display:flex; align-items:center; justify-content:space-between; gap:12px; margin:12px 0; color:#d5dfd2; font-size:12px; }',
-    '#overlay .modal .inv-import-header-row select,#overlay .modal .inv-import-map-field select { min-width:0; width:100%; padding:9px 10px; border:1px solid #506454; border-radius:8px; background:#1d2d24!important; color:#e4e9df!important; }',
+    '#overlay .modal .inv-import-meta { display:flex; justify-content:space-between; gap:10px; flex-wrap:wrap; margin:14px 0 10px; color:var(--text); font-size:12px; }',
+    '#overlay .modal .inv-import-meta span { color:var(--muted); }',
+    '#overlay .modal .inv-import-header-row { display:flex; align-items:center; justify-content:space-between; gap:12px; margin:12px 0; color:var(--text); font-size:12px; }',
+    '#overlay .modal .inv-import-header-row select,#overlay .modal .inv-import-map-field select { min-width:0; width:100%; padding:9px 10px; border:1px solid var(--control-border); border-radius:8px; background:var(--surface)!important; color:var(--text)!important; }',
     '#overlay .modal .inv-import-mapping { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; }',
-    '#overlay .modal .inv-import-map-field { display:grid; gap:5px; min-width:0; color:#b9c7b8; font-size:11px; }',
-    '#overlay .modal .inv-import-section-title { margin:18px 0 9px; color:#e4e9df; font-size:13px; }',
-    '#overlay .modal .inv-import-physical { display:flex; align-items:flex-start; gap:10px; margin-top:14px; padding:12px; border:1px solid #78653c; border-radius:9px; background:#332f22; color:#f0e4c4; cursor:pointer; }',
-    '#overlay .modal .inv-import-physical input { flex:none; margin-top:3px; accent-color:#c9b77f; }',
+    '#overlay .modal .inv-import-map-field { display:grid; gap:5px; min-width:0; color:var(--muted); font-size:12px; }',
+    '#overlay .modal .inv-import-section-title { margin:18px 0 9px; color:var(--text); font-size:13px; }',
+    '#overlay .modal .inv-import-physical { display:flex; align-items:flex-start; gap:10px; margin-top:14px; padding:12px; border:1px solid var(--warn); border-radius:9px; background:var(--warn-soft); color:var(--warn); cursor:pointer; }',
+    '#overlay .modal .inv-import-physical input { flex:none; margin-top:3px; accent-color:var(--brand); }',
     '#overlay .modal .inv-import-physical span { display:grid; gap:4px; }',
-    '#overlay .modal .inv-import-physical b { font-size:12px; color:#f0e4c4; }',
-    '#overlay .modal .inv-import-physical small { color:#d1c6a5; font-size:11px; line-height:1.45; }',
-    '#overlay .modal .inv-import-preview { max-width:100%; overflow:auto; border:1px solid #45594a; border-radius:8px; }',
+    '#overlay .modal .inv-import-physical b { font-size:12px; color:var(--warn); }',
+    '#overlay .modal .inv-import-physical small { color:var(--muted); font-size:12px; line-height:1.45; }',
+    '#overlay .modal .inv-import-preview { max-width:100%; overflow:auto; border:1px solid var(--card-border); border-radius:8px; }',
     '#overlay .modal .inv-import-preview table { min-width:620px; }',
-    '#overlay .modal .inv-import-preview th { background:#34493b!important; color:#edf0e8!important; }',
-    '#overlay .modal .inv-import-preview td { background:#26372d!important; color:#e4e9df!important; }',
-    '#overlay .modal .inv-import-preview tr:nth-child(even) td { background:#2b3d32!important; }',
+    '#overlay .modal .inv-import-preview th { background:var(--table-head)!important; color:var(--table-head-text)!important; }',
+    '#overlay .modal .inv-import-preview td { background:var(--table-row)!important; color:var(--table-text)!important; }',
+    '#overlay .modal .inv-import-preview tr:nth-child(even) td { background:var(--table-row-alt)!important; }',
     '#overlay .modal .inv-import-corrections { margin-top:15px; }',
-    '#overlay .modal .inv-import-section-heading h4 { margin:0 0 4px; color:#f0d69a; font-size:12px; }',
-    '#overlay .modal .inv-import-section-heading p { margin:0 0 10px; font-size:11px; }',
-    '#overlay .modal .inv-import-correction { padding:11px; margin-top:8px; border:1px solid #45594a; border-radius:9px; background:#24362b; }',
-    '#overlay .modal .inv-import-row-title { margin-bottom:8px; color:#d7e0d2; font-size:11px; font-weight:700; }',
+    '#overlay .modal .inv-import-section-heading h4 { margin:0 0 4px; color:var(--text); font-size:12px; }',
+    '#overlay .modal .inv-import-section-heading p { margin:0 0 10px; font-size:12px; }',
+    '#overlay .modal .inv-import-correction { padding:11px; margin-top:8px; border:1px solid var(--card-border); border-radius:9px; background:var(--surface-2); }',
+    '#overlay .modal .inv-import-row-title { margin-bottom:8px; color:var(--text); font-size:12px; font-weight:700; }',
     '#overlay .modal .inv-import-edit-grid { display:grid; grid-template-columns:repeat(5,minmax(0,1fr)); gap:8px; }',
-    '#overlay .modal .inv-import-edit-field { display:grid; gap:4px; min-width:0; color:#b9c7b8; font-size:10px; }',
-    '#overlay .modal .inv-import-edit-field input { min-width:0; width:100%; padding:8px 7px; background:#1c2b22!important; color:#edf0e8!important; border:1px solid #506454!important; border-radius:7px; }',
-    '#overlay .modal .inv-import-edit-field input::placeholder { color:#91a394!important; }',
-    '#overlay .modal .inv-import-ok { margin-top:12px; padding:10px; border-radius:8px; background:#243c2c; color:#c8e3c9; font-size:12px; }',
-    '#overlay .modal .inv-import-error { margin-top:10px; padding:10px; border-radius:8px; background:#452d2a; color:#ffd0c8; font-size:12px; }',
-    '#overlay .modal .inv-import-note { margin:12px 0 0; font-size:11px; }',
-    '#overlay .modal .inv-import-empty { margin-top:12px; padding:22px 12px; text-align:center; border:1px dashed #45594a; border-radius:9px; color:#b9c7b8; font-size:12px; }',
+    '#overlay .modal .inv-import-edit-field { display:grid; gap:4px; min-width:0; color:var(--muted); font-size:12px; }',
+    '#overlay .modal .inv-import-edit-field input { min-width:0; width:100%; padding:8px 7px; background:var(--surface)!important; color:var(--text)!important; border:1px solid var(--control-border)!important; border-radius:7px; }',
+    '#overlay .modal .inv-import-edit-field input::placeholder { color:var(--placeholder)!important; }',
+    '#overlay .modal .inv-import-ok { margin-top:12px; padding:10px; border-radius:8px; background:var(--ok-soft); color:var(--ok); font-size:12px; }',
+    '#overlay .modal .inv-import-error { margin-top:10px; padding:10px; border-radius:8px; background:var(--bad-soft); color:var(--bad); font-size:12px; }',
+    '#overlay .modal .inv-import-note { margin:12px 0 0; font-size:12px; }',
+    '#overlay .modal .inv-import-empty { margin-top:12px; padding:22px 12px; text-align:center; border:1px dashed var(--card-border); border-radius:9px; color:var(--muted); font-size:12px; }',
     '@media(max-width:700px) { #overlay .modal .inv-import-mapping { grid-template-columns:1fr; } #overlay .modal .inv-import-edit-grid { grid-template-columns:repeat(2,minmax(0,1fr)); } #overlay .modal .inv-import-header-row { align-items:stretch; flex-direction:column; } }'
   ].join('\n');
   document.head.appendChild(style);
 }
 installInventoryReadabilityStyles();
-function installInventoryTableContrastOverrides() {
-  if (document.getElementById('inventoryTableContrastOverrides')) return;
-  const style = document.createElement('style');
-  style.id = 'inventoryTableContrastOverrides';
-  style.textContent = [
-    'body:not(.auth-locked) .main #v-registry table { background:#26372d!important; color:#e4e9df!important; border-color:#45594a!important; }',
-    'body:not(.auth-locked) .main #v-registry table thead th { background:#34493b!important; color:#edf0e8!important; border-color:#4a5e4e!important; }',
-    'body:not(.auth-locked) .main #v-registry table tbody tr td { background:#26372d!important; color:#e4e9df!important; border-color:#45594a!important; }',
-    'body:not(.auth-locked) .main #v-registry table tbody tr:nth-child(even) td { background:#2b3d32!important; color:#e4e9df!important; }',
-    'body:not(.auth-locked) .main #v-registry table tbody tr:hover td { background:#354b3d!important; color:#f1f2eb!important; }',
-    'body:not(.auth-locked) .main #v-registry table td b { color:#f1f2eb!important; }',
-    'body:not(.auth-locked) .main #v-registry table td .muted, body:not(.auth-locked) .main #v-registry table td small { color:#b9c7b8!important; }',
-    'body:not(.auth-locked) .main #v-registry .inv-category>summary, body:not(.auth-locked) .main #v-registry .inv-category>summary b { color:#e4e9df!important; }',
-    'body:not(.auth-locked) .main #v-registry .inv-category>summary small { color:#b9c7b8!important; }',
-    'body:not(.auth-locked) .main #v-registry .inv-category-placeholder { color:#b9c7b8!important; }'
-  ].join('\n');
-  document.head.appendChild(style);
-}
-installInventoryTableContrastOverrides();
+
+
 
 const inventoryImporter = createInventoryImporter({ db, collection, doc, writeBatch, serverTimestamp, getInventory: () => S.inventory, onComplete: () => scheduleRender(), esc, toast, openModal, closeModal });
 
@@ -2642,7 +2712,7 @@ const H = {
       }
       await b.commit();
       toast("Weekly plan saved successfully!");
-      closeModal();
+      closeModal(true);
       currentTurfWeekStart = tpState.start;
       renderTurfCare();
     } catch(e) {
@@ -2718,7 +2788,7 @@ const H = {
       toast('Bill saved · '+money(total,2));
       const seen=new Set(), queue=[];
       clean.forEach((i,idx)=>{const k=normName(i.itemName);if(!i.inInventory&&!seen.has(k)){seen.add(k);queue.push(idx);}});
-      if(queue.length){closeModal();runNewItemQueue(ref.id,clean,queue,queue.length);return false;}
+      if(queue.length){closeModal(true);runNewItemQueue(ref.id,clean,queue,queue.length);return false;}
     }}); $$('#exRows .exi-name')[0]?.focus(); },
   'exp-filter': d => { expFilter = d.f || 'all'; renderLocalExpenseLedger(); },
   'delete-local-expense': d => openForm({title:'Delete local expense',submit:'Delete',danger:true,html:'This expense record will be permanently deleted.',onSubmit:async()=>{await deleteDoc(doc(db,CONFIG.COL.expenses,d.id));toast('Expense deleted');}}),
@@ -2785,9 +2855,10 @@ document.addEventListener('input', e => {
   }
 });
 document.addEventListener('input', e => { const el = e.target.closest('[data-inp]'); if (el && ['inQty','inRate','inCustomGst'].includes(el.id)) { previewInward(); } else if (el && el.dataset.inp === 'fleetq') { F.q = el.value; renderFleet(); } else if (el && el.dataset.inp === 'tp-qty') { calcTot(el.dataset.day); } else if (el && el.dataset.inp === 'turf-log-search') { turfAppSearch = el.value; renderTurfApplications(); } });
-$('#overlay').addEventListener('mousedown', e => { if (e.target.id === 'overlay') closeModal(); });
-$('#drawerOv').addEventListener('mousedown', e => { if (e.target.id === 'drawerOv') closeDrawer(); });
-document.addEventListener('keydown', e => { if (e.key === 'Escape') { closeModal(); closeDrawer(); } });
+$('#mBody').addEventListener('input', () => { if ($('#overlay').classList.contains('open')) $('#modal').dataset.dirty = 'true'; });
+$('#mBody').addEventListener('change', () => { if ($('#overlay').classList.contains('open')) $('#modal').dataset.dirty = 'true'; });
+$('#overlay').addEventListener('click', e => { if (e.target.id === 'overlay') closeModal(); });
+$('#drawerOv').addEventListener('click', e => { if (e.target.id === 'drawerOv') closeDrawer(); });
 
 let currentTurfWeekStart = "";
 let turfSection = 'workboard';
@@ -2834,12 +2905,37 @@ document.body.classList.add("auth-locked");
 $("#login").hidden = false;
 let confirmationResult = null;
 let recaptchaVerifier = null;
+let pendingAuthError = "";
+function resetOtpUI({ clearError = true, focusPhone = false } = {}) {
+  confirmationResult = null;
+  try { recaptchaVerifier?.clear(); } catch (_) {}
+  recaptchaVerifier = null;
+  $("#recaptcha-container")?.replaceChildren();
+  if ($("#loginOtp")) $("#loginOtp").value = "";
+  if ($("#loginPhone")) $("#loginPhone").readOnly = false;
+  if ($("#loginPhoneStep")) $("#loginPhoneStep").hidden = false;
+  if ($("#loginOtpStep")) $("#loginOtpStep").hidden = true;
+  const submitLabel = $("#loginSubmit")?.querySelector("span:first-child");
+  if (submitLabel) submitLabel.textContent = "Send verification code";
+  if (clearError && $("#loginErr")) $("#loginErr").textContent = "";
+  if (focusPhone) $("#loginPhone")?.focus();
+}
 onAuthStateChanged(auth, async user => {
+  const authUid = user?.uid || null;
+  const isCurrentAuth = () => (auth.currentUser?.uid || null) === authUid;
   stopListeners();
   RBAC.session.role = null; RBAC.session.authenticated = false; RBAC.session.uid = null; RBAC.session.displayName = "";
   const login = $("#login"), gate = $("#pinGate"), error = $("#loginErr");
   if (gate) gate.hidden = true;
   if (!user) {
+    resetOtpUI();
+    listenerErrors.clear();
+    if (pendingAuthError && error) error.textContent = pendingAuthError;
+    pendingAuthError = "";
+    sessionStorage.removeItem("tpDraftV4");
+    history.replaceState(null, "", location.pathname + location.search);
+    closeModal(true); closeDrawer();
+    if (cmdOpen) toggleCmdPal(false);
     Object.keys(CONFIG.COL).forEach(k => { LOADED[k] = false; S[k] = []; });
     S._v++;
     if (login) login.hidden = false;
@@ -2851,6 +2947,7 @@ onAuthStateChanged(auth, async user => {
   }
   try {
     let roleSnap = await getDoc(doc(db, "app_roles", user.uid));
+    if (!isCurrentAuth()) return;
     // One-time bootstrap for the explicitly allowlisted first-owner UID.
     // Firestore rules must enforce the same UID, own-document-only, admin-only creation.
     const bootstrapAdminUid = "C1l8ArB3GlSaAQr6iw4O9RKGGik1";
@@ -2859,12 +2956,19 @@ onAuthStateChanged(auth, async user => {
         role: "admin", active: true, displayName: "DARKX Administrator",
         updatedAt: serverTimestamp(), updatedBy: user.uid
       });
+      if (!isCurrentAuth()) return;
       roleSnap = await getDoc(doc(db, "app_roles", user.uid));
+      if (!isCurrentAuth()) return;
     }
     const roleData = roleSnap.exists() ? roleSnap.data() : null;
     if (!roleData || roleData.active !== true || !ROLE_PERMISSIONS[roleData.role]) {
+      if (!isCurrentAuth()) return;
+      resetOtpUI();
+      pendingAuthError = "This account has no active application role. Ask an administrator to assign access.";
       await signOut(auth);
-      if (error) error.textContent = "This account has no active application role. Ask an administrator to assign access.";
+      if (!isCurrentAuth()) return;
+      if (error) error.textContent = pendingAuthError;
+      pendingAuthError = "";
       return;
     }
     RBAC.session.role = roleData.role;
@@ -2879,9 +2983,13 @@ onAuthStateChanged(auth, async user => {
     startListeners();
     toast("Signed in · " + (ROLE_LABELS[roleData.role] || roleData.role));
   } catch (err) {
+    if (!isCurrentAuth()) return;
     console.error("RBAC role lookup failed", err);
+    pendingAuthError = "Could not verify your application role. Check Firebase access rules and try again.";
     await signOut(auth);
-    if (error) error.textContent = "Could not verify your application role. Check Firebase access rules and try again.";
+    if (!isCurrentAuth()) return;
+    if (error) error.textContent = pendingAuthError;
+    pendingAuthError = "";
   }
 });
 $("#loginForm").addEventListener("submit", async e => {
@@ -2945,19 +3053,7 @@ $("#loginOtp").addEventListener("input", () => {
     $("#loginForm").requestSubmit();
   }
 });
-$("#changePhone").addEventListener("click", () => {
-  confirmationResult = null;
-  try { recaptchaVerifier?.clear(); } catch (_) {}
-  recaptchaVerifier = null;
-  $("#recaptcha-container").replaceChildren();
-  $("#loginOtp").value = "";
-  $("#loginPhone").readOnly = false;
-  $("#loginPhoneStep").hidden = false;
-  $("#loginOtpStep").hidden = true;
-  $("#loginSubmit").querySelector("span:first-child").textContent = "Send verification code";
-  $("#loginErr").textContent = "";
-  $("#loginPhone").focus();
-});
+$("#changePhone").addEventListener("click", () => resetOtpUI({ focusPhone: true }));
 
 $("#signoutBtn").addEventListener("click", async () => {
   try { await signOut(auth); } catch (err) { toast("Sign-out failed. Retry.", "err"); }
@@ -3371,7 +3467,7 @@ async function saveTurfBatch() {
   if(dates.length*rows.length>500){toast('This schedule creates more than 500 tasks. Narrow the date range or weekdays.','err');releaseSave();return;}
   try{
     for(const dateStr of dates){const dateObj=new Date(`${dateStr}T12:00:00`);for(const r of rows) await addDoc(collection(db,CONFIG.COL.plans),{weekStart:currentTurfWeekStart,date:dateStr,dayIndex:dateObj.getDay(),productId:r.product.id,productName:itemName(r.product),category:r.product.category||'Fertilizers',targetQty:r.qty,unit:r.unit,targetArea:area,area,validFrom:from,validUntil:until,repeatWeekdays:weekdays,notes,status:'Planned',createdAt:Date.now()});}
-    closeModal();toast(`${rows.length} product${rows.length===1?'':'s'} scheduled for ${dates.length} date${dates.length===1?'':'s'} in ${area}.`);renderTurfCare();
+    closeModal(true);toast(`${rows.length} product${rows.length===1?'':'s'} scheduled for ${dates.length} date${dates.length===1?'':'s'} in ${area}.`);renderTurfCare();
   }catch(e){console.error(e);toast('Schedule save failed. Some tasks may have saved; refresh and verify before retrying.','err');releaseSave();}
 }
 function renderTurfAreaPlanDashboard(){
@@ -3614,7 +3710,7 @@ function renderTp(){
  return '<article class="tp-product-row" data-search="'+esc(String(itemName(p)).toLowerCase())+'" data-unit="'+esc(unit)+'"><div class="tp-product-ident"><span class="tp-product-icon material-symbols-rounded">inventory_2</span><div class="tp-product-copy"><b>'+esc(itemName(p))+'</b><span>'+esc(unit||'Unit not set')+' · Stock '+fmt(num(p.stockQuantity),2)+(hasExisting?' · Already planned':'')+'</span></div></div><div class="tp-qty-control"><label>Qty ('+esc(unit||'unit')+')<input type="number" min="0" step="any" value="'+esc(qty===''?'':String(qty))+'" data-tp-qty data-product="'+esc(p.id)+'" '+(!unit?'disabled':'')+'></label></div><div class="tp-scope-control">'+(tpState.area==='Greens'?'<label class="tp-per-green"><input type="checkbox" data-tp-per-green data-product="'+esc(p.id)+'"'+(per?' checked':'')+'><span><b>Per green</b><small>× 18 greens</small></span></label>':'<span class="tp-scope-fixed">Whole area</span>')+'<div class="tp-total-label"><small>Total</small><b data-tp-total>'+(num(qty)>0?fmt(total,2)+' '+esc(unit):'—')+'</b></div></div><button type="button" class="tp-repeat-trigger'+(dates.length?' is-active':'')+'" data-act="tp-repeat-toggle" data-product="'+esc(p.id)+'"><span class="material-symbols-rounded">event_repeat</span><span>Repeat'+(dates.length?' · '+dates.length:'')+'</span></button>'+(isOpen?tpRenderCalendar(p.id):'')+'</article>';
  }).join('');
  const saved=tpMatchingPlanRecords(tpState.area,tpState.category).filter(p=>turfRecordDate(p)===tpState.date);
- const savedHtml=saved.map(p=>'<div class="tp-saved-entry'+(tpState.deletedPlanIds.includes(p.id)?' is-deleted':'')+'"><span>'+esc(p.productName||p.itemName||'Inventory item')+'</span><b>'+fmt(num(p.targetQty??p.quantity??p.qty),2)+' '+esc(p.unit||'')+'</b><button data-act="tp-delete-entry" data-id="'+esc(p.id)+'">'+(tpState.deletedPlanIds.includes(p.id)?'Undo':'×')+'</button></div>').join('');
+ const savedHtml=saved.map(p=>'<div class="tp-saved-entry'+(tpState.deletedPlanIds.includes(p.id)?' is-deleted':'')+'"><span>'+esc(p.productName||p.itemName||'Inventory item')+'</span><b>'+fmt(num(p.targetQty??p.quantity??p.qty),2)+' '+esc(p.unit||'')+'</b><button data-act="tp-delete-entry" data-id="'+esc(p.id)+'" aria-label="'+(tpState.deletedPlanIds.includes(p.id)?'Undo delete':'Delete saved entry')+'">'+(tpState.deletedPlanIds.includes(p.id)?'Undo':'×')+'</button></div>').join('');
  const pending=Object.values(tpState.lines).reduce((n,l)=>n+(l.touchedDates||[]).length,0)+tpState.deletedPlanIds.length;
  const reviewHtml=tpState.reviewOpen?'<section class="tp-inline-review"><div class="tp-inline-review-head"><b>Review changes</b><span>Check each row before saving.</span></div><div class="tp-review-table-wrap"><table class="tp-review-table"><thead><tr><th>Date</th><th>Item</th><th>Area</th><th>Quantity</th></tr></thead><tbody>'+tpBuildChanges().map(x=>'<tr><td>'+esc(x.date)+'</td><td>'+esc(itemName(x.product))+'</td><td>'+esc(x.area)+'</td><td>'+fmt(x.total,2)+' '+esc(x.unit)+'</td></tr>').join('')+tpState.deletedPlanIds.map(id=>(S.plans||[]).find(p=>p.id===id)).filter(Boolean).map(p=>'<tr class="tp-review-delete"><td>'+esc(turfRecordDate(p))+'</td><td>'+esc(p.productName||p.itemName||'Reservation')+'</td><td>'+esc(p.targetArea||p.area||'')+'</td><td>Delete</td></tr>').join('')+'</tbody></table></div><div class="tp-inline-review-actions"><button type="button" class="btn" data-act="tp-review-back">Back to planner</button><button type="button" class="btn btn-primary" data-act="tp-confirm-save">Confirm &amp; save</button></div></section>':'';
  c.innerHTML='<div class="tp-planner-toolbar"><label class="tp-date-single"><span class="material-symbols-rounded">calendar_today</span><input type="date" min="'+esc(today())+'" value="'+esc(tpState.date)+'" data-tp-date aria-label="Plan date"></label><span class="tp-draft-status">'+pending+' pending · '+saved.length+' saved</span></div><div class="tp-planner-layout"><aside class="tp-area-sidebar">'+areaTabs+'</aside><section class="tp-workspace"><div class="tp-category-tabs">'+tabs+'</div><label class="tp-product-search"><span class="material-symbols-rounded">search</span><input type="search" data-tp-search placeholder="Search items…"><kbd>Filter</kbd></label>'+(savedHtml?'<details class="tp-saved-list" open><summary>Saved reservations · '+saved.length+'</summary><div>'+savedHtml+'</div></details>':'')+'<div class="tp-product-list">'+(rows||'<div class="tp-empty-state">No items in this category.</div>')+'<div data-tp-search-empty hidden>No matching items.</div></div></section></div>'+reviewHtml+'<div class="tp-floating-save"><span><b>'+pending+'</b> pending</span><button type="button" class="btn btn-primary" data-act="tp-save-open" '+(pending?'':'disabled')+'><span class="material-symbols-rounded">save</span>Review &amp; Save</button></div>';
@@ -3664,31 +3760,67 @@ document.addEventListener('change',e=>{
 document.addEventListener('dblclick',e=>{const b=e.target.closest('[data-act="tp-repeat-date"]');if(!b)return;e.preventDefault();const p=S.inventory.find(x=>String(x.id)===String(b.dataset.product));if(!p)return;const l=tpGetLine(p);if(!(l.repeatDates||[]).includes(b.dataset.date))l.repeatDates.push(b.dataset.date);tpState.repeatOpen=b.dataset.product;tpState.editingRepeatDate=b.dataset.date;renderTp();});
 document.addEventListener('toggle',e=>{if(e.target&&e.target.id==='turfInlinePlanner'&&e.target.open)renderTp();},true);
 let cmdOpen = false;
-function toggleCmdPal() {
-  cmdOpen = !cmdOpen;
+let cmdReturnFocus = null;
+function toggleCmdPal(force) {
+  const next = typeof force === "boolean" ? force : !cmdOpen;
+  if (next && !RBAC.session.authenticated) return;
+  if (next && !cmdOpen) cmdReturnFocus = document.activeElement;
+  cmdOpen = next;
   $("#cmdPal").classList.toggle("open", cmdOpen);
   $("#cmdOverlay").classList.toggle("open", cmdOpen);
-  if (cmdOpen) { $("#cmdInp").value = ""; $("#cmdInp").focus(); renderCmd(""); }
+  syncLayerState();
+  if (cmdOpen) { $("#cmdPal").setAttribute("role", "dialog"); $("#cmdPal").setAttribute("aria-modal", "true"); $("#cmdPal").setAttribute("aria-label", "Command palette"); $("#cmdInp").setAttribute("aria-label", "Search accessible modules and records"); $("#cmdInp").value = ""; $("#cmdInp").focus(); renderCmd(""); }
+  else { const target = cmdReturnFocus; cmdReturnFocus = null; if (target?.isConnected && typeof target.focus === "function") target.focus(); }
 }
+document.querySelector(".cmd-hint")?.addEventListener("click", () => toggleCmdPal(true));
 document.addEventListener("keydown", e => {
   if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") {
-    e.preventDefault(); toggleCmdPal();
+    if (!RBAC.session.authenticated) return;
+    e.preventDefault(); toggleCmdPal(true); return;
   }
-  if (e.key === "Escape" && cmdOpen) { toggleCmdPal(); }
+  if (cmdOpen && ["ArrowDown", "ArrowUp"].includes(e.key)) {
+    const buttons = $$("#cmdRes button[data-cmd-view]");
+    if (!buttons.length) return;
+    e.preventDefault();
+    const current = buttons.indexOf(document.activeElement);
+    const next = e.key === "ArrowDown" ? (current + 1) % buttons.length : (current <= 0 ? buttons.length - 1 : current - 1);
+    buttons[next].focus();
+    return;
+  }
+  if (cmdOpen && e.key === "Enter" && document.activeElement === $("#cmdInp")) {
+    const first = $("#cmdRes button[data-cmd-view]");
+    if (first) { e.preventDefault(); first.click(); }
+    return;
+  }
+  if (e.key === "Tab") {
+    const layer = cmdOpen ? $("#cmdPal") : $("#overlay").classList.contains("open") ? $("#modal") : $("#drawerOv").classList.contains("open") ? $(".drawer") : null;
+    if (layer) {
+      const focusable = [...layer.querySelectorAll('a[href],button:not([disabled]),input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])')].filter(el => !el.hidden && el.getClientRects().length);
+      if (!focusable.length) { e.preventDefault(); layer.focus(); return; }
+      const first = focusable[0], last = focusable[focusable.length - 1];
+      if (e.shiftKey && (document.activeElement === first || !layer.contains(document.activeElement))) { e.preventDefault(); last.focus(); }
+      else if (!e.shiftKey && (document.activeElement === last || !layer.contains(document.activeElement))) { e.preventDefault(); first.focus(); }
+    }
+  }
+  if (e.key === "Escape") {
+    if (cmdOpen) { e.preventDefault(); toggleCmdPal(false); }
+    else if ($("#overlay").classList.contains("open")) { e.preventDefault(); closeModal(); }
+    else if ($("#drawerOv").classList.contains("open")) { e.preventDefault(); closeDrawer(); }
+  }
 });
-$("#cmdOverlay").addEventListener("mousedown", () => { if(cmdOpen) toggleCmdPal(); });
+$("#cmdOverlay").addEventListener("click", e => { if (e.target.id === "cmdOverlay" && cmdOpen) toggleCmdPal(false); });
 document.addEventListener("input", e => { if (e.target.id === "cmdInp") renderCmd(e.target.value.toLowerCase()); });
 
 function renderCmd(q) {
   const res = [];
   Object.entries(VIEWS).forEach(([view, meta]) => {
-    if (!q || String(meta[0] || "").toLowerCase().includes(q) || String(meta[3] || "").toLowerCase().includes(q)) {
+    if (RBAC.can(permissionForView(view)) && (!q || String(meta[0] || "").toLowerCase().includes(q) || String(meta[3] || "").toLowerCase().includes(q))) {
       res.push({ type: "Module", name: meta[0], view, icon: meta[2] });
     }
   });
 
   if (q) {
-    S.machines.forEach(machine => {
+    if (RBAC.can("fleet.read")) S.machines.forEach(machine => {
       const name = String(machine.assetName || "");
       const id = String(machine.id || "");
       const category = String(machine.category || "");
@@ -3697,14 +3829,14 @@ function renderCmd(q) {
       }
     });
 
-    S.users.forEach(user => {
+    if (RBAC.can("users.read")) S.users.forEach(user => {
       const name = String(user.fullName || user.mobileNumber || "");
       if (name.toLowerCase().includes(q) || String(user.mobileNumber || "").includes(q) || String(user.role || "").toLowerCase().includes(q)) {
-        res.push({ type: "Workforce · " + String(user.role || "unassigned"), name, view: "registry", icon: "person" });
+        res.push({ type: "Workforce · " + String(user.role || "unassigned"), name, view: "users", icon: "person" });
       }
     });
 
-    S.inventory.forEach(item => {
+    if (RBAC.can("inventory.read")) S.inventory.forEach(item => {
       const name = String(item.partName || "");
       const category = String(item.category || "");
       if (name.toLowerCase().includes(q) || category.toLowerCase().includes(q)) {
@@ -3715,7 +3847,8 @@ function renderCmd(q) {
     });
   }
 
-  const buttons = res.slice(0, 10).map(result => {
+  const permitted = res.filter(result => RBAC.can(permissionForView(result.view)));
+  const buttons = permitted.slice(0, 10).map(result => {
     const machineAttr = result.machineId ? ` data-cmd-machine="${esc(result.machineId)}"` : "";
     return `<button type="button" data-cmd-view="${esc(result.view)}"${machineAttr}><span class="material-symbols-rounded">${esc(result.icon)}</span><div><b>${esc(result.name)}</b><span class="t">${esc(result.type)}</span></div></button>`;
   });
