@@ -3576,7 +3576,6 @@ function openTurfPlanner() {
   tpState.reviewOpen=false;
   const pane=$('#turfInlinePlanner');
   if(pane) pane.open=true;
-  if(typeof renderTurf==='function') {}
   renderTp();
 }
 function tpPersistDraft(){try{sessionStorage.setItem('tpDraftV4',JSON.stringify(tpState));}catch(_){}}
@@ -3662,6 +3661,7 @@ document.addEventListener('change',e=>{
  const per=t.closest('[data-tp-per-green]');if(per){const p=S.inventory.find(x=>String(x.id)===String(per.dataset.product));if(!p)return;const l=tpGetLine(p);l.perGreen=per.checked;l.touchedDates=[...new Set([...(l.touchedDates||[]),tpState.date])];tpPersistDraft();renderTp();}
 });
 document.addEventListener('dblclick',e=>{const b=e.target.closest('[data-act="tp-repeat-date"]');if(!b)return;e.preventDefault();const p=S.inventory.find(x=>String(x.id)===String(b.dataset.product));if(!p)return;const l=tpGetLine(p);if(!(l.repeatDates||[]).includes(b.dataset.date))l.repeatDates.push(b.dataset.date);tpState.repeatOpen=b.dataset.product;tpState.editingRepeatDate=b.dataset.date;renderTp();});
+document.addEventListener('toggle',e=>{if(e.target&&e.target.id==='turfInlinePlanner'&&e.target.open)renderTp();},true);
 let cmdOpen = false;
 function toggleCmdPal() {
   cmdOpen = !cmdOpen;
