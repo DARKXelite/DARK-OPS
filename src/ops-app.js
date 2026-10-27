@@ -1370,6 +1370,83 @@ function oaRenderTurfVariance(){
   const rows=oaTurfVariance(),body=rows.map(r=>{const diff=r.issued-r.planned;return '<tr><td><b>'+esc(r.name)+'</b><div class="oa-dim">'+esc(r.category)+'</div></td><td>'+esc(r.unit)+'</td><td class="num">'+fmt(r.planned,2)+'</td><td class="num">'+fmt(r.issued,2)+'</td><td class="num '+(diff>0?'oa-over':diff<0?'oa-under':'')+'">'+(diff>0?'+':'')+fmt(diff,2)+'</td><td class="num">'+r.plannedCount+' / '+r.issuedCount+'</td><td>'+esc([...r.areas].join(', '))+'</td><td>'+esc(r.lastDate)+'</td></tr>';}).join('');
   return '<div class="oa-kpi-grid">'+oaKpi('Product / unit groups',rows.length,'Units remain separate')+oaKpi('Over-plan groups',rows.filter(r=>r.issued-r.planned>0.00001).length,'Review underlying records')+oaKpi('Under-plan groups',rows.filter(r=>r.issued-r.planned< -0.00001).length,'Review outstanding work')+oaKpi('Actual lines',rows.reduce((s,r)=>s+r.issuedCount,0),'Issued/applied status records')+'</div><section class="oa-panel"><div class="oa-panel-head"><div><small>CONTROL CHECK</small><h3>Planned vs issued / applied</h3><p>Quantity variance by product and stock unit.</p></div></div>'+oaTable(['Product','Unit','Planned','Issued / applied','Variance','Planned / actual lines','Areas','Last activity'],body,'No planned or actual records.')+'</section><p class="oa-note-text">Positive variance means recorded issue exceeded plan; negative variance means less was recorded. Inspect source records before drawing conclusions.</p>';
 }
+
+function oaUnplannedLines() {
+  return allTurfPlanRecords().filter(isUnplannedMaterialIssue).map(p => {
+    const date = turfRecordDate(p);
+    if (!date || date < OA.from || date > OA.to || turfRecordStatus(p) === 'Cancelled') return null;
+    const costLine = turfCostLine(p);
+    const product = turfProductForPlan(p);
+    return {
+      ...costLine,
+      record: p,
+      date,
+      time: timeOf(tsMs(p.issuedAt ?? p.issueTimestamp ?? p.timestamp ?? p.createdAt)),
+      category: turfPlanCategory(p),
+      name: turfRecordProductName(p) || (product ? itemName(product) : 'Unspecified material'),
+      area: String(p.targetZoneOrMachine || p.targetArea || p.area || p.location || 'Unassigned').trim() || 'Unassigned',
+      qty: Math.max(0, turfRecordQuantity(p)),
+      unit: String(p.unit || p.stockUnit || p.uom || p.unitOfMeasure || product?.unit || 'Unit not set'),
+      status: turfRecordStatus(p),
+      issueType: String(p.issueType || (p.isAdHoc === true ? 'UNPLANNED' : 'Legacy unplanned')),
+      planId: String(p.planId || p.id || ''),
+      issuedBy: String(p.issuedBy || p.performedBy || p.recordedBy || p.operatorName || '—'),
+      notes: String(p.notes || p.reason || '').trim(),
+      sourceCollection: String(p._sourceCollection || '')
+    };
+  }).filter(Boolean).sort((a,b) => b.date.localeCompare(a.date) ||
+    tsMs(b.record.issuedAt ?? b.record.timestamp ?? b.record.createdAt)-tsMs(a.record.issuedAt ?? a.record.timestamp ?? a.record.createdAt));
+}
+function oaRenderTurfUnplanned() {
+  const lines = oaUnplannedLines();
+  const issued = lines.filter(line => line.status === 'Issued' || line.status === 'Applied');
+  const priced = issued.filter(line => line.cost !== null && Number.isFinite(line.cost));
+  const materials = new Map();
+  const days = new Map();
+  lines.forEach(line => {
+    const key = (line.productId || line.name).toLowerCase() + '|' + line.unit.toLowerCase();
+    if (!materials.has(key)) materials.set(key, {name:line.name,category:line.category,unit:line.unit,records:0,qty:0,issued:0,applied:0,areas:new Set(),lastDate:''});
+    const material = materials.get(key);
+    material.records++; material.qty += line.qty; material.areas.add(line.area);
+    material.issued += line.status === 'Issued' ? 1 : 0;
+    material.applied += line.status === 'Applied' ? 1 : 0;
+    if (line.date > material.lastDate) material.lastDate = line.date;
+    if (!days.has(line.date)) days.set(line.date, {date:line.date,records:0,issued:0,applied:0,areas:new Set(),materials:new Set(),units:new Map(),priced:0,unpriced:0});
+    const day = days.get(line.date);
+    day.records++; day.issued += line.status === 'Issued' ? 1 : 0; day.applied += line.status === 'Applied' ? 1 : 0;
+    day.areas.add(line.area); day.materials.add(line.productId || line.name);
+    day.units.set(line.unit,(day.units.get(line.unit)||0)+line.qty);
+    if (line.status === 'Issued' || line.status === 'Applied') {
+      if (line.cost !== null && Number.isFinite(line.cost)) day.priced += line.cost;
+      else day.unpriced++;
+    }
+  });
+  const materialRows = [...materials.values()].sort((a,b)=>b.qty-a.qty||a.name.localeCompare(b.name)).map(row =>
+    '<tr><td><b>'+esc(row.name)+'</b><div class="oa-dim">'+esc(row.category)+'</div></td><td>'+esc(row.unit)+'</td><td class="num">'+row.records+'</td><td class="num"><b>'+fmt(row.qty,2)+'</b></td><td class="num">'+row.issued+' / '+row.applied+'</td><td>'+esc([...row.areas].sort().join(', '))+'</td><td>'+esc(row.lastDate)+'</td></tr>'
+  ).join('');
+  const dayRows = [...days.values()].sort((a,b)=>b.date.localeCompare(a.date)).map(day => {
+    const qty = [...day.units.entries()].sort((a,b)=>a[0].localeCompare(b[0])).map(([unit,value])=>fmt(value,2)+' '+unit).join(' · ') || '—';
+    return '<tr><td><b>'+esc(day.date)+'</b></td><td class="num">'+day.records+'</td><td class="num">'+day.issued+'</td><td class="num">'+day.applied+'</td><td class="num">'+day.materials.size+'</td><td class="num">'+day.areas.size+'</td><td>'+esc(qty)+'</td><td class="num">'+(day.priced?money(day.priced):'—')+'</td><td class="num">'+(day.unpriced||'—')+'</td></tr>';
+  }).join('');
+  const detailRows = lines.map(line =>
+    '<tr><td>'+esc(line.date)+'</td><td>'+esc(line.time||'—')+'</td><td><code>'+esc(line.planId||'—')+'</code><div class="oa-dim">'+esc(line.issueType)+'</div></td><td>'+esc(line.category)+'</td><td><b>'+esc(line.name)+'</b><div class="oa-dim">'+esc(line.productId||'')+'</div></td><td>'+esc(line.area)+'</td><td><span class="oa-status">'+esc(line.status)+'</span></td><td class="num">'+fmt(line.qty,2)+' '+esc(line.unit)+'</td><td>'+esc(line.issuedBy)+'</td><td class="num">'+(line.cost!==null&&Number.isFinite(line.cost)?money(line.cost):'—')+'</td><td>'+esc(line.notes||'—')+'</td><td>'+esc(line.sourceCollection||'—')+'</td></tr>'
+  ).join('');
+  const chartRows = [...days.values()].sort((a,b)=>a.date.localeCompare(b.date)).slice(-28).map(day=>({label:dShort(day.date),value:day.records}));
+  return '<div class="oa-kpi-grid">'+
+    oaKpi('Unplanned issue records',lines.length,'Explicit ad-hoc/unplanned markers and supported legacy flags')+
+    oaKpi('Issued / applied',issued.length,issued.filter(line=>line.status==='Applied').length+' marked Applied')+
+    oaKpi('Distinct material / unit groups',materials.size,'Different units remain separate')+
+    oaKpi('Priced recorded value',priced.length?money(priced.reduce((sum,line)=>sum+line.cost,0)):'₹—',(issued.length-priced.length)+' unpriced issued/applied records')+
+    '</div><section class="oa-panel"><div class="oa-panel-head"><div><small>ISSUE ACTIVITY</small><h3>Unplanned issues by day</h3><p>Record counts by date. Quantities are shown by unit and never combined across unlike units.</p></div><span class="oa-panel-meta">'+lines.length+' records</span></div>'+
+    (chartRows.length?'<div class="oa-chart-wrap">'+barChart(chartRows,{unit:'records',h:155})+'</div>':'')+
+    oaTable(['Date','Records','Issued','Applied','Materials','Areas','Quantity by unit','Priced value*','Unpriced actuals'],dayRows,'No unplanned issues in this date range.')+
+    '</section><section class="oa-panel"><div class="oa-panel-head"><div><small>MATERIAL ROLL-UP</small><h3>By material and stock unit</h3><p>Sorted by recorded quantity within each unit group.</p></div></div>'+
+    oaTable(['Material','Unit','Records','Total quantity','Issued / applied','Areas','Last issue'],materialRows,'No unplanned material groups.')+
+    '</section><section class="oa-panel"><div class="oa-panel-head"><div><small>AUDIT REGISTER</small><h3>Unplanned material issue detail</h3><p>Issuer, reference, status, notes and source collection retained for traceability.</p></div></div>'+
+    oaTable(['Date','Time','Issue reference','Category','Material','Area / destination','Status','Quantity','Issued by','Recorded value*','Notes','Source collection'],detailRows,'No unplanned issue records in this date range.')+
+    '</section><p class="oa-note-text">Unplanned classification uses the explicit <code>issueType: UNPLANNED</code> or <code>isAdHoc: true</code> fields first, plus known legacy unplanned flags. “Issued” and “Applied” are recorded statuses, not independent proof of physical use. Recorded value appears only when an inventory item, matching unit and usable unit cost exist.</p>';
+}
+
 function renderOpsAnalytics(){
   const root=$('#opsAnalyticsRoot');if(!root)return;
   const domains=[['overview','Overall Ops','query_stats'],['fuel','Fuel Ops','local_gas_station'],['turf','Turf Ops','grass']];
