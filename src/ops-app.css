@@ -3441,7 +3441,10 @@ textarea {
   border: 1px solid #414A43;
   border-radius: 5px;
   color: #B2B8B0;
-  font: 9px/1.2 inherit;
+  font-family: inherit;
+  font-size: 9px;
+  line-height: 1.2;
+  font-weight: 600;
 }
 .modal.turf-planner-modal .tp-search-empty {
   display: flex;
