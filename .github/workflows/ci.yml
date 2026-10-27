@@ -6,6 +6,20 @@ on:
   pull_request:
 
 jobs:
+  dependency-audit:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Install dependencies for audit
+        run: npm install --no-fund
+      - name: Audit dependency tree
+        run: npm audit --audit-level=high
+
   verify:
     runs-on: ubuntu-latest
     steps:
@@ -23,11 +37,6 @@ jobs:
       - name: Install dependencies
         id: install
         run: npm install --no-fund
-      # Keep vulnerability reporting visible without letting existing dependency debt
-      # suppress independent regression tests, the Firestore emulator suite, or the build.
-      - name: Audit dependency tree
-        run: npm audit --audit-level=high
-        continue-on-error: true
       - name: Validate optional contrast audit
         run: node --check scripts/contrast-audit.mjs && node scripts/contrast-audit.mjs
 
