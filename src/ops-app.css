@@ -3834,8 +3834,8 @@ details > summary:focus-visible { outline:3px solid #315A7D!important; }
 #tpContainer .tp-inline-review-actions { display:flex;justify-content:flex-end;gap:8px;margin-top:12px; }
 #tpContainer .tp-empty-state,#tpContainer .tp-search-empty { padding:16px;color:#4B5968;background:#F7F9FB;border:1px dashed #8996A5;border-radius:8px; }
 @media(max-width:1000px) {
-  #tpContainer .tp-product-row { grid-template-columns:minmax(0,1fr) 96px minmax(100px,auto); }
-  #tpContainer .tp-repeat-trigger { grid-column:1/-1;justify-self:start; }
+  #tpContainer .tp-product-row { grid-template-columns:minmax(0,1fr) 84px minmax(100px,auto) auto;gap:7px;padding:8px; }
+  #tpContainer .tp-repeat-trigger { grid-column:auto;justify-self:stretch; }
 }
 @media(max-width:700px) {
   .turf-inline-planner > summary small { display:none; }
