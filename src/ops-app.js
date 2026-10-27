@@ -3312,6 +3312,32 @@ function renderTp() {
     (tpState.weekdays.includes(item.day) ? ' checked' : '') + '><span>' + item.label + '</span></label>'
   ).join('');
   const plannedDates = tpSelectedDates();
+  // Show already-saved allocations for the other dates in this range without crowding the active editor.
+  const otherDayGroups = new Map();
+  tpMatchingPlanRecords(area, category)
+    .filter(plan => tpPlanDateInRange(plan, tpState.date, tpState.validUntil || tpState.date))
+    .filter(plan => turfRecordDate(plan) && turfRecordDate(plan) !== tpState.date)
+    .forEach(plan => {
+      const date = turfRecordDate(plan);
+      if (!otherDayGroups.has(date)) otherDayGroups.set(date, []);
+      otherDayGroups.get(date).push(plan);
+    });
+  const otherDayEntries = [...otherDayGroups.entries()].sort((a, b) => a[0].localeCompare(b[0]));
+  const otherDayItemCount = otherDayEntries.reduce((total, entry) => total + entry[1].length, 0);
+  const otherDaysHtml = otherDayEntries.map(([date, plans]) => {
+    const dayLabel = new Date(date + 'T12:00:00').toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'short' });
+    const itemsHtml = plans.sort((a, b) => String(a.productName || '').localeCompare(String(b.productName || ''))).map(plan => {
+      const product = S.inventory.find(item => String(item.id) === String(plan.productId || plan.itemId || plan.inventoryId || ''));
+      const name = product ? itemName(product) : (plan.productName || plan.itemName || 'Unknown product');
+      const qty = num(plan.targetQty ?? plan.quantity ?? plan.qty);
+      const unit = plan.unit || (product && turfProductUnit(product)) || '';
+      return '<div class="tp-other-day-item"><span class="material-symbols-rounded">inventory_2</span><span class="tp-other-day-name">' + esc(name) + '</span><b>' + fmt(qty, 2) + (unit ? ' ' + esc(unit) : '') + '</b></div>';
+    }).join('');
+    return '<details class="tp-other-day"><summary><span class="material-symbols-rounded">calendar_month</span><b>' + esc(dayLabel) + '</b><span class="tp-other-day-count">' + plans.length + ' item' + (plans.length === 1 ? '' : 's') + '</span><span class="material-symbols-rounded tp-other-chevron">expand_more</span></summary><div class="tp-other-day-items">' + itemsHtml + '</div></details>';
+  }).join('');
+  const otherDaysPanel = otherDayEntries.length
+    ? '<details class="tp-other-days"><summary><span class="material-symbols-rounded">event_note</span><span class="tp-other-days-title"><b>Other days in this plan</b><small>Review saved items without leaving the active day</small></span><span class="tp-other-days-count">' + otherDayEntries.length + ' days · ' + otherDayItemCount + ' items</span><span class="material-symbols-rounded tp-other-chevron">expand_more</span></summary><div class="tp-other-days-content">' + otherDaysHtml + '</div></details>'
+    : '';
   container.innerHTML =
     '<div class="tp-planner-toolbar"><div class="tp-planner-title"><span class="tp-eyebrow">APPLICATION PLAN</span><h3>Daily treatment allocation</h3><p>Set the active dates once, then configure each area and category.</p></div>' +
     '<div class="tp-date-range"><label><span>Plan from</span><input type="date" value="' + esc(tpState.date) + '" data-tp-date></label>' +
