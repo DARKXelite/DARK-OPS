@@ -1817,6 +1817,8 @@ function inventoryRowsMarkup(items) {
   }).join(''):'<tr><td colspan="8" class="empty">No items in this category.</td></tr>'}</tbody></table></div>`;
 }
 function renderRegistry() {
+  const importToolbar = $('#v-registry .toolbar');
+  if (importToolbar && !$('#openInventoryImportButton')) importToolbar.insertAdjacentHTML('beforeend', '<button id="openInventoryImportButton" class="btn" data-act="open-inventory-import"><span class="material-symbols-rounded">upload_file</span> Import stock</button>');
   const items=S.inventory.slice();
   const low=items.filter(i=>inventoryOnHand(i)<=effectiveReorderLevel(i)).length;
   const total=items.reduce((v,i)=>v+inventoryOnHand(i)*Math.max(0,num(i.unitCost)),0);
@@ -2189,6 +2191,342 @@ function stopListeners() {
 setInterval(() => { if (cur === 'radar') { updateBadges('live'); scheduleRender(); } }, 10000);
 
 /* ================= EVENTS ================= */
+
+const INVENTORY_IMPORT_FIELDS = [
+  { key: 'itemName', label: 'Item name', aliases: ['item name','item','product name','product','material','description','stock item','part name','sku name','name','particulars','item description'] },
+  { key: 'category', label: 'Category', aliases: ['category','item category','product category','group','type','department','material category'] },
+  { key: 'unitCost', label: 'Rate / unit cost', aliases: ['rate','unit rate','unit cost','price','cost','price per unit','rate per unit','basic rate','purchase rate','mrp'] },
+  { key: 'unit', label: 'UOM', aliases: ['uom','unit','unit of measure','measure','stock unit','measurement','units'] },
+  { key: 'quantity', label: 'Quantity / stock', aliases: ['qty','quantity','stock','closing stock','current stock','balance','on hand','physical stock','opening stock','available quantity','closing qty','stock qty'] }
+];
+const normalizeHeader = value => String(value ?? '').toLowerCase().normalize('NFKD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, ' ').trim();
+const normalizeItem = value => String(value ?? '').trim().toLowerCase().replace(/\s+/g, ' ');
+const aliasMatches = (header, alias) => {
+  const h = normalizeHeader(header), a = normalizeHeader(alias);
+  return h === a || (a.length >= 5 && h.includes(a));
+};
+const columnLabel = index => {
+  let n = index + 1, out = '';
+  while (n) { const r = (n - 1) % 26; out = String.fromCharCode(65 + r) + out; n = Math.floor((n - 1) / 26); }
+  return 'Column ' + out;
+};
+const numberFromCell = value => {
+  if (typeof value === 'number') return Number.isFinite(value) ? value : NaN;
+  const text = String(value ?? '').trim();
+  if (!text) return NaN;
+  const cleaned = text.replace(/[₹$€£,\s]/g, '').replace(/^\((.*)\)$/, '-$1');
+  const number = Number(cleaned);
+  return Number.isFinite(number) ? number : NaN;
+};
+function createInventoryImporter(options) {
+  const { db, collection, doc, writeBatch, serverTimestamp, getInventory, onComplete, esc, toast, openModal, closeModal } = options;
+  let state = null;
+  function detectHeaderRow(matrix) {
+    let bestIndex = -1, bestScore = 0;
+    for (let i = 0; i < Math.min(matrix.length, 20); i++) {
+      const cells = (matrix[i] || []).map(normalizeHeader);
+      const score = INVENTORY_IMPORT_FIELDS.reduce((total, field) => total + (cells.some(cell => field.aliases.some(alias => aliasMatches(cell, alias))) ? 1 : 0), 0);
+      if (score > bestScore) { bestScore = score; bestIndex = i; }
+    }
+    return bestScore >= 2 ? bestIndex : -1;
+  }
+  function configureHeader(headerIndex) {
+    state.headerIndex = headerIndex;
+    const maxColumns = state.matrix.reduce((max, row) => Math.max(max, row.length), 1);
+    if (headerIndex < 0) {
+      state.headers = Array.from({ length: maxColumns }, (_, i) => columnLabel(i));
+      state.rows = state.matrix;
+    } else {
+      state.headers = Array.from({ length: maxColumns }, (_, i) => String(state.matrix[headerIndex]?.[i] ?? '').trim() || columnLabel(i));
+      state.rows = state.matrix.slice(headerIndex + 1);
+    }
+    state.rows = state.rows.map((row, index) => ({ sourceIndex: index, cells: row || [] })).filter(row => row.cells.some(cell => String(cell ?? '').trim() !== ''));
+    state.mapping = {};
+    for (const field of INVENTORY_IMPORT_FIELDS) state.mapping[field.key] = state.headers.findIndex(header => field.aliases.some(alias => aliasMatches(header, alias)));
+    if (headerIndex < 0) INVENTORY_IMPORT_FIELDS.forEach((field, index) => {
+      if (state.mapping[field.key] < 0 && index < state.headers.length) state.mapping[field.key] = index;
+    });
+    state.corrections = {};
+  }
+  function mappedRows() {
+    return state.rows.map((row, index) => {
+      const correction = state.corrections[index] || {};
+      const raw = key => {
+        if (Object.prototype.hasOwnProperty.call(correction, key)) return correction[key];
+        const column = state.mapping[key];
+        return column >= 0 ? String(row.cells[column] ?? '').trim() : '';
+      };
+      return {
+        index,
+        sourceRow: state.headerIndex < 0 ? index + 1 : index + state.headerIndex + 2,
+        itemName: raw('itemName'), category: raw('category'), unitCost: raw('unitCost'),
+        unit: raw('unit'), quantity: raw('quantity')
+      };
+    });
+  }
+  function fieldSelect(field) {
+    const current = state.mapping[field.key];
+    const optionsHtml = ['<option value="-1">Not mapped</option>'].concat(state.headers.map((header, index) =>
+      '<option value="' + index + '"' + (current === index ? ' selected' : '') + '>' + esc(header) + ' (' + columnLabel(index).replace('Column ', '') + ')</option>'
+    )).join('');
+    return '<label class="inv-import-map-field"><span>' + esc(field.label) + '</span><select data-invimp-map="' + field.key + '">' + optionsHtml + '</select></label>';
+  }
+  function inputFor(row, field, label) {
+    const value = row[field];
+    const type = (field === 'quantity' || field === 'unitCost') ? 'number' : 'text';
+    const step = field === 'unitCost' ? '0.01' : 'any';
+    return '<label class="inv-import-edit-field"><span>' + esc(label) + '</span><input data-invimp-row="' + row.index + '" data-invimp-field="' + field + '" type="' + type + '"' + (type === 'number' ? ' min="0" step="' + step + '"' : '') + ' value="' + esc(value) + '" placeholder="' + esc(label) + '"></label>';
+  }
+  function render() {
+    if (!state) return;
+    const hasFile = Boolean(state.fileName);
+    const rows = mappedRows();
+    const incomplete = rows.filter(row => !row.itemName.trim() || !String(row.quantity).trim() || !String(row.category).trim() || !String(row.unit).trim() || !String(row.unitCost).trim());
+    const previewRows = rows.slice(0, 6).map(row => '<tr><td>' + row.sourceRow + '</td><td>' + esc(row.itemName || 'Missing item name') + '</td><td>' + esc(row.category || 'Other (default)') + '</td><td>' + esc(row.unit || 'Nos (default)') + '</td><td class="num">' + esc(row.unitCost || '0 (unknown)') + '</td><td class="num">' + esc(row.quantity || '0 / missing') + '</td></tr>').join('');
+    const corrections = incomplete.slice(0, 100).map(row =>
+      '<div class="inv-import-correction"><div class="inv-import-row-title">File row ' + row.sourceRow + '</div><div class="inv-import-edit-grid">' +
+      inputFor(row, 'itemName', 'Item name') + inputFor(row, 'category', 'Category') + inputFor(row, 'unitCost', 'Rate') + inputFor(row, 'unit', 'UOM') + inputFor(row, 'quantity', 'Quantity') +
+      '</div></div>'
+    ).join('');
+    const headerOptions = ['<option value="-1"' + (state.headerIndex < 0 ? ' selected' : '') + '>No header row (columns by position)</option>']
+      .concat(state.matrix.slice(0, 20).map((row, index) => '<option value="' + index + '"' + (state.headerIndex === index ? ' selected' : '') + '>Row ' + (index + 1) + ': ' + esc(row.slice(0, 5).join(' · ').slice(0, 70)) + '</option>')).join('');
+    const body = '<div class="inv-import-intro"><p>Upload an Excel or CSV stock sheet. The importer guesses the header row and matches common names like Item, Category, Rate, UOM and Qty. Review the mapping and preview before writing anything.</p>' +
+      '<label class="inv-import-file"><span class="material-symbols-rounded">upload_file</span><span><b>' + (hasFile ? esc(state.fileName) : 'Choose inventory file') + '</b><small>Excel (.xlsx, .xls), CSV or TSV</small></span><input id="invImportFile" type="file" accept=".xlsx,.xls,.csv,.tsv,.txt"></label>' +
+      (state.error ? '<div class="inv-import-error">' + esc(state.error) + '</div>' : '') + '</div>' +
+      (hasFile ? '<div class="inv-import-meta"><b>' + rows.length + ' data rows detected</b><span>' + state.headers.length + ' columns · ' + (state.headerIndex < 0 ? 'no header row' : 'header on row ' + (state.headerIndex + 1)) + '</span></div>' +
+        '<label class="inv-import-header-row"><span>Header row</span><select id="invImportHeaderRow">' + headerOptions + '</select></label>' +
+        '<h4 class="inv-import-section-title">Match file columns</h4><div class="inv-import-mapping">' + INVENTORY_IMPORT_FIELDS.map(fieldSelect).join('') + '</div>' +
+        '<label class="inv-import-physical"><input id="invImportPhysical" type="checkbox" ' + (state.physicalStock ? 'checked' : '') + '><span><b>Uploaded quantity is physical stock</b><small>When checked, overwrite the current stock balance of matching existing items. Leave unchecked to preserve existing balances. New items use the uploaded quantity as opening stock.</small></span></label>' +
+        '<h4 class="inv-import-section-title">Preview</h4><div class="table-wrap inv-import-preview"><table><thead><tr><th>Row</th><th>Item</th><th>Category</th><th>UOM</th><th class="num">Rate</th><th class="num">Qty</th></tr></thead><tbody>' + (previewRows || '<tr><td colspan="6">No data rows found.</td></tr>') + '</tbody></table></div>' +
+        (incomplete.length ? '<div class="inv-import-corrections"><div class="inv-import-section-heading"><h4>Rows needing attention (' + incomplete.length + ')</h4><p>Correct blank or unmapped values below. Showing up to 100 rows; use column matching for larger files.</p></div>' + corrections + '</div>' : '<div class="inv-import-ok">All rows have values for the mapped fields.</div>') +
+        '<p class="inv-import-note">Blank category defaults to Other for new items. Blank UOM defaults to Nos. Missing rates remain unchanged on existing items and default to 0 on new items. Physical-stock mode requires a quantity for every row.</p>'
+        : '<div class="inv-import-empty">Select a file to inspect its contents and configure column matching.</div>');
+    openModal({
+      title: 'Smart inventory import',
+      sub: 'Map columns, fix missing values, then review the stock update mode.',
+      size: 'lg',
+      body: '<div class="inv-importer">' + body + '</div>',
+      footer: '<button class="btn" data-act="close-modal">Cancel</button><button class="btn btn-primary" data-act="inventory-import-commit"' + (!hasFile || !rows.length ? ' disabled' : '') + '>Import inventory</button>'
+    });
+  }
+  async function readFile(file) {
+    if (!file) return;
+    if (!globalThis.XLSX) { toast('Excel parser did not load. Refresh and try again.', 'err'); return; }
+    state.fileName = file.name;
+    state.error = '';
+    state.matrix = [];
+    try {
+      const data = await file.arrayBuffer();
+      const workbook = globalThis.XLSX.read(data, { type: 'array', cellDates: true });
+      const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+      if (!firstSheet) throw new Error('The workbook has no worksheets.');
+      state.matrix = globalThis.XLSX.utils.sheet_to_json(firstSheet, { header: 1, defval: '', raw: false })
+        .filter(row => Array.isArray(row) && row.some(cell => String(cell ?? '').trim() !== ''));
+      if (!state.matrix.length) throw new Error('The selected file contains no rows.');
+      configureHeader(detectHeaderRow(state.matrix));
+      render();
+    } catch (error) {
+      state.error = 'Could not read this file: ' + (error?.message || 'unsupported or damaged file');
+      render();
+    }
+  }
+  function open() {
+    state = { fileName: '', matrix: [], rows: [], headers: [], mapping: {}, corrections: {}, headerIndex: -1, physicalStock: false, error: '' };
+    render();
+  }
+  async function commit() {
+    if (!state?.rows?.length) { toast('Choose a valid file first.', 'err'); return; }
+    const rows = mappedRows();
+    const physicalStock = Boolean(document.getElementById('invImportPhysical')?.checked ?? state.physicalStock);
+    const missingName = rows.filter(row => !row.itemName.trim());
+    const missingQty = physicalStock ? rows.filter(row => !String(row.quantity).trim() || !Number.isFinite(numberFromCell(row.quantity)) || numberFromCell(row.quantity) < 0) : [];
+    if (missingName.length || missingQty.length) {
+      state.error = missingName.length
+        ? missingName.length + ' row(s) still need an item name. Correct them below before importing.'
+        : missingQty.length + ' row(s) need a valid non-negative quantity because physical-stock mode is enabled.';
+      state.physicalStock = physicalStock;
+      render();
+      toast('Fix the highlighted missing values before importing.', 'err');
+      return;
+    }
+    const existing = getInventory() || [];
+    const updates = [], creates = [];
+    const seen = new Set();
+    let duplicates = 0, ambiguous = 0;
+    for (const row of rows) {
+      const name = String(row.itemName).trim();
+      const categoryText = String(row.category || '').trim();
+      const category = categoryText || 'Other';
+      const unit = String(row.unit || '').trim();
+      const rate = numberFromCell(row.unitCost);
+      const quantity = numberFromCell(row.quantity);
+      const key = normalizeItem(name);
+      if (seen.has(key)) { duplicates++; continue; }
+      seen.add(key);
+      const matches = existing.filter(item => normalizeItem(item.partName || item.itemName || item.name || item.productName) === normalizeItem(name));
+      let match = null;
+      if (matches.length === 1) match = matches[0];
+      else if (matches.length > 1) {
+        const categoryMatches = matches.filter(item => normalizeItem(item.category || 'Other') === normalizeItem(category));
+        if (categoryMatches.length === 1) match = categoryMatches[0];
+        else { ambiguous++; continue; }
+      }
+      const data = {};
+      if (name) data.partName = name;
+      if (categoryText) data.category = categoryText;
+      else if (!match) data.category = 'Other';
+      if (unit) data.unit = unit;
+      else if (!match) data.unit = 'Nos';
+      if (Number.isFinite(rate) && String(row.unitCost).trim() !== '') data.unitCost = Math.max(0, rate);
+      else if (!match) data.unitCost = 0;
+      if (match) {
+        if (physicalStock) data.stockQuantity = Math.max(0, quantity);
+        data.updatedAt = serverTimestamp();
+        updates.push({ id: match.id, data });
+      } else {
+        data.stockQuantity = Number.isFinite(quantity) && quantity >= 0 ? quantity : 0;
+        data.reorderLevel = 0;
+        data.updatedAt = serverTimestamp();
+        creates.push(data);
+      }
+    }
+    if (!updates.length && !creates.length) {
+      toast(ambiguous ? 'No rows imported. Some names match multiple existing items; resolve duplicates first.' : 'No valid rows to import.', 'err');
+      return;
+    }
+    try {
+      const operations = [
+        ...updates.map(item => ({ type: 'update', id: item.id, data: item.data })),
+        ...creates.map(data => ({ type: 'create', data }))
+      ];
+      for (let start = 0; start < operations.length; start += 400) {
+        const batch = writeBatch(db);
+        operations.slice(start, start + 400).forEach(operation => {
+          if (operation.type === 'update') batch.update(doc(db, 'inventory', operation.id), operation.data);
+          else batch.set(doc(collection(db, 'inventory')), operation.data);
+        });
+        await batch.commit();
+      }
+      closeModal();
+      onComplete?.();
+      toast('Inventory import complete · ' + creates.length + ' created · ' + updates.length + ' updated' + (physicalStock ? ' · physical stock applied' : ' · existing stock preserved') + (duplicates ? ' · ' + duplicates + ' duplicate rows skipped' : '') + (ambiguous ? ' · ' + ambiguous + ' ambiguous rows skipped' : ''));
+      state = null;
+    } catch (error) {
+      toast('Import failed: ' + (error?.message || 'database write error'), 'err');
+    }
+  }
+  document.addEventListener('change', event => {
+    const target = event.target;
+    if (target?.id === 'invImportFile') { readFile(target.files?.[0]); return; }
+    if (target?.id === 'invImportHeaderRow' && state) { configureHeader(Number(target.value)); render(); return; }
+    if (target?.id === 'invImportPhysical' && state) { state.physicalStock = target.checked; return; }
+    const field = target?.dataset?.invimpMap;
+    if (field && state && Object.prototype.hasOwnProperty.call(state.mapping, field)) {
+      state.mapping[field] = Number(target.value);
+      render();
+    }
+  });
+  document.addEventListener('input', event => {
+    const target = event.target;
+    if (!target?.dataset?.invimpRow || !target?.dataset?.invimpField || !state) return;
+    const index = Number(target.dataset.invimpRow), field = target.dataset.invimpField;
+    if (!state.corrections[index]) state.corrections[index] = {};
+    state.corrections[index][field] = target.value;
+  });
+  return { open, commit };
+}
+
+
+function installInventoryReadabilityStyles() {
+  if (document.getElementById('inventoryReadabilityStyles')) return;
+  const style = document.createElement('style');
+  style.id = 'inventoryReadabilityStyles';
+  style.textContent = [
+    '#v-registry { --inv-surface:#202f27; --inv-row:#26372d; --inv-row-alt:#2b3d32; --inv-line:#45594a; --inv-text:#e4e9df; --inv-muted:#b7c4b5; }',
+    '#v-registry .card { background:var(--inv-surface)!important; color:var(--inv-text)!important; border-color:var(--inv-line)!important; box-shadow:none!important; }',
+    '#v-registry .card-h h3,#v-registry .kpi-label,#v-registry .inv-category summary,#v-registry .inv-category summary b { color:var(--inv-text)!important; }',
+    '#v-registry .card-h .muted,#v-registry .inv-category summary small,#v-registry .inv-category-placeholder,#v-registry .muted { color:var(--inv-muted)!important; }',
+    '#v-registry .kpi { background:#26372d!important; color:var(--inv-text)!important; border-color:var(--inv-line)!important; box-shadow:none!important; }',
+    '#v-registry .kpi-value { color:#f0f1e9!important; }',
+    '#v-registry .inv-category { background:var(--inv-row)!important; border-color:var(--inv-line)!important; }',
+    '#v-registry .inv-category>summary:hover { background:#304438!important; }',
+    '#v-registry .inv-cat-icon { background:#304438!important; border-color:#506454!important; color:#c7d4bd!important; }',
+    '#v-registry .inv-cat-alert { background:#2d4034!important; border-color:#506454!important; color:#d1dacd!important; }',
+    '#v-registry .inv-category-body { border-color:var(--inv-line)!important; }',
+    '#v-registry table { background:var(--inv-row)!important; color:var(--inv-text)!important; border-color:var(--inv-line)!important; }',
+    '#v-registry table thead th { background:#34493b!important; color:#edf0e8!important; border-color:#4a5e4e!important; }',
+    '#v-registry table tbody tr,#v-registry table tbody tr td { background:var(--inv-row)!important; color:var(--inv-text)!important; border-color:var(--inv-line)!important; }',
+    '#v-registry table tbody tr:nth-child(even),#v-registry table tbody tr:nth-child(even) td { background:var(--inv-row-alt)!important; }',
+    '#v-registry table tbody tr:hover,#v-registry table tbody tr:hover td { background:#354b3d!important; }',
+    '#v-registry table td b { color:#f1f2eb!important; }',
+    '#v-registry table .muted,#v-registry table small { color:#b9c7b8!important; }',
+    '#v-registry .toolbar .btn:not(.btn-primary) { background:#293b30!important; color:#e4e9df!important; border-color:#506454!important; }',
+    '#v-registry .toolbar .btn:not(.btn-primary):hover { background:#354b3d!important; }',
+    '#overlay .modal .inv-importer { color:#e4e9df; }',
+    '#overlay .modal .inv-importer p { color:#b9c7b8; font-size:12px; line-height:1.55; }',
+    '#overlay .modal .inv-import-file { display:flex; align-items:center; gap:12px; position:relative; overflow:hidden; padding:14px; border:1px dashed #607766; border-radius:10px; background:#263a2e; cursor:pointer; }',
+    '#overlay .modal .inv-import-file>.material-symbols-rounded { color:#c7d4bd; font-size:26px; }',
+    '#overlay .modal .inv-import-file span:nth-child(2) { display:grid; gap:4px; }',
+    '#overlay .modal .inv-import-file b { color:#edf0e8; font-size:13px; overflow-wrap:anywhere; }',
+    '#overlay .modal .inv-import-file small { color:#b9c7b8; font-size:11px; }',
+    '#overlay .modal .inv-import-file input { position:absolute; inset:0; width:100%; height:100%; opacity:0; cursor:pointer; }',
+    '#overlay .modal .inv-import-meta { display:flex; justify-content:space-between; gap:10px; flex-wrap:wrap; margin:14px 0 10px; color:#e4e9df; font-size:12px; }',
+    '#overlay .modal .inv-import-meta span { color:#b9c7b8; }',
+    '#overlay .modal .inv-import-header-row { display:flex; align-items:center; justify-content:space-between; gap:12px; margin:12px 0; color:#d5dfd2; font-size:12px; }',
+    '#overlay .modal .inv-import-header-row select,#overlay .modal .inv-import-map-field select { min-width:0; width:100%; padding:9px 10px; border:1px solid #506454; border-radius:8px; background:#1d2d24!important; color:#e4e9df!important; }',
+    '#overlay .modal .inv-import-mapping { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; }',
+    '#overlay .modal .inv-import-map-field { display:grid; gap:5px; min-width:0; color:#b9c7b8; font-size:11px; }',
+    '#overlay .modal .inv-import-section-title { margin:18px 0 9px; color:#e4e9df; font-size:13px; }',
+    '#overlay .modal .inv-import-physical { display:flex; align-items:flex-start; gap:10px; margin-top:14px; padding:12px; border:1px solid #78653c; border-radius:9px; background:#332f22; color:#f0e4c4; cursor:pointer; }',
+    '#overlay .modal .inv-import-physical input { flex:none; margin-top:3px; accent-color:#c9b77f; }',
+    '#overlay .modal .inv-import-physical span { display:grid; gap:4px; }',
+    '#overlay .modal .inv-import-physical b { font-size:12px; color:#f0e4c4; }',
+    '#overlay .modal .inv-import-physical small { color:#d1c6a5; font-size:11px; line-height:1.45; }',
+    '#overlay .modal .inv-import-preview { max-width:100%; overflow:auto; border:1px solid #45594a; border-radius:8px; }',
+    '#overlay .modal .inv-import-preview table { min-width:620px; }',
+    '#overlay .modal .inv-import-preview th { background:#34493b!important; color:#edf0e8!important; }',
+    '#overlay .modal .inv-import-preview td { background:#26372d!important; color:#e4e9df!important; }',
+    '#overlay .modal .inv-import-preview tr:nth-child(even) td { background:#2b3d32!important; }',
+    '#overlay .modal .inv-import-corrections { margin-top:15px; }',
+    '#overlay .modal .inv-import-section-heading h4 { margin:0 0 4px; color:#f0d69a; font-size:12px; }',
+    '#overlay .modal .inv-import-section-heading p { margin:0 0 10px; font-size:11px; }',
+    '#overlay .modal .inv-import-correction { padding:11px; margin-top:8px; border:1px solid #45594a; border-radius:9px; background:#24362b; }',
+    '#overlay .modal .inv-import-row-title { margin-bottom:8px; color:#d7e0d2; font-size:11px; font-weight:700; }',
+    '#overlay .modal .inv-import-edit-grid { display:grid; grid-template-columns:repeat(5,minmax(0,1fr)); gap:8px; }',
+    '#overlay .modal .inv-import-edit-field { display:grid; gap:4px; min-width:0; color:#b9c7b8; font-size:10px; }',
+    '#overlay .modal .inv-import-edit-field input { min-width:0; width:100%; padding:8px 7px; background:#1c2b22!important; color:#edf0e8!important; border:1px solid #506454!important; border-radius:7px; }',
+    '#overlay .modal .inv-import-edit-field input::placeholder { color:#91a394!important; }',
+    '#overlay .modal .inv-import-ok { margin-top:12px; padding:10px; border-radius:8px; background:#243c2c; color:#c8e3c9; font-size:12px; }',
+    '#overlay .modal .inv-import-error { margin-top:10px; padding:10px; border-radius:8px; background:#452d2a; color:#ffd0c8; font-size:12px; }',
+    '#overlay .modal .inv-import-note { margin:12px 0 0; font-size:11px; }',
+    '#overlay .modal .inv-import-empty { margin-top:12px; padding:22px 12px; text-align:center; border:1px dashed #45594a; border-radius:9px; color:#b9c7b8; font-size:12px; }',
+    '@media(max-width:700px) { #overlay .modal .inv-import-mapping { grid-template-columns:1fr; } #overlay .modal .inv-import-edit-grid { grid-template-columns:repeat(2,minmax(0,1fr)); } #overlay .modal .inv-import-header-row { align-items:stretch; flex-direction:column; } }'
+  ].join('\n');
+  document.head.appendChild(style);
+}
+installInventoryReadabilityStyles();
+function installInventoryTableContrastOverrides() {
+  if (document.getElementById('inventoryTableContrastOverrides')) return;
+  const style = document.createElement('style');
+  style.id = 'inventoryTableContrastOverrides';
+  style.textContent = [
+    'body:not(.auth-locked) .main #v-registry table { background:#26372d!important; color:#e4e9df!important; border-color:#45594a!important; }',
+    'body:not(.auth-locked) .main #v-registry table thead th { background:#34493b!important; color:#edf0e8!important; border-color:#4a5e4e!important; }',
+    'body:not(.auth-locked) .main #v-registry table tbody tr td { background:#26372d!important; color:#e4e9df!important; border-color:#45594a!important; }',
+    'body:not(.auth-locked) .main #v-registry table tbody tr:nth-child(even) td { background:#2b3d32!important; color:#e4e9df!important; }',
+    'body:not(.auth-locked) .main #v-registry table tbody tr:hover td { background:#354b3d!important; color:#f1f2eb!important; }',
+    'body:not(.auth-locked) .main #v-registry table td b { color:#f1f2eb!important; }',
+    'body:not(.auth-locked) .main #v-registry table td .muted, body:not(.auth-locked) .main #v-registry table td small { color:#b9c7b8!important; }',
+    'body:not(.auth-locked) .main #v-registry .inv-category>summary, body:not(.auth-locked) .main #v-registry .inv-category>summary b { color:#e4e9df!important; }',
+    'body:not(.auth-locked) .main #v-registry .inv-category>summary small { color:#b9c7b8!important; }',
+    'body:not(.auth-locked) .main #v-registry .inv-category-placeholder { color:#b9c7b8!important; }'
+  ].join('\n');
+  document.head.appendChild(style);
+}
+installInventoryTableContrastOverrides();
+
+const inventoryImporter = createInventoryImporter({ db, collection, doc, writeBatch, serverTimestamp, getInventory: () => S.inventory, onComplete: () => scheduleRender(), esc, toast, openModal, closeModal });
+
 const H = {
   'cost-model': () => openCostModel(),
   'open-ops-analytics': d => openOpsAnalytics(d.domain || 'overview'),
@@ -2205,6 +2543,8 @@ const H = {
   'export-turf-cost-range': () => exportTurfCostRange(),
   'export-roi': () => exportROIReport(),
   'edit-part': d => editInventoryCost(d.id),
+  'open-inventory-import': () => inventoryImporter.open(),
+  'inventory-import-commit': () => inventoryImporter.commit(),
   'open-store-records': () => openStoreRecordsEditor(),
   'fnb-tab': d => { fnbModule.setTab(d.tab); renderAll(); },
   'fnb-save-order': () => fnbModule.saveOrder(),
@@ -2246,29 +2586,18 @@ const H = {
   'open-turf-variance': () => openTurfVarianceModal(),
   'apply-turf-variance': () => { const a=$('#turfVarianceFrom')?.value||today(),b=$('#turfVarianceTo')?.value||today(); if(a>b){toast('From date must be on or before To date.','err');return;} renderTurfVariance(a,b); },
   'export-turf-variance': () => exportTurfVariance(), 
-  "tp-area": d => { tpState.area = d.area || "Greens"; renderTp(); },
-  "tp-category": d => { tpState.category = d.category || "Fertilizers"; renderTp(); },
-  "tp-save-tab": () => saveTpCategoryTab(),
+  "tp-area": d => { tpState.area=d.area||"Greens";tpState.repeatOpen='';renderTp(); },
+  "tp-category": d => { tpState.category=d.category||"Fertilizers";tpState.repeatOpen='';renderTp(); },
   "open-planner": () => openTurfPlanner(),
-  "tp-add-app": d => { tpState.activeDay = parseInt(d.day); renderTp(); },
-  "tp-cancel": () => { tpState.activeDay = -1; renderTp(); },
-  "tp-del-app": d => { tpState.days[d.day].splice(parseInt(d.app), 1); renderTp(); },
-  "tp-save-app": d => {
-    const dIdx = parseInt(d.day);
-    const productId = document.getElementById("tpProd_" + dIdx)?.value;
-    const product = S.inventory.find(i => i.id === productId && isTurfCategory(i.category));
-    const scope = document.getElementById("tpScope_" + dIdx)?.value || "overall";
-    const qty = num(document.getElementById("tpQty_" + dIdx)?.value);
-    if (!product) { toast("Select a valid turf product from Inventory Master", "err"); return; }
-    if (!turfProductUnit(product)) { toast("Set this product’s stock unit in Inventory Master first", "err"); return; }
-    if (!(qty > 0)) { toast("Enter a quantity greater than zero", "err"); return; }
-    const totQty = scope === "per_area" ? qty * 18 : qty;
-    const stockUnit = turfProductUnit(product);
-    if (totQty > num(product.stockQuantity)) toast(`Planned quantity exceeds available stock for ${itemName(product)}. Check replenishment.`, "warn");
-    tpState.days[dIdx].push({ pId: product.id, area: document.getElementById("tpArea_" + dIdx).value, scope, qty, unit: stockUnit, totQty });
-    tpState.activeDay = -1;
-    renderTp();
-  },
+  "tp-save-open": () => openTpSaveReview(),
+  "tp-confirm-save": () => confirmTpSave(),
+  "tp-review-back": () => { closeModal();openTurfPlanner(); },
+  "tp-repeat-toggle": d => { tpState.repeatOpen=tpState.repeatOpen===String(d.product)?'':String(d.product);tpState.repeatMonth=tpState.date.slice(0,7);tpState.editingRepeatDate='';renderTp(); },
+  "tp-repeat-date": d => { const p=S.inventory.find(x=>String(x.id)===String(d.product));if(!p)return;const l=tpGetLine(p),set=new Set(l.repeatDates||[]);l.removedDates=l.removedDates||[];if(set.has(d.date)){if(d.date!==tpState.date){set.delete(d.date);if(l.existingIds?.[d.date])tpState.deletedPlanIds=[...new Set([...tpState.deletedPlanIds,l.existingIds[d.date]])];else l.removedDates=[...new Set([...l.removedDates,d.date])];}}else{set.add(d.date);l.removedDates=l.removedDates.filter(x=>x!==d.date);if(l.existingIds?.[d.date])tpState.deletedPlanIds=tpState.deletedPlanIds.filter(x=>x!==l.existingIds[d.date]);const existing=(S.plans||[]).find(x=>tpIsEditablePlan(x)&&turfRecordDate(x)===d.date&&tpCanonicalArea(x.targetArea||x.area)===tpCanonicalArea(tpState.area)&&tpPlanCategory(x)===tpState.category&&String(x.productId||x.itemId||x.inventoryId||'')===String(p.id));if(existing){const per=tpState.area==='Greens'&&String(existing.scope||'').toLowerCase()==='per_area',total=num(existing.targetQty??existing.quantity??existing.qty);l.qtyByDate[d.date]=per?total/18:total;l.existingIds={...(l.existingIds||{}),[d.date]:existing.id};}else if(l.qtyByDate?.[d.date]===undefined)l.qtyByDate[d.date]=tpQty(l,tpState.date);}l.repeatDates=[...set].sort();l.touchedDates=[...new Set([...(l.touchedDates||[]),d.date])];tpPersistDraft();const panel=document.querySelector('.tp-repeat-panel');const cell=panel?.querySelector('[data-act="tp-repeat-date"][data-date="'+d.date+'"]');if(cell){cell.classList.toggle('is-selected',set.has(d.date));const count=panel.querySelector('.tp-repeat-actions span');if(count)count.textContent=set.size+' dates';} },
+  "tp-repeat-month": d => { const x=new Date((tpState.repeatMonth||tpState.date.slice(0,7))+'-01T12:00:00');x.setMonth(x.getMonth()+Number(d.delta||0));tpState.repeatMonth=x.getFullYear()+'-'+String(x.getMonth()+1).padStart(2,'0');renderTp(); },
+  "tp-repeat-qty-ok": d => { const input=document.querySelector('[data-tp-repeat-qty][data-date="'+d.date+'"]'),p=S.inventory.find(x=>String(x.id)===String(d.product));if(!p)return;const l=tpGetLine(p),q=num(input?.value);if(!(q>0)){toast('Enter a quantity greater than zero.','err');return;}l.overrides=l.overrides||{};l.overrides[d.date]=q;l.qtyByDate[d.date]=q;l.touchedDates=[...new Set([...(l.touchedDates||[]),d.date])];tpState.editingRepeatDate='';tpPersistDraft();renderTp(); },
+  "tp-repeat-cancel": () => { tpState.repeatOpen='';tpState.editingRepeatDate='';renderTp(); },
+  "tp-delete-entry": d => { tpState.deletedPlanIds=tpState.deletedPlanIds.includes(d.id)?tpState.deletedPlanIds.filter(x=>x!==d.id):[...tpState.deletedPlanIds,d.id];tpPersistDraft();renderTp(); },
   "save-turf-plan": async () => {
     const btn = document.querySelector("[data-act='save-turf-plan']");
     if(btn) btn.disabled = true;
@@ -3240,390 +3569,89 @@ function tpUpdateRowTotal(element) {
   if (meta) meta.textContent = perGreen ? fmt(qty, 2) + ' ' + unit + ' × 18 greens' : 'Total quantity for this area';
 }
 function openTurfPlanner() {
-  const start = today();
-  tpState = {
-    date: start,
-    validUntil: start,
-    weekdays: tpDefaultWeekdays(start),
-    weekdaysTouched: false,
-    area: 'Greens',
-    category: 'Fertilizers',
-    lines: {},
-    notes: {}
-  };
-  openModal({
-    title: 'Turf Treatment Planner',
-    sub: 'Build repeatable treatment plans by course area, category, date range and weekdays.',
-    size: 'turf-planner-modal',
-    body: '<div id="tpContainer"></div>',
-    footer: '<button type="button" class="btn" data-act="close-modal">Close planner</button>'
-  });
+  const d=today();
+  tpState={date:d,area:'Greens',category:'Fertilizers',lines:{},notes:{},repeatOpen:'',repeatMonth:d.slice(0,7),editingRepeatDate:'',deletedPlanIds:[],draftVersion:3};
+  try { const x=JSON.parse(sessionStorage.getItem('tpDraftV3')||'null'); if(x&&x.draftVersion===3)tpState={...tpState,...x}; } catch(_){}
+  openModal({title:'Day Planner',sub:'',size:'turf-planner-modal',body:'<div id="tpContainer"></div>',footer:'<button type="button" class="btn" data-act="close-modal">Close</button>'});
   renderTp();
 }
-function renderTp() {
-  const container = $('#tpContainer');
-  if (!container) return;
-  const area = tpState.area;
-  const category = tpState.category;
-  const areasHtml = TP_AREAS.map(item =>
-    '<button type="button" class="tp-area-button' + (item.name === area ? ' is-active' : '') + '" data-act="tp-area" data-area="' + esc(item.name) + '">' +
-      '<span class="material-symbols-rounded">' + esc(item.icon) + '</span>' +
-      '<span class="tp-area-copy"><b>' + esc(item.name) + '</b><small>' + esc(item.detail) + '</small></span>' +
-      '<span class="material-symbols-rounded tp-area-chevron">chevron_right</span>' +
-    '</button>'
-  ).join('');
-  const categoryTabs = TP_CATEGORIES.map(item =>
-    '<button type="button" class="tp-category-tab' + (item.name === category ? ' is-active' : '') + '" data-act="tp-category" data-category="' + esc(item.name) + '">' +
-      '<span class="material-symbols-rounded">' + esc(item.icon) + '</span><span>' + esc(item.name) + '</span>' +
-    '</button>'
-  ).join('');
-  const products = S.inventory
-    .filter(item => turfCategoryLabel(item.category) === category)
-    .sort((a, b) => String(itemName(a)).localeCompare(String(itemName(b))));
-  const rows = products.map(product => {
-    const line = tpLineForProduct(product);
-    const unit = turfProductUnit(product);
-    const stock = Math.max(0, num(product.stockQuantity));
-    const qtyValue = line.qty === '' || line.qty === null || line.qty === undefined ? '' : String(line.qty);
-    const perGreen = area === 'Greens' && !!line.perGreen;
-    const repeat = line.repeat !== false;
-    const total = tpLineTotal(line, area);
-    const canPlan = !!unit;
-    return '<article class="tp-product-row" data-search="' + esc(String(itemName(product)).toLowerCase()) + '" data-unit="' + esc(unit) + '">' +
-      '<div class="tp-product-ident"><span class="tp-product-icon material-symbols-rounded">' + esc(category === 'Fertilizers' ? 'spa' : category === 'Pesticides' ? 'pest_control' : 'eco') + '</span>' +
-      '<div class="tp-product-copy"><b>' + esc(itemName(product)) + '</b><span>' + esc(unit || 'Unit not set') + ' · Available stock: ' + fmt(stock, 2) + (num(product.unitCost) > 0 ? ' · ' + money(num(product.unitCost)) + '/' + esc(unit) : ' · Unit cost not set') + '</span>' + (stock <= effectiveReorderLevel(product) ? '<small class="tp-stock-hint is-low">Low stock · at or below reorder level</small>' : '<small class="tp-stock-hint">Stock is checked again when issuing</small>') + '</div></div>' +
-      '<div class="tp-qty-control"><label>Qty (' + esc(unit || 'unit') + ')' +
-      '<input type="number" min="0" step="any" inputmode="decimal" value="' + esc(qtyValue) + '" placeholder="0" aria-label="Quantity for ' + esc(itemName(product)) + '" data-tp-qty data-product="' + esc(product.id) + '"' + (canPlan ? '' : ' disabled') + '></label></div>' +
-      '<div class="tp-scope-control">' +
-      (area === 'Greens' ? '<label class="tp-per-green"><input type="checkbox" data-tp-per-green data-product="' + esc(product.id) + '"' + (perGreen ? ' checked' : '') + (canPlan ? '' : ' disabled') + '><span><b>Per green</b><small>× 18 greens</small></span></label>' : '<span class="tp-scope-fixed">Whole area</span>') +
-      '<div class="tp-total-label"><small>' + (perGreen ? '18-green total' : 'Total required') + '</small><b data-tp-total>' + (num(line.qty) > 0 ? fmt(total, 2) + ' ' + esc(unit) : '—') + '</b></div></div>' +
-      '<span class="tp-rate-label" data-tp-rate-label>' + (perGreen ? fmt(num(line.qty), 2) + ' ' + esc(unit) + ' × 18 greens' : 'Total quantity for this area') + '</span>' +
-      (tpSelectedDates().length > 1 ? '<label class="tp-repeat-item"><input type="checkbox" data-tp-repeat data-product="' + esc(product.id) + '"' + (repeat ? ' checked' : '') + '><span><b>Repeat this item</b><small>On selected weekdays through this date range</small></span></label>' : '') +
-      (!canPlan ? '<small class="tp-unit-warning">Set a unit of measure in Products &amp; Stock before planning this item.</small>' : '') +
-      '</article>';
-  }).join('');
-  const noteKey = area + '::' + category;
-  const note = tpState.notes[noteKey] || '';
-  const existingCount = tpMatchingPlanRecords(area, category).filter(plan =>
-    tpPlanDateInRange(plan, tpState.date, tpState.validUntil || tpState.date)
-  ).length;
-  const weekdaysHtml = TP_WEEKDAYS.map(item =>
-    '<label class="tp-weekday-chip"><input type="checkbox" data-tp-weekday value="' + item.day + '"' +
-    (tpState.weekdays.includes(item.day) ? ' checked' : '') + '><span>' + item.label + '</span></label>'
-  ).join('');
-  const plannedDates = tpSelectedDates();
-  // Show already-saved allocations for the other dates in this range without crowding the active editor.
-  const otherDayGroups = new Map();
-  const addOtherDayItem = (date, plan) => {
-    if (!date || date === tpState.date) return;
-    if (!otherDayGroups.has(date)) otherDayGroups.set(date, new Map());
-    const productId = String(plan.productId || plan.itemId || plan.inventoryId || '');
-    const key = productId || String(plan.productName || plan.itemName || 'unknown') + '::' + String(plan.targetQty ?? plan.quantity ?? plan.qty ?? '');
-    otherDayGroups.get(date).set(key, plan);
-  };
-  tpMatchingPlanRecords(area, category)
-    .filter(plan => tpPlanDateInRange(plan, tpState.date, tpState.validUntil || tpState.date))
-    .forEach(plan => addOtherDayItem(turfRecordDate(plan), plan));
-  // Include unsaved quantities from the active editor so the accordion updates before Save is pressed.
-  const draftDates = tpSelectedDates();
-  S.inventory.filter(item => turfCategoryLabel(item.category) === category).forEach(product => {
-    const line = tpLineForProduct(product);
-    const qty = Math.max(0, num(line.qty));
-    if (!(qty > 0)) return;
-    const unit = turfProductUnit(product);
-    const dates = line.repeat === false ? draftDates.slice(0, 1) : draftDates;
-    dates.forEach(date => {
-      if (date === tpState.date) return;
-      addOtherDayItem(date, {
-        productId: product.id,
-        productName: itemName(product),
-        targetQty: tpLineTotal(line, area),
-        unit,
-        _draft: true
-      });
-    });
-  });
-  const otherDayEntries = [...otherDayGroups.entries()]
-    .map(([date, items]) => [date, [...items.values()]])
-    .sort((a, b) => a[0].localeCompare(b[0]));
-  const otherDayItemCount = otherDayEntries.reduce((total, entry) => total + entry[1].length, 0);
-  const otherDaysHtml = otherDayEntries.map(([date, plans]) => {
-    const dayLabel = new Date(date + 'T12:00:00').toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'short' });
-    const itemsHtml = plans.sort((a, b) => String(a.productName || '').localeCompare(String(b.productName || ''))).map(plan => {
-      const product = S.inventory.find(item => String(item.id) === String(plan.productId || plan.itemId || plan.inventoryId || ''));
-      const name = product ? itemName(product) : (plan.productName || plan.itemName || 'Unknown product');
-      const qty = num(plan.targetQty ?? plan.quantity ?? plan.qty);
-      const unit = plan.unit || (product && turfProductUnit(product)) || '';
-      return '<div class="tp-other-day-item' + (plan._draft ? ' is-draft' : '') + '"><span class="material-symbols-rounded">' + (plan._draft ? 'edit_note' : 'inventory_2') + '</span><span class="tp-other-day-name">' + esc(name) + (plan._draft ? '<small>Draft · not saved yet</small>' : '') + '</span><b>' + fmt(qty, 2) + (unit ? ' ' + esc(unit) : '') + '</b></div>';
-    }).join('');
-    return '<details class="tp-other-day"><summary><span class="material-symbols-rounded">calendar_month</span><b>' + esc(dayLabel) + '</b><span class="tp-other-day-count">' + plans.length + ' item' + (plans.length === 1 ? '' : 's') + '</span><span class="material-symbols-rounded tp-other-chevron">expand_more</span></summary><div class="tp-other-day-items">' + itemsHtml + '</div></details>';
-  }).join('');
-  const otherDaysPanel = otherDayEntries.length
-    ? '<details class="tp-other-days"><summary><span class="material-symbols-rounded">event_note</span><span class="tp-other-days-title"><b>Other days in this plan</b><small>Review saved items without leaving the active day</small></span><span class="tp-other-days-count">' + otherDayEntries.length + ' days · ' + otherDayItemCount + ' items</span><span class="material-symbols-rounded tp-other-chevron">expand_more</span></summary><div class="tp-other-days-content">' + otherDaysHtml + '</div></details>'
-    : '';
-  container.innerHTML =
-    '<div class="tp-planner-toolbar"><div class="tp-planner-title"><span class="tp-eyebrow">APPLICATION PLAN</span><h3>Daily treatment allocation</h3><p>Set the active dates once, then configure each area and category.</p></div>' +
-    '<div class="tp-date-range"><label><span>Plan from</span><input type="date" value="' + esc(tpState.date) + '" data-tp-date></label>' +
-    '<span class="tp-range-arrow material-symbols-rounded">arrow_forward</span>' +
-    '<label><span>Valid through</span><input type="date" min="' + esc(tpState.date) + '" value="' + esc(tpState.validUntil) + '" data-tp-until></label></div></div>' +
-    '<div class="tp-repeat-strip"><div class="tp-repeat-heading"><span class="material-symbols-rounded">event_repeat</span><div><b>Repeat on</b><small>' + plannedDates.length + ' scheduled date' + (plannedDates.length === 1 ? '' : 's') + '</small></div></div>' +
-    '<div class="tp-weekday-options">' + weekdaysHtml + '</div><span class="tp-repeat-help">Only selected weekdays between the start and end dates are scheduled.</span></div>' +
-    otherDaysPanel +
-    '<div class="tp-planner-layout"><aside class="tp-area-sidebar"><div class="tp-sidebar-heading"><span>COURSE AREAS</span><small>' + TP_AREAS.length + ' areas</small></div>' + areasHtml +
-    '<div class="tp-sidebar-foot"><span class="material-symbols-rounded">golf_course</span><div><b>Greens mode</b><small>Per-green quantity × 18</small></div></div></aside>' +
-    '<section class="tp-workspace"><div class="tp-category-tabs">' + categoryTabs + '</div>' +
-    '<div class="tp-category-heading"><div><span class="tp-eyebrow">' + esc(area.toUpperCase()) + '</span><h3>' + esc(category) + '</h3><p>' + esc((TP_CATEGORIES.find(item => item.name === category) || {}).description || 'Select products and quantities.') + '</p></div>' +
-    '<span class="tp-planned-count">' + existingCount + ' planned line' + (existingCount === 1 ? '' : 's') + ' in this range</span></div>' +
-    '<label class="tp-product-search"><span class="material-symbols-rounded">search</span><input type="search" data-tp-search placeholder="Search ' + esc(category.toLowerCase()) + ' by product name…" autocomplete="off" aria-label="Search ' + esc(category) + ' products"><kbd>Filter</kbd></label>' +
-    '<div class="tp-product-list">' + (rows || '<div class="tp-empty-state"><span class="material-symbols-rounded">inventory_2</span><b>No ' + esc(category.toLowerCase()) + ' found</b><p>Add products to this category in Products &amp; Stock first.</p></div>') + '<div class="tp-search-empty" data-tp-search-empty hidden><b>No matching products</b><span>Try another product name.</span></div></div>' +
-    '<label class="tp-notes-field"><span>Notes <small>(optional · this area and category)</small></span><textarea rows="2" placeholder="Purpose, rate reference, weather or operator instructions" data-tp-note data-area="' + esc(area) + '" data-category="' + esc(category) + '">' + esc(note) + '</textarea></label>' +
-    '<div class="tp-category-footer"><div class="tp-save-explainer"><span class="material-symbols-rounded">info</span><span>Creates one dated plan per selected weekday. Stock is not deducted until an issue is recorded.</span></div>' +
-    '<button type="button" class="btn btn-primary tp-save-tab" data-act="tp-save-tab"><span class="material-symbols-rounded">save</span>Save ' + esc(category) + '</button></div></section></div>';
+function tpPersistDraft(){try{sessionStorage.setItem('tpDraftV3',JSON.stringify(tpState));}catch(_){}}
+function tpGetLine(product){
+  const key=tpLineKey(tpState.area,tpState.category,product.id);
+  if(tpState.lines[key]) {
+    const existingLine=tpState.lines[key];
+    const foundNow=tpMatchingPlanRecords(tpState.area,tpState.category).filter(p=>String(p.productId||p.itemId||p.inventoryId||'')===String(product.id)&&turfRecordDate(p)===tpState.date);
+    if(existingLine.qtyByDate && existingLine.qtyByDate[tpState.date]===undefined && foundNow.length) {
+      const p0=foundNow[0], per0=tpState.area==='Greens'&&String(p0.scope||'').toLowerCase()==='per_area', total0=num(p0.targetQty??p0.quantity??p0.qty);
+      existingLine.qtyByDate[tpState.date]=per0?total0/18:total0;
+      existingLine.perGreen=per0;
+      existingLine.existingIds={...(existingLine.existingIds||{}),[tpState.date]:p0.id};
+      if(!(existingLine.repeatDates||[]).includes(tpState.date))existingLine.repeatDates=[...(existingLine.repeatDates||[]),tpState.date];
+    }
+    return existingLine;
+  }
+  const found=tpMatchingPlanRecords(tpState.area,tpState.category).filter(p=>String(p.productId||p.itemId||p.inventoryId||'')===String(product.id)&&turfRecordDate(p)===tpState.date);
+  const p=found[0],per=tpState.area==='Greens'&&String(p?.scope||'').toLowerCase()==='per_area',total=num(p?.targetQty??p?.quantity??p?.qty);
+  return tpState.lines[key]={qtyByDate:p?{[tpState.date]:per?total/18:total}:{},perGreen:per,repeatDates:p?[tpState.date]:[],overrides:{},touchedDates:[],existingIds:Object.fromEntries(found.map(x=>[turfRecordDate(x),x.id]))};
 }
-async function saveTpCategoryTab() {
-  const saveButton = document.querySelector('[data-act="tp-save-tab"]');
-  if (saveButton) saveButton.disabled = true;
-  const from = tpState.date;
-  const until = tpState.validUntil;
-  const weekdays = [...tpState.weekdays].sort((a, b) => a - b);
-  const area = tpState.area;
-  const category = tpState.category;
-  try {
-    if (!from || !until || until < from) { toast('Choose a valid plan date range.', 'err'); return; }
-    if (!weekdays.length) { toast('Select at least one weekday.', 'err'); return; }
-    const spanDays = Math.floor((new Date(until + 'T12:00:00') - new Date(from + 'T12:00:00')) / 86400000) + 1;
-    if (spanDays > 366) { toast('Keep a plan validity period within 366 days.', 'err'); return; }
-    const dates = tpSelectedDates();
-    if (!dates.length) { toast('No dates in this range match the selected weekdays.', 'err'); return; }
-
-    const products = S.inventory.filter(item => turfCategoryLabel(item.category) === category);
-    const desiredLines = new Map();
-    for (const product of products) {
-      const line = tpLineForProduct(product);
-      const qty = Math.max(0, num(line.qty));
-      if (!(qty > 0)) continue;
-      const unit = turfProductUnit(product);
-      if (!unit) { toast('Set the stock unit for ' + itemName(product) + ' in Products & Stock first.', 'err'); return; }
-      const perGreen = area === 'Greens' && !!line.perGreen;
-      const totalQty = qty * (perGreen ? 18 : 1);
-      desiredLines.set(String(product.id), { product, qty, unit, perGreen, totalQty, repeat: line.repeat !== false });
-      if (totalQty > num(product.stockQuantity)) {
-        toast('Planned quantity for ' + itemName(product) + ' exceeds current stock. The plan can still be saved, but replenishment may be needed.', 'warn');
-      }
-    }
-
-    const allCategoryPlans = tpMatchingPlanRecords(area, category);
-    // The existing app already uses validFrom, validUntil and repeatWeekdays for turf schedules.
-    // Replacing an overlapping recurring series keeps this planner compatible with that same record shape.
-    const overlappingProducts = new Set();
-    for (const productId of desiredLines.keys()) {
-      const conflict = allCategoryPlans.find(plan =>
-        String(plan.productId || plan.itemId || plan.inventoryId || '') === productId &&
-        tpIsRepeatSeries(plan) &&
-        plan.validFrom !== from &&
-        tpDateRangeOverlaps(plan.validFrom, plan.validUntil, from, until)
-      );
-      if (conflict) overlappingProducts.add(productId);
-    }
-    if (overlappingProducts.size) {
-      const names = [...overlappingProducts].map(id => itemName(S.inventory.find(item => String(item.id) === id) || { partName: id }));
-      toast('A recurring plan already overlaps this date range for ' + names.join(', ') + '. Edit that plan using its original start date, or choose a non-overlapping range.', 'err');
-      return;
-    }
-    // Treat records anchored on this exact start date as the same series being edited.
-    // Other series are left intact; overlapping series for the same product are blocked above.
-    const oldSeries = allCategoryPlans.filter(plan =>
-      tpIsRepeatSeries(plan) &&
-      plan.validFrom === from &&
-      tpDateRangeOverlaps(plan.validFrom, plan.validUntil, from, until)
-    );
-    const selectedDateSet = new Set(dates);
-    const selectedSingleDatePlans = allCategoryPlans.filter(plan =>
-      !tpIsRepeatSeries(plan) &&
-      selectedDateSet.has(turfRecordDate(plan))
-    );
-    const replaceRecords = [...new Map([...oldSeries, ...selectedSingleDatePlans].map(plan => [plan.id, plan])).values()];
-    if (!desiredLines.size && !replaceRecords.length) {
-      toast('Enter a quantity for at least one product before saving this tab.', 'warn');
-      return;
-    }
-
-    const noteKey = area + '::' + category;
-    const note = String(tpState.notes[noteKey] || '').trim();
-    const storedArea = area === 'Fairways' ? 'Fairway' : area;
-    const desiredByDateProduct = new Map();
-    for (const line of desiredLines.values()) {
-      const lineDates = line.repeat ? dates : dates.slice(0, 1);
-      for (const date of lineDates) {
-        desiredByDateProduct.set(date + '::' + line.product.id, { date, ...line });
-      }
-    }
-    const batch = writeBatch(db);
-    let writeCount = 0;
-    const handled = new Set();
-    const baseDate = new Date(from + 'T12:00:00');
-    for (const record of replaceRecords) {
-      const recordDate = turfRecordDate(record);
-      const productId = String(record.productId || record.itemId || record.inventoryId || '');
-      const key = recordDate + '::' + productId;
-      const desired = desiredByDateProduct.get(key);
-      if (desired && !handled.has(key)) {
-        const line = desired;
-        const dateObj = new Date(line.date + 'T12:00:00');
-        const fields = {
-          weekStart: getSunday(line.date),
-          date: line.date,
-          dayIndex: dateObj.getDay(),
-          productId: line.product.id,
-          productName: itemName(line.product),
-          category: line.product.category || category,
-          targetQty: line.totalQty,
-          unit: line.unit,
-          targetArea: storedArea,
-          area: storedArea,
-          scope: line.perGreen ? 'per_area' : 'overall',
-          validFrom: line.repeat ? from : null,
-          validUntil: line.repeat ? until : null,
-          repeatWeekdays: line.repeat ? weekdays : [],
-          notes: note || 'Planned via Turf Treatment Planner',
-          status: 'Planned'
-        };
-        batch.update(doc(db, CONFIG.COL.plans, record.id), fields);
-        handled.add(key);
-        writeCount++;
-      } else {
-        batch.delete(doc(db, CONFIG.COL.plans, record.id));
-        writeCount++;
-      }
-    }
-    for (const [key, line] of desiredByDateProduct.entries()) {
-      if (handled.has(key)) continue;
-      const dateObj = new Date(line.date + 'T12:00:00');
-      const ref = doc(collection(db, CONFIG.COL.plans));
-      batch.set(ref, {
-        weekStart: getSunday(line.date),
-        date: line.date,
-        dayIndex: dateObj.getDay(),
-        productId: line.product.id,
-        productName: itemName(line.product),
-        category: line.product.category || category,
-        targetQty: line.totalQty,
-        unit: line.unit,
-        targetArea: storedArea,
-        area: storedArea,
-        scope: line.perGreen ? 'per_area' : 'overall',
-        ...(line.repeat ? { validFrom: from, validUntil: until, repeatWeekdays: weekdays } : {}),
-        notes: note || 'Planned via Turf Treatment Planner',
-        status: 'Planned',
-        createdAt: Date.now()
-      });
-      writeCount++;
-    }
-    if (!writeCount) { toast('No changes to save for this tab.'); return; }
-    if (writeCount > 450) {
-      toast('This plan would update ' + writeCount + ' records. Shorten the date range or select fewer products.', 'err');
-      return;
-    }
-    await batch.commit();
-    toast(category + ' scheduled for ' + area + ' on ' + dates.length + ' date' + (dates.length === 1 ? '' : 's') + '.');
-    renderTp();
-  } catch (error) {
-    console.error('Turf planner save failed:', error);
-    toast('Could not save this treatment plan. Check the connection and try again.', 'err');
-  } finally {
-    if (saveButton) saveButton.disabled = false;
-  }
+function tpQty(line,date=tpState.date){return line.overrides?.[date]!==undefined?line.overrides[date]:(line.qtyByDate?.[date]??'');}
+function tpRenderCalendar(id){
+  const line=tpGetLine(S.inventory.find(p=>String(p.id)===String(id))||{id}),[y,m]=String(tpState.repeatMonth||tpState.date.slice(0,7)).split('-').map(Number),first=new Date(y,m-1,1,12),offset=(first.getDay()+6)%7,days=new Date(y,m,0).getDate(),sel=new Set(line.repeatDates||[]);let cells='';
+  for(let i=0;i<offset;i++)cells+='<span></span>';
+  for(let d=1;d<=days;d++){const date=y+'-'+String(m).padStart(2,'0')+'-'+String(d).padStart(2,'0');cells+='<button type="button" class="tp-cal-day'+(sel.has(date)?' is-selected':'')+(date===tpState.date?' is-current':'')+'" data-act="tp-repeat-date" data-product="'+esc(id)+'" data-date="'+date+'">'+d+(line.overrides?.[date]!==undefined?'<i></i>':'')+'</button>';}
+  const edit=tpState.editingRepeatDate;
+  return '<div class="tp-repeat-panel"><div class="tp-repeat-cal-head"><button type="button" data-act="tp-repeat-month" data-delta="-1">‹</button><b>'+esc(first.toLocaleDateString('en-IN',{month:'long',year:'numeric'}))+'</b><button type="button" data-act="tp-repeat-month" data-delta="1">›</button></div><div class="tp-cal-grid">'+['M','T','W','T','F','S','S'].map(x=>'<span class="tp-cal-weekday">'+x+'</span>').join('')+cells+'</div><small>Click dates to repeat this quantity. Double-click a selected date to override its quantity.</small>'+(edit?'<div class="tp-repeat-qty-edit"><label>'+esc(edit)+' qty <input type="number" min="0.01" step="any" data-tp-repeat-qty data-product="'+esc(id)+'" data-date="'+esc(edit)+'" value="'+esc(String(tpQty(line,edit)))+'"></label><button class="btn btn-sm" data-act="tp-repeat-qty-ok" data-product="'+esc(id)+'" data-date="'+esc(edit)+'">Apply</button></div>':'')+'<div class="tp-repeat-actions"><span>'+sel.size+' dates</span><button class="btn btn-sm" data-act="tp-repeat-cancel">Done</button></div></div>';
 }
-document.addEventListener('input', event => {
-  const target = event.target;
-  if (!target || !target.closest) return;
-  const searchInput = target.closest('[data-tp-search]');
-  if (searchInput) {
-    const query = String(searchInput.value || '').trim().toLowerCase();
-    const list = searchInput.closest('.tp-workspace')?.querySelector('.tp-product-list');
-    if (!list) return;
-    const rows = [...list.querySelectorAll('.tp-product-row[data-search]')];
-    let visible = 0;
-    rows.forEach(row => {
-      const match = !query || String(row.dataset.search || '').includes(query);
-      row.hidden = !match;
-      if (match) visible++;
-    });
-    const noMatch = list.querySelector('[data-tp-search-empty]');
-    const categoryEmpty = list.querySelector('.tp-empty-state');
-    if (noMatch) noMatch.hidden = !(query && visible === 0);
-    if (categoryEmpty) categoryEmpty.hidden = !!query;
-    return;
+function renderTp(){
+ const c=$('#tpContainer');if(!c)return;tpPersistDraft();
+ const areaTabs=TP_AREAS.map(a=>'<button class="tp-area-button'+(a.name===tpState.area?' is-active':'')+'" data-act="tp-area" data-area="'+esc(a.name)+'"><span class="material-symbols-rounded">'+esc(a.icon)+'</span><span class="tp-area-copy"><b>'+esc(a.name)+'</b></span></button>').join('');
+ const tabs=TP_CATEGORIES.map(a=>'<button class="tp-category-tab'+(a.name===tpState.category?' is-active':'')+'" data-act="tp-category" data-category="'+esc(a.name)+'"><span class="material-symbols-rounded">'+esc(a.icon)+'</span><span>'+esc(a.name)+'</span></button>').join('');
+ const products=S.inventory.filter(p=>turfCategoryLabel(p.category)===tpState.category).sort((a,b)=>String(itemName(a)).localeCompare(String(itemName(b))));
+ const rows=products.map(p=>{const l=tpGetLine(p),unit=turfProductUnit(p),qty=tpQty(l),per=tpState.area==='Greens'&&l.perGreen,total=num(qty)*(per?18:1),isOpen=tpState.repeatOpen===String(p.id),dates=l.repeatDates||[];
+ return '<article class="tp-product-row" data-search="'+esc(String(itemName(p)).toLowerCase())+'" data-unit="'+esc(unit)+'"><div class="tp-product-ident"><span class="tp-product-icon material-symbols-rounded">inventory_2</span><div class="tp-product-copy"><b>'+esc(itemName(p))+'</b><span>'+esc(unit||'Unit not set')+' · Stock '+fmt(num(p.stockQuantity),2)+'</span></div></div><div class="tp-qty-control"><label>Qty ('+esc(unit||'unit')+')<input type="number" min="0" step="any" value="'+esc(qty===''?'':String(qty))+'" data-tp-qty data-product="'+esc(p.id)+'" '+(!unit?'disabled':'')+'></label></div><div class="tp-scope-control">'+(tpState.area==='Greens'?'<label class="tp-per-green"><input type="checkbox" data-tp-per-green data-product="'+esc(p.id)+'"'+(per?' checked':'')+'><span><b>Per green</b><small>× 18 greens</small></span></label>':'<span class="tp-scope-fixed">Whole area</span>')+'<div class="tp-total-label"><small>Total</small><b data-tp-total>'+(num(qty)>0?fmt(total,2)+' '+esc(unit):'—')+'</b></div></div><button type="button" class="tp-repeat-trigger'+(dates.length?' is-active':'')+'" data-act="tp-repeat-toggle" data-product="'+esc(p.id)+'"><span class="material-symbols-rounded">event_repeat</span>Repeat'+(dates.length?' · '+dates.length:'')+'</button>'+(isOpen?tpRenderCalendar(p.id):'')+'</article>';
+ }).join('');
+ const saved=tpMatchingPlanRecords(tpState.area,tpState.category).filter(p=>turfRecordDate(p)===tpState.date);
+ const savedHtml=saved.map(p=>'<div class="tp-saved-entry'+(tpState.deletedPlanIds.includes(p.id)?' is-deleted':'')+'"><span>'+esc(p.productName||p.itemName||'Inventory item')+'</span><b>'+fmt(num(p.targetQty??p.quantity??p.qty),2)+' '+esc(p.unit||'')+'</b><button data-act="tp-delete-entry" data-id="'+esc(p.id)+'">'+(tpState.deletedPlanIds.includes(p.id)?'Undo':'×')+'</button></div>').join('');
+ const pending=Object.values(tpState.lines).reduce((n,l)=>n+(l.touchedDates||[]).length,0)+tpState.deletedPlanIds.length;
+ c.innerHTML='<div class="tp-planner-toolbar"><label class="tp-date-single"><span class="material-symbols-rounded">calendar_today</span><input type="date" value="'+esc(tpState.date)+'" data-tp-date aria-label="Plan date"></label><span class="tp-draft-status">'+pending+' pending · '+saved.length+' saved</span></div><div class="tp-planner-layout"><aside class="tp-area-sidebar">'+areaTabs+'</aside><section class="tp-workspace"><div class="tp-category-tabs">'+tabs+'</div><label class="tp-product-search"><span class="material-symbols-rounded">search</span><input type="search" data-tp-search placeholder="Search items…"><kbd>Filter</kbd></label>'+(savedHtml?'<details class="tp-saved-list" open><summary>Saved reservations · '+saved.length+'</summary><div>'+savedHtml+'</div></details>':'')+'<div class="tp-product-list">'+(rows||'<div class="tp-empty-state">No items in this category.</div>')+'<div data-tp-search-empty hidden>No matching items.</div></div></section></div><div class="tp-floating-save"><span><b>'+pending+'</b> pending</span><button type="button" class="btn btn-primary" data-act="tp-save-open" '+(pending?'':'disabled')+'><span class="material-symbols-rounded">save</span>Review &amp; Save</button></div>';
+}
+function tpBuildChanges(){
+ const out=[];
+ for(const [key,l] of Object.entries(tpState.lines)){const [area,category,id]=key.split('::'),product=S.inventory.find(p=>String(p.id)===id);if(!product)continue;
+ for(const date of new Set([...(l.touchedDates||[]),...(l.repeatDates||[])])){if(l.removedDates?.includes(date))continue;if(l.existingIds?.[date]&&tpState.deletedPlanIds.includes(l.existingIds[date]))continue;const qty=num(tpQty(l,date));if(!(qty>0))continue;out.push({area,category,id,product,date,qty,total:qty*(area==='Greens'&&l.perGreen?18:1),unit:turfProductUnit(product),perGreen:l.perGreen});}}
+ return out;
+}
+function openTpSaveReview(){
+ const changes=tpBuildChanges(),deletes=tpState.deletedPlanIds.map(id=>(S.plans||[]).find(p=>p.id===id)).filter(Boolean);
+ if(!changes.length&&!deletes.length){toast('Add or change a quantity first.','warn');return;}
+ const rows=changes.map(x=>'<tr><td>'+esc(x.date)+'</td><td>'+esc(itemName(x.product))+'</td><td>'+esc(x.area)+'</td><td>'+fmt(x.total,2)+' '+esc(x.unit)+'</td></tr>').join('')+deletes.map(p=>'<tr><td>'+esc(turfRecordDate(p))+'</td><td>'+esc(p.productName||p.itemName||'Reservation')+'</td><td>'+esc(p.targetArea||p.area||'')+'</td><td>Delete</td></tr>').join('');
+ openModal({title:'Confirm planner changes',sub:'',size:'turf-planner-confirm-modal',body:'<div class="tp-review-table-wrap"><table class="tp-review-table"><thead><tr><th>Date</th><th>Item</th><th>Application area</th><th>Quantity</th></tr></thead><tbody>'+rows+'</tbody></table></div><p>Review the reservations before committing.</p>',footer:'<button class="btn" data-act="tp-review-back">Back</button><button class="btn btn-primary" data-act="tp-confirm-save">Confirm &amp; save</button>'});
+}
+async function confirmTpSave(){
+ const btn=document.querySelector('[data-act="tp-confirm-save"]');if(btn)btn.disabled=true;
+ try{
+  const changes=tpBuildChanges(),ids=[...new Set(tpState.deletedPlanIds)];if(changes.length+ids.length>450){toast('Split this into smaller saves.','err');return;}
+  const batch=writeBatch(db);let writes=0;
+  for(const id of ids){const p=(S.plans||[]).find(x=>x.id===id);if(p&&tpIsEditablePlan(p)){batch.delete(doc(db,CONFIG.COL.plans,id));writes++;}}
+  for(const x of changes){const old=(S.plans||[]).find(p=>tpIsEditablePlan(p)&&turfRecordDate(p)===x.date&&tpCanonicalArea(p.targetArea||p.area)===tpCanonicalArea(x.area)&&String(p.productId||p.itemId||p.inventoryId||'')===x.id);
+   const fields={weekStart:getSunday(x.date),date:x.date,dayIndex:new Date(x.date+'T12:00:00').getDay(),productId:x.id,productName:itemName(x.product),category:x.product.category||x.category,targetQty:x.total,unit:x.unit,targetArea:x.area==='Fairways'?'Fairway':x.area,area:x.area==='Fairways'?'Fairway':x.area,scope:x.area==='Greens'&&x.perGreen?'per_area':'overall',status:'Planned'};
+   if(old){batch.update(doc(db,CONFIG.COL.plans,old.id),fields);writes++;}else{batch.set(doc(collection(db,CONFIG.COL.plans)),{...fields,notes:'Planned via Day Planner',createdAt:Date.now()});writes++;}
   }
-  const qtyInput = target.closest('[data-tp-qty]');
-  if (qtyInput) {
-    const productId = qtyInput.dataset.product;
-    const key = tpLineKey(tpState.area, tpState.category, productId);
-    const previous = tpState.lines[key] || tpLineForProduct({ id: productId });
-    tpState.lines[key] = { ...previous, qty: qtyInput.value };
-    tpUpdateRowTotal(qtyInput);
-    return;
-  }
-  const noteInput = target.closest('[data-tp-note]');
-  if (noteInput) {
-    tpState.notes[noteInput.dataset.area + '::' + noteInput.dataset.category] = noteInput.value;
-  }
+  if(!writes){closeModal();return;}await batch.commit();sessionStorage.removeItem('tpDraftV3');toast('Day Planner saved.');closeModal();openTurfPlanner();
+ }catch(e){console.error(e);toast('Could not save planner changes. Check connection and retry.','err');}finally{if(btn)btn.disabled=false;}
+}
+document.addEventListener('input',e=>{
+ const t=e.target;if(!t||!t.closest)return;
+ const search=t.closest('[data-tp-search]');if(search){const q=String(search.value||'').toLowerCase().trim(),list=search.closest('.tp-workspace')?.querySelector('.tp-product-list');if(!list)return;let n=0;list.querySelectorAll('.tp-product-row[data-search]').forEach(r=>{r.hidden=!!q&&!r.dataset.search.includes(q);if(!r.hidden)n++;});const empty=list.querySelector('[data-tp-search-empty]');if(empty)empty.hidden=!(q&&!n);return;}
+ const qty=t.closest('[data-tp-qty]');if(qty){const p=S.inventory.find(x=>String(x.id)===String(qty.dataset.product));if(!p)return;const l=tpGetLine(p);l.qtyByDate=l.qtyByDate||{};l.qtyByDate[tpState.date]=qty.value;l.touchedDates=[...new Set([...(l.touchedDates||[]),tpState.date])];tpPersistDraft();const row=qty.closest('.tp-product-row'),el=row?.querySelector('[data-tp-total]'),unit=row?.dataset.unit||'',per=tpState.area==='Greens'&&!!row?.querySelector('[data-tp-per-green]')?.checked;if(el)el.textContent=num(qty.value)>0?fmt(num(qty.value)*(per?18:1),2)+' '+unit:'—';return;}
+ const q=t.closest('[data-tp-repeat-qty]');if(q){tpState.repeatQtyValue=q.value;return;}
 });
-document.addEventListener('change', event => {
-  const target = event.target;
-  if (!target || !target.closest) return;
-  const qtyInput = target.closest('[data-tp-qty]');
-  if (qtyInput) { renderTp(); return; }
-  const dateInput = target.closest('[data-tp-date]');
-  if (dateInput) {
-    if (!dateInput.value) return;
-    tpState.date = dateInput.value;
-    if (!tpState.validUntil || tpState.validUntil < tpState.date) tpState.validUntil = tpState.date;
-    if (!tpState.weekdaysTouched) tpState.weekdays = tpDefaultWeekdays(tpState.date);
-    tpState.lines = {};
-    tpState.notes = {};
-    renderTp();
-    return;
-  }
-  const untilInput = target.closest('[data-tp-until]');
-  if (untilInput) {
-    if (!untilInput.value) return;
-    tpState.validUntil = untilInput.value < tpState.date ? tpState.date : untilInput.value;
-    renderTp();
-    return;
-  }
-  const weekdayInput = target.closest('[data-tp-weekday]');
-  if (weekdayInput) {
-    const day = Number(weekdayInput.value);
-    const selected = new Set(tpState.weekdays);
-    if (weekdayInput.checked) selected.add(day);
-    else selected.delete(day);
-    tpState.weekdays = [...selected].sort((a, b) => a - b);
-    tpState.weekdaysTouched = true;
-    renderTp();
-    return;
-  }
-  const repeatInput = target.closest('[data-tp-repeat]');
-  if (repeatInput) {
-    const productId = repeatInput.dataset.product;
-    const key = tpLineKey(tpState.area, tpState.category, productId);
-    const previous = tpState.lines[key] || tpLineForProduct({ id: productId });
-    tpState.lines[key] = { ...previous, repeat: repeatInput.checked };
-    return;
-  }
-  const perGreenInput = target.closest('[data-tp-per-green]');
-  if (perGreenInput) {
-    const productId = perGreenInput.dataset.product;
-    const key = tpLineKey(tpState.area, tpState.category, productId);
-    const previous = tpState.lines[key] || tpLineForProduct({ id: productId });
-    tpState.lines[key] = { ...previous, perGreen: perGreenInput.checked };
-    tpUpdateRowTotal(perGreenInput);
-  }
+document.addEventListener('change',e=>{
+ const t=e.target;if(!t||!t.closest)return;
+ const date=t.closest('[data-tp-date]');if(date&&date.value){tpState.date=date.value;tpState.repeatOpen='';tpState.editingRepeatDate='';renderTp();return;}
+ const per=t.closest('[data-tp-per-green]');if(per){const p=S.inventory.find(x=>String(x.id)===String(per.dataset.product));if(!p)return;const l=tpGetLine(p);l.perGreen=per.checked;l.touchedDates=[...new Set([...(l.touchedDates||[]),tpState.date])];tpPersistDraft();renderTp();}
 });
-
-
-
-
+document.addEventListener('dblclick',e=>{const b=e.target.closest('[data-act="tp-repeat-date"]');if(!b)return;e.preventDefault();const p=S.inventory.find(x=>String(x.id)===String(b.dataset.product));if(!p)return;const l=tpGetLine(p);if(!(l.repeatDates||[]).includes(b.dataset.date))l.repeatDates.push(b.dataset.date);tpState.repeatOpen=b.dataset.product;tpState.editingRepeatDate=b.dataset.date;renderTp();});
 let cmdOpen = false;
 function toggleCmdPal() {
   cmdOpen = !cmdOpen;
