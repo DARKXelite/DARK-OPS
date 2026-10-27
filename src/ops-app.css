@@ -3849,3 +3849,25 @@ details > summary:focus-visible { outline:3px solid #315A7D!important; }
   #tpContainer .tp-repeat-panel { grid-column:1/-1; }
   #tpContainer .tp-floating-save { margin-left:-8px;margin-right:-8px; }
 }
+
+
+/* Shared component contract across operational views: menus, lists, filters and data surfaces use one neutral scheme. */
+.view [class*="dropdown"],.view [class*="popover"],.view [class*="context-menu"],.view [class*="menu-panel"],
+.view [class*="list-panel"],.view [class*="list-container"],.view [class*="table-container"],.view [class*="table-wrap"],
+.view [class*="filter-bar"],.view [class*="filter-panel"],.view [class*="form-panel"],.view [class*="section-card"],
+.view [class*="data-panel"],.view [class*="results-panel"] {
+  background:#FFFFFF!important;color:#202B38!important;border-color:#CBD3DC!important;box-shadow:none!important;
+}
+.view [class*="dropdown"] *, .view [class*="popover"] *, .view [class*="context-menu"] *,
+.view [class*="menu-panel"] *, .view [class*="list-panel"] *, .view [class*="list-container"] *,
+.view [class*="table-container"] *, .view [class*="table-wrap"] *, .view [class*="filter-bar"] *,
+.view [class*="filter-panel"] *, .view [class*="form-panel"] *, .view [class*="section-card"] *,
+.view [class*="data-panel"] *, .view [class*="results-panel"] * {
+  text-shadow:none!important;
+}
+.view [class*="dropdown"] button,.view [class*="popover"] button,.view [class*="context-menu"] button,
+.view [class*="menu-panel"] button { color:#202B38!important;background:transparent!important; }
+.view [class*="dropdown"] button:hover,.view [class*="popover"] button:hover,.view [class*="context-menu"] button:hover,
+.view [class*="menu-panel"] button:hover { color:#172433!important;background:#E8EDF2!important; }
+.view [class*="table"] th,.view [class*="table"] thead { background:#F1F4F7!important;color:#334155!important; }
+.view [class*="table"] td { color:#202B38!important; }
