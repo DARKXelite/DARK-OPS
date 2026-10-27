@@ -2912,6 +2912,7 @@ document.body.classList.add("auth-locked");
 $("#login").hidden = false;
 let confirmationResult = null;
 let recaptchaVerifier = null;
+let pendingAuthError = "";
 function resetOtpUI({ clearError = true, focusPhone = false } = {}) {
   confirmationResult = null;
   try { recaptchaVerifier?.clear(); } catch (_) {}
@@ -2935,6 +2936,8 @@ onAuthStateChanged(auth, async user => {
   if (gate) gate.hidden = true;
   if (!user) {
     resetOtpUI();
+    if (pendingAuthError && error) error.textContent = pendingAuthError;
+    pendingAuthError = "";
     sessionStorage.removeItem("tpDraftV4");
     history.replaceState(null, "", location.pathname + location.search);
     closeModal(true); closeDrawer();
@@ -2967,8 +2970,11 @@ onAuthStateChanged(auth, async user => {
     if (!roleData || roleData.active !== true || !ROLE_PERMISSIONS[roleData.role]) {
       if (!isCurrentAuth()) return;
       resetOtpUI();
+      pendingAuthError = "This account has no active application role. Ask an administrator to assign access.";
       await signOut(auth);
-      if (error) error.textContent = "This account has no active application role. Ask an administrator to assign access.";
+      if (!isCurrentAuth()) return;
+      if (error) error.textContent = pendingAuthError;
+      pendingAuthError = "";
       return;
     }
     RBAC.session.role = roleData.role;
@@ -2985,8 +2991,11 @@ onAuthStateChanged(auth, async user => {
   } catch (err) {
     if (!isCurrentAuth()) return;
     console.error("RBAC role lookup failed", err);
+    pendingAuthError = "Could not verify your application role. Check Firebase access rules and try again.";
     await signOut(auth);
-    if (error) error.textContent = "Could not verify your application role. Check Firebase access rules and try again.";
+    if (!isCurrentAuth()) return;
+    if (error) error.textContent = pendingAuthError;
+    pendingAuthError = "";
   }
 });
 $("#loginForm").addEventListener("submit", async e => {
