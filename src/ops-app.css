@@ -3955,3 +3955,25 @@ details > summary:focus-visible { outline:3px solid #1D4D33!important; }
 #tpContainer .tp-inline-chevron {
   color: #536047;
 }
+
+/* Separate out-of-plan issues from scheduled application records. */
+#v-turfcare .turf-view-tabs { flex-wrap:wrap; }
+#v-turfcare .turf-unplanned-log-card .turf-card-head { align-items:flex-start; }
+#v-turfcare .turf-unplanned-log-card .turf-card-head p { max-width:760px; }
+#v-turfcare .turf-unplanned-log-card .turf-filter-bar { align-items:flex-end; }
+#v-turfcare .turf-unplanned-log-card .turf-search { flex:1 1 280px; min-width:200px; }
+#v-turfcare .turf-unplanned-log-card .table-wrap { max-width:100%; overflow:auto; }
+#v-turfcare #turfUnplannedIssuesTbl table { min-width:1120px; }
+#v-turfcare #turfUnplannedIssuesTbl th { white-space:nowrap; }
+#v-turfcare #turfUnplannedIssuesTbl td { vertical-align:top; }
+#v-turfcare #turfUnplannedIssuesTbl td code { display:inline-block; max-width:190px; overflow-wrap:anywhere; white-space:normal; }
+#v-turfcare #turfUnplannedIssuesTbl td .muted { display:block; margin-top:3px; }
+#v-turfcare #turfUnplannedIssuesTbl td:nth-child(9) { min-width:180px; white-space:normal; overflow-wrap:anywhere; }
+#v-turfcare .turf-unplanned-log-card .turf-data-note { margin-top:12px; }
+@media(max-width:700px) {
+  #v-turfcare .turf-unplanned-log-card .turf-card-head { align-items:stretch; flex-direction:column; }
+  #v-turfcare .turf-unplanned-log-card .turf-card-head>.btn { align-self:flex-start; }
+  #v-turfcare .turf-unplanned-log-card .turf-filter-bar>label { flex:1 1 100%; }
+  #v-turfcare .turf-unplanned-log-card .turf-filter-bar select { width:100%; }
+  #v-turfcare #turfUnplannedIssuesTbl table { min-width:1040px; }
+}
