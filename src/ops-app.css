@@ -1040,46 +1040,6 @@ body::after{display:none!important;content:none!important}
 .turf-variance-table{width:100%;border-collapse:collapse;font-size:11px}.turf-variance-table th,.turf-variance-table td{text-align:left;padding:9px;border-bottom:1px solid var(--border)}.turf-variance-table th{color:var(--muted);font-size:9px;text-transform:uppercase;letter-spacing:.04em}.turf-variance-table td:not(:first-child),.turf-variance-table th:not(:first-child){text-align:right;font-variant-numeric:tabular-nums}
 @media(max-width:760px){#v-turfcare .turf-week-layout{grid-template-columns:1fr!important}.turf-batch-entry-row{grid-template-columns:18px minmax(0,1fr) 85px}.turf-batch-entry-row .turf-batch-area{grid-column:2/-1}.dock-pill{right:10px!important;bottom:10px!important}.dock-pill .nav-btn{width:36px;height:38px;min-width:36px!important}}
 
-/* CLOVER GREENS BRAND PALETTE: Sherwood Green / Romance / Dorado / Chamois */
-
-body,html{background:var(--bg)!important;color:var(--text)!important}
-.sidebar{background:#1D4D33!important;color:#F4F5F2!important}
-.brand-mark{background:#E5C794!important;color:#1D4D33!important}
-.brand b,.topbar h1,.card-h h3,.section-title,.modal h2,.modal h3{color:#1D4D33}
-.brand span.s,.side-foot{color:rgba(244,245,242,.72)!important}
-.nav button{color:rgba(244,245,242,.78)!important}
-.nav button:hover,.nav button.active{background:rgba(244,245,242,.13)!important;color:#fff!important}
-.nav .nb{background:#E5C794!important;color:#1D4D33!important}
-.topbar,.top-header{background:rgba(244,245,242,.94)!important;color:var(--text)!important;border-color:var(--border)!important}
-.card,.panel,.stat-card,.kmenu,.drawer,.login-card,.modal,.modal-content,.dropdown-menu,.popover,.table-wrap,.table-container{background:#FFFFFF!important;color:var(--text)!important;border-color:var(--border)!important;box-shadow:var(--shadow)!important}
-.m-head,.m-foot,.modal-header,.modal-footer{background:#F7F7F4!important;color:var(--text)!important;border-color:var(--border)!important}
-input,select,textarea,.modal input,.modal select,.modal textarea{background:#FFFFFF!important;color:#243D30!important;border-color:rgba(29,77,51,.24)!important}
-select option{background:#FFFFFF!important;color:#243D30!important}
-button.primary,.btn-primary,.btn-brand,.button-primary{background:#1D4D33!important;color:#FFFFFF!important;border-color:#1D4D33!important}
-button.secondary,.btn-secondary{background:#F7F7F4!important;color:#1D4D33!important;border-color:var(--border)!important}
-button:hover,.icon-btn:hover{filter:brightness(.98)}
-table thead,th{background:#EEF1EC!important;color:#1D4D33!important}
-td,th{border-color:var(--border)!important}
-.badge,.tag,.chip{border-color:var(--border)}
-hr{border-color:var(--border)!important}
-
-
-/* Table contrast refinement: muted warm-green surfaces, never stark white */
-
-.table-wrap{border:1px solid var(--table-line);border-radius:10px;overflow:auto;background:var(--table-bg)}
-table{background:var(--table-bg);color:var(--table-text)}
-thead th{background:var(--table-head)!important;color:#E7D7B8!important;border-bottom:1px solid var(--table-line)!important}
-tbody tr{background:var(--table-row)}
-tbody tr:nth-child(even){background:var(--table-row-alt)}
-tbody td{background:transparent!important;color:var(--table-text);border-bottom:1px solid var(--table-line)!important}
-tbody tr:hover td{background:var(--table-hover)!important}
-tfoot td{background:var(--table-head)!important;color:var(--table-text);border-top:1px solid var(--table-line)!important}
-td .muted,td.muted,.table-wrap .muted{color:var(--table-muted)!important}
-td .badge.mute{background:#35483D;color:#D8E0D8}
-
-
-
-
 /* Turf planner: give the calendar the full workspace and let application cards use their width. */
 #v-turfcare .turf-workboard-grid{grid-template-columns:minmax(0,1fr)!important;align-items:start;gap:18px!important}
 #v-turfcare .turf-weekly-card{grid-column:1/-1!important;grid-row:auto!important;min-width:0;width:100%}
@@ -1500,19 +1460,6 @@ main,.main-content,.page-content{padding-left:clamp(12px,1.35vw,22px)!important;
 .ops-turf-area-row{padding:9px 0;border-bottom:1px solid var(--border)}.ops-turf-area-row:last-child{border-bottom:0}.ops-turf-area-row-head{display:flex;justify-content:space-between;gap:10px;font-size:11px;margin-bottom:5px}.ops-turf-area-row-head span{color:var(--muted);font-size:10px}.ops-turf-area-task{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:10px;align-items:center;padding:5px 0;font-size:10px}.ops-turf-area-task span:nth-child(2){color:var(--muted)}.ops-turf-area-task b{white-space:nowrap;font-size:10px}
 @media(max-width:620px){.turf-plan-schedule-grid{grid-template-columns:1fr 1fr}.turf-plan-schedule-grid label:first-child{grid-column:1/-1}.ops-turf-area-task{grid-template-columns:minmax(0,1fr) auto;gap:6px}.ops-turf-area-task b{grid-column:1/-1}}
 
-/* Global table contrast audit: consistent, low-glare warm surfaces across every module. */
-
-.table-wrap table, table{border-collapse:separate;border-spacing:0;background:#f1f3ee;color:#28382e;border-color:var(--table-line);}
-.table-wrap table thead th, table thead th{background:#244a37!important;color:#fffaf0!important;border-color:#3c5f4c!important;font-weight:650;letter-spacing:.015em;}
-.table-wrap table tbody tr, table tbody tr{background:#f1f3ee!important;color:#28382e;}
-.table-wrap table tbody tr:nth-child(even), table tbody tr:nth-child(even){background:#e8ede6!important;}
-.table-wrap table tbody tr:hover, table tbody tr:hover{background:#dce7dc!important;color:#20392a;}
-.table-wrap table td, .table-wrap table th, table td, table th{border-color:#cbd5ca!important;}
-.table-wrap table td b, table td b{color:#20392a;}
-.table-wrap table .muted, table .muted{color:#657368!important;}
-.table-wrap table tfoot td, table tfoot td{background:#dfe7dc!important;color:#20392a!important;font-weight:700;}
-.table-wrap table .empty, table .empty{color:#68766b!important;background:#eef1eb!important;}
-.table-wrap table input,.table-wrap table select,.table-wrap table textarea{background:#fffdf8;color:#26392d;border:1px solid #b9c7b8;}
 .user-tools{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:0 0 12px;}
 .user-search{display:flex;align-items:center;gap:8px;min-width:min(320px,100%);flex:1;border:1px solid #cbd5ca;border-radius:9px;background:#f7f8f4;padding:0 10px;color:#52695a;}
 .user-search input{width:100%;min-width:0;border:0!important;outline:0;background:transparent!important;color:#28382e;padding:10px 0;box-shadow:none!important;}
