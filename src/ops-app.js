@@ -243,7 +243,22 @@ function toast(msg, type = 'ok') {
 function setConn(state) { document.documentElement.dataset.firebaseState = state || 'connecting'; const dot=$('#connDot'); if(dot) dot.className='dot '+state; const label=$('#connText'); if(label) label.textContent=state==='ok'?'Connected':state==='err'?'Connection error':'Connecting'; }
 let modalReturnFocus = null;
 let drawerReturnFocus = null;
-function syncLayerState() { document.body.classList.toggle("layer-open", ["#overlay", "#drawerOv", "#cmdOverlay"].some(sel => $(sel)?.classList.contains("open"))); }
+const layerBackgroundState = new Map();
+function syncLayerState() {
+  const open = ["#overlay", "#drawerOv", "#cmdOverlay"].some(sel => $(sel)?.classList.contains("open"));
+  document.body.classList.toggle("layer-open", open);
+  const layerIds = new Set(["overlay", "drawerOv", "cmdOverlay", "cmdPal", "toasts"]);
+  [...document.body.children].forEach(child => {
+    if (layerIds.has(child.id)) return;
+    if (open) {
+      if (!layerBackgroundState.has(child)) layerBackgroundState.set(child, child.inert);
+      child.inert = true;
+    } else if (layerBackgroundState.has(child)) {
+      child.inert = layerBackgroundState.get(child);
+      layerBackgroundState.delete(child);
+    }
+  });
+}
 function openModal({ title, sub = '', body = '', footer = '', size = '' }) {
   if (!$('#overlay').classList.contains('open')) modalReturnFocus = document.activeElement;
   $('#modal').className = 'modal ' + size; $('#modal').setAttribute('role', 'dialog'); $('#modal').setAttribute('aria-modal', 'true'); $('#modal').setAttribute('aria-label', title || 'Dialog'); $('#modal').setAttribute('tabindex', '-1'); $('#modal').dataset.dirty = 'false'; $('#mTitle').textContent = title; $('#mSub').textContent = sub;
