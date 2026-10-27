@@ -3314,15 +3314,38 @@ function renderTp() {
   const plannedDates = tpSelectedDates();
   // Show already-saved allocations for the other dates in this range without crowding the active editor.
   const otherDayGroups = new Map();
+  const addOtherDayItem = (date, plan) => {
+    if (!date || date === tpState.date) return;
+    if (!otherDayGroups.has(date)) otherDayGroups.set(date, new Map());
+    const productId = String(plan.productId || plan.itemId || plan.inventoryId || '');
+    const key = productId || String(plan.productName || plan.itemName || 'unknown') + '::' + String(plan.targetQty ?? plan.quantity ?? plan.qty ?? '');
+    otherDayGroups.get(date).set(key, plan);
+  };
   tpMatchingPlanRecords(area, category)
     .filter(plan => tpPlanDateInRange(plan, tpState.date, tpState.validUntil || tpState.date))
-    .filter(plan => turfRecordDate(plan) && turfRecordDate(plan) !== tpState.date)
-    .forEach(plan => {
-      const date = turfRecordDate(plan);
-      if (!otherDayGroups.has(date)) otherDayGroups.set(date, []);
-      otherDayGroups.get(date).push(plan);
+    .forEach(plan => addOtherDayItem(turfRecordDate(plan), plan));
+  // Include unsaved quantities from the active editor so the accordion updates before Save is pressed.
+  const draftDates = tpSelectedDates();
+  S.inventory.filter(item => turfCategoryLabel(item.category) === category).forEach(product => {
+    const line = tpLineForProduct(product);
+    const qty = Math.max(0, num(line.qty));
+    if (!(qty > 0)) return;
+    const unit = turfProductUnit(product);
+    const dates = line.repeat === false ? draftDates.slice(0, 1) : draftDates;
+    dates.forEach(date => {
+      if (date === tpState.date) return;
+      addOtherDayItem(date, {
+        productId: product.id,
+        productName: itemName(product),
+        targetQty: tpLineTotal(line, area),
+        unit,
+        _draft: true
+      });
     });
-  const otherDayEntries = [...otherDayGroups.entries()].sort((a, b) => a[0].localeCompare(b[0]));
+  });
+  const otherDayEntries = [...otherDayGroups.entries()]
+    .map(([date, items]) => [date, [...items.values()]])
+    .sort((a, b) => a[0].localeCompare(b[0]));
   const otherDayItemCount = otherDayEntries.reduce((total, entry) => total + entry[1].length, 0);
   const otherDaysHtml = otherDayEntries.map(([date, plans]) => {
     const dayLabel = new Date(date + 'T12:00:00').toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'short' });
@@ -3331,7 +3354,7 @@ function renderTp() {
       const name = product ? itemName(product) : (plan.productName || plan.itemName || 'Unknown product');
       const qty = num(plan.targetQty ?? plan.quantity ?? plan.qty);
       const unit = plan.unit || (product && turfProductUnit(product)) || '';
-      return '<div class="tp-other-day-item"><span class="material-symbols-rounded">inventory_2</span><span class="tp-other-day-name">' + esc(name) + '</span><b>' + fmt(qty, 2) + (unit ? ' ' + esc(unit) : '') + '</b></div>';
+      return '<div class="tp-other-day-item' + (plan._draft ? ' is-draft' : '') + '"><span class="material-symbols-rounded">' + (plan._draft ? 'edit_note' : 'inventory_2') + '</span><span class="tp-other-day-name">' + esc(name) + (plan._draft ? '<small>Draft · not saved yet</small>' : '') + '</span><b>' + fmt(qty, 2) + (unit ? ' ' + esc(unit) : '') + '</b></div>';
     }).join('');
     return '<details class="tp-other-day"><summary><span class="material-symbols-rounded">calendar_month</span><b>' + esc(dayLabel) + '</b><span class="tp-other-day-count">' + plans.length + ' item' + (plans.length === 1 ? '' : 's') + '</span><span class="material-symbols-rounded tp-other-chevron">expand_more</span></summary><div class="tp-other-day-items">' + itemsHtml + '</div></details>';
   }).join('');
