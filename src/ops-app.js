@@ -3306,7 +3306,7 @@ function turfEditablePlanRecord(plan) {
     !!String(plan.id || plan.planId || '').trim();
 }
 function openTurfPlansManager() {
-  const records = allTurfPlanRecords().filter(p => isTurfCategory(turfPlanCategory(p)))
+  const records = allTurfPlanRecords().filter(p => isTurfCategory(turfPlanCategory(p)) && !isUnplannedMaterialIssue(p))
     .sort((a,b) => turfRecordDate(b).localeCompare(turfRecordDate(a)) || tsMs(b.createdAt)-tsMs(a.createdAt));
   curModalRender = renderTurfPlansManager;
   openModal({title:'Turf treatment plans',sub:'Expand a date to inspect its plan records. Only planned, not-yet-issued records can be edited or deleted.',size:'turf-plans-manager-modal',body:'<div id="turfPlansManagerRoot"></div>',footer:'<button class="btn" data-act="close-modal">Close</button>'});
@@ -3314,7 +3314,7 @@ function openTurfPlansManager() {
 }
 function renderTurfPlansManager() {
   const root=$('#turfPlansManagerRoot'); if(!root)return;
-  const records=allTurfPlanRecords().filter(p=>isTurfCategory(turfPlanCategory(p)))
+  const records=allTurfPlanRecords().filter(p=>isTurfCategory(turfPlanCategory(p))&&!isUnplannedMaterialIssue(p))
     .sort((a,b)=>turfRecordDate(b).localeCompare(turfRecordDate(a))||tsMs(b.createdAt)-tsMs(a.createdAt));
   const groups=new Map();
   records.forEach(p=>{const date=turfRecordDate(p)||'Undated';if(!groups.has(date))groups.set(date,[]);groups.get(date).push(p);});
@@ -3517,7 +3517,7 @@ function renderTurfAreaPlanDashboard(){
   const todayStr=today();
   const areaName=p=>String(p.targetArea||p.area||p.location||'').trim();
   const plannedQty=p=>num(p.targetQty??p.plannedQty??p.requestedQty??p.plannedQuantity??p.targetQuantity??(turfRecordStatus(p)==='Planned'?(p.quantity??p.qty):0));
-  const plans=allTurfPlanRecords().filter(p=>isTurfCategory(turfPlanCategory(p))&&turfRecordDate(p)===todayStr&&turfRecordStatus(p)!=='Cancelled')
+  const plans=allTurfPlanRecords().filter(p=>isTurfCategory(turfPlanCategory(p))&&!isUnplannedMaterialIssue(p)&&turfRecordDate(p)===todayStr&&turfRecordStatus(p)!=='Cancelled')
     .sort((a,b)=>areaName(a).localeCompare(areaName(b))||turfRecordProductName(a).localeCompare(turfRecordProductName(b)));
   const areas=['Greens','Fairway','Nursery','Driving Range','Short Game Area','Roughs'];
   const grouped=areas.map(area=>({area,rows:plans.filter(p=>areaName(p).toLowerCase()===area.toLowerCase())})).filter(g=>g.rows.length);
