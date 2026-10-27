@@ -77,8 +77,14 @@ const timeOf = ms => ms ? new Date(ms).toLocaleTimeString('en-IN', { hour: '2-di
 const ago = ms => { if (!ms) return 'just now'; const s = Math.max(0, (Date.now() - ms) / 1000); return s < 60 ? `${Math.round(s)}s ago` : s < 3600 ? `${Math.round(s/60)}m ago` : `${Math.round(s/3600)}h ago`; };
 function normDate(v, ts) {
   if (typeof v === 'string') {
-    let m = v.match(/^(\d{4})-(\d{2})-(\d{2})/); if (m) return `${m[1]}-${m[2]}-${m[3]}`;
-    m = v.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})/); if (m) return `${m[3]}-${pad(m[2])}-${pad(m[1])}`;
+    let m = v.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (m) return `${m[1]}-${m[2]}-${m[3]}`;
+    if (/^\d{4}-\d{2}-\d{2}T/.test(v)) {
+      const parsed = new Date(v);
+      if (!Number.isNaN(parsed.getTime())) return ymd(parsed);
+    }
+    m = v.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})/);
+    if (m) return `${m[3]}-${pad(m[2])}-${pad(m[1])}`;
   } else if (v && v.toDate) return ymd(v.toDate());
   else if (typeof v === 'number') return ymd(new Date(v < 1e12 ? v * 1000 : v));
   const t = tsMs(ts); return t ? ymd(new Date(t)) : '';
@@ -235,12 +241,19 @@ function toast(msg, type = 'ok') {
   $('#toasts').appendChild(t); setTimeout(() => { t.style.opacity = '0'; setTimeout(() => t.remove(), 250); }, type === 'err' ? 6000 : 3500);
 }
 function setConn(state) { document.documentElement.dataset.firebaseState = state || 'connecting'; const dot=$('#connDot'); if(dot) dot.className='dot '+state; const label=$('#connText'); if(label) label.textContent=state==='ok'?'Connected':state==='err'?'Connection error':'Connecting'; }
+let modalReturnFocus = null;
+let drawerReturnFocus = null;
 function openModal({ title, sub = '', body = '', footer = '', size = '' }) {
+  if (!$('#overlay').classList.contains('open')) modalReturnFocus = document.activeElement;
   $('#modal').className = 'modal ' + size; $('#modal').setAttribute('role', 'dialog'); $('#modal').setAttribute('aria-modal', 'true'); $('#modal').setAttribute('aria-label', title || 'Dialog'); $('#mTitle').textContent = title; $('#mSub').textContent = sub;
   $('#mBody').innerHTML = body; $('#mBody')._h = null; $('#mFoot').innerHTML = footer; $('#mFoot').style.display = footer ? 'flex' : 'none';
   $('#overlay').classList.add('open');
 }
-function closeModal() { $('#overlay').classList.remove('open'); curModalRender = null; }
+function closeModal() {
+  $('#overlay').classList.remove('open'); curModalRender = null;
+  const target = modalReturnFocus; modalReturnFocus = null;
+  if (target?.isConnected && typeof target.focus === 'function') target.focus();
+}
 function openForm({ title, html, submit = 'Save', danger = false, onSubmit }) {
   curModalRender = null;
   openModal({ title, size: 'sm', body: html, footer: `<button class="btn" data-act="close-modal">Cancel</button><button class="btn ${danger ? 'btn-danger fill' : 'btn-primary'}" id="mSubmit">${esc(submit)}</button>` });
@@ -252,10 +265,23 @@ function confirmDelete(col, id, label) {
   openForm({ title: 'Delete record', html: `<p style="margin:0">Permanently delete <b>${esc(label)}</b>? This cannot be undone.</p>`, submit: 'Delete', danger: true,
     onSubmit: async () => { await deleteDoc(doc(db, CONFIG.COL[col] || col, id)); toast(`${label} deleted`); } });
 }
-function openDrawer(title, sub, body) { $('#dTitle').textContent = title; $('#dSub').textContent = sub; $('#dBody').innerHTML = body; $('#drawerOv').classList.add('open'); }
-function closeDrawer() { $('#drawerOv').classList.remove('open'); }
+function openDrawer(title, sub, body) {
+  if (!$('#drawerOv').classList.contains('open')) drawerReturnFocus = document.activeElement;
+  $('#dTitle').textContent = title; $('#dSub').textContent = sub; $('#dBody').innerHTML = body;
+  $('#drawerOv').setAttribute('role', 'dialog'); $('#drawerOv').setAttribute('aria-modal', 'true'); $('#drawerOv').setAttribute('aria-label', title || 'Details');
+  $('#drawerOv').classList.add('open');
+}
+function closeDrawer() {
+  $('#drawerOv').classList.remove('open');
+  const target = drawerReturnFocus; drawerReturnFocus = null;
+  if (target?.isConnected && typeof target.focus === 'function') target.focus();
+}
 function downloadCSV(name, rows) {
-  const csv = rows.map(r => r.map(c => `"${String(c ?? '').replace(/"/g, '""')}"`).join(',')).join('\n');
+  const csv = rows.map(r => r.map(c => {
+    const raw = String(c ?? '');
+    const safe = /^[\t\r\n ]*[=+\-@]/.test(raw) ? "'" + raw : raw;
+    return `"${safe.replace(/"/g, '""')}"`;
+  }).join(',')).join('\n');
   const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8' })); a.download = name;
   document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 1500);
 }
@@ -2785,9 +2811,8 @@ document.addEventListener('input', e => {
   }
 });
 document.addEventListener('input', e => { const el = e.target.closest('[data-inp]'); if (el && ['inQty','inRate','inCustomGst'].includes(el.id)) { previewInward(); } else if (el && el.dataset.inp === 'fleetq') { F.q = el.value; renderFleet(); } else if (el && el.dataset.inp === 'tp-qty') { calcTot(el.dataset.day); } else if (el && el.dataset.inp === 'turf-log-search') { turfAppSearch = el.value; renderTurfApplications(); } });
-$('#overlay').addEventListener('mousedown', e => { if (e.target.id === 'overlay') closeModal(); });
-$('#drawerOv').addEventListener('mousedown', e => { if (e.target.id === 'drawerOv') closeDrawer(); });
-document.addEventListener('keydown', e => { if (e.key === 'Escape') { closeModal(); closeDrawer(); } });
+$('#overlay').addEventListener('click', e => { if (e.target.id === 'overlay') closeModal(); });
+$('#drawerOv').addEventListener('click', e => { if (e.target.id === 'drawerOv') closeDrawer(); });
 
 let currentTurfWeekStart = "";
 let turfSection = 'workboard';
@@ -2834,12 +2859,33 @@ document.body.classList.add("auth-locked");
 $("#login").hidden = false;
 let confirmationResult = null;
 let recaptchaVerifier = null;
+function resetOtpUI({ clearError = true, focusPhone = false } = {}) {
+  confirmationResult = null;
+  try { recaptchaVerifier?.clear(); } catch (_) {}
+  recaptchaVerifier = null;
+  $("#recaptcha-container")?.replaceChildren();
+  if ($("#loginOtp")) $("#loginOtp").value = "";
+  if ($("#loginPhone")) $("#loginPhone").readOnly = false;
+  if ($("#loginPhoneStep")) $("#loginPhoneStep").hidden = false;
+  if ($("#loginOtpStep")) $("#loginOtpStep").hidden = true;
+  const submitLabel = $("#loginSubmit")?.querySelector("span:first-child");
+  if (submitLabel) submitLabel.textContent = "Send verification code";
+  if (clearError && $("#loginErr")) $("#loginErr").textContent = "";
+  if (focusPhone) $("#loginPhone")?.focus();
+}
 onAuthStateChanged(auth, async user => {
+  const authUid = user?.uid || null;
+  const isCurrentAuth = () => (auth.currentUser?.uid || null) === authUid;
   stopListeners();
   RBAC.session.role = null; RBAC.session.authenticated = false; RBAC.session.uid = null; RBAC.session.displayName = "";
   const login = $("#login"), gate = $("#pinGate"), error = $("#loginErr");
   if (gate) gate.hidden = true;
   if (!user) {
+    resetOtpUI();
+    sessionStorage.removeItem("tpDraftV4");
+    history.replaceState(null, "", location.pathname + location.search);
+    closeModal(); closeDrawer();
+    if (cmdOpen) toggleCmdPal(false);
     Object.keys(CONFIG.COL).forEach(k => { LOADED[k] = false; S[k] = []; });
     S._v++;
     if (login) login.hidden = false;
@@ -2851,6 +2897,7 @@ onAuthStateChanged(auth, async user => {
   }
   try {
     let roleSnap = await getDoc(doc(db, "app_roles", user.uid));
+    if (!isCurrentAuth()) return;
     // One-time bootstrap for the explicitly allowlisted first-owner UID.
     // Firestore rules must enforce the same UID, own-document-only, admin-only creation.
     const bootstrapAdminUid = "C1l8ArB3GlSaAQr6iw4O9RKGGik1";
@@ -2859,10 +2906,14 @@ onAuthStateChanged(auth, async user => {
         role: "admin", active: true, displayName: "DARKX Administrator",
         updatedAt: serverTimestamp(), updatedBy: user.uid
       });
+      if (!isCurrentAuth()) return;
       roleSnap = await getDoc(doc(db, "app_roles", user.uid));
+      if (!isCurrentAuth()) return;
     }
     const roleData = roleSnap.exists() ? roleSnap.data() : null;
     if (!roleData || roleData.active !== true || !ROLE_PERMISSIONS[roleData.role]) {
+      if (!isCurrentAuth()) return;
+      resetOtpUI();
       await signOut(auth);
       if (error) error.textContent = "This account has no active application role. Ask an administrator to assign access.";
       return;
@@ -2879,6 +2930,7 @@ onAuthStateChanged(auth, async user => {
     startListeners();
     toast("Signed in · " + (ROLE_LABELS[roleData.role] || roleData.role));
   } catch (err) {
+    if (!isCurrentAuth()) return;
     console.error("RBAC role lookup failed", err);
     await signOut(auth);
     if (error) error.textContent = "Could not verify your application role. Check Firebase access rules and try again.";
@@ -2945,19 +2997,7 @@ $("#loginOtp").addEventListener("input", () => {
     $("#loginForm").requestSubmit();
   }
 });
-$("#changePhone").addEventListener("click", () => {
-  confirmationResult = null;
-  try { recaptchaVerifier?.clear(); } catch (_) {}
-  recaptchaVerifier = null;
-  $("#recaptcha-container").replaceChildren();
-  $("#loginOtp").value = "";
-  $("#loginPhone").readOnly = false;
-  $("#loginPhoneStep").hidden = false;
-  $("#loginOtpStep").hidden = true;
-  $("#loginSubmit").querySelector("span:first-child").textContent = "Send verification code";
-  $("#loginErr").textContent = "";
-  $("#loginPhone").focus();
-});
+$("#changePhone").addEventListener("click", () => resetOtpUI({ focusPhone: true }));
 
 $("#signoutBtn").addEventListener("click", async () => {
   try { await signOut(auth); } catch (err) { toast("Sign-out failed. Retry.", "err"); }
@@ -3664,30 +3704,55 @@ document.addEventListener('change',e=>{
 document.addEventListener('dblclick',e=>{const b=e.target.closest('[data-act="tp-repeat-date"]');if(!b)return;e.preventDefault();const p=S.inventory.find(x=>String(x.id)===String(b.dataset.product));if(!p)return;const l=tpGetLine(p);if(!(l.repeatDates||[]).includes(b.dataset.date))l.repeatDates.push(b.dataset.date);tpState.repeatOpen=b.dataset.product;tpState.editingRepeatDate=b.dataset.date;renderTp();});
 document.addEventListener('toggle',e=>{if(e.target&&e.target.id==='turfInlinePlanner'&&e.target.open)renderTp();},true);
 let cmdOpen = false;
-function toggleCmdPal() {
-  cmdOpen = !cmdOpen;
+let cmdReturnFocus = null;
+function toggleCmdPal(force) {
+  const next = typeof force === "boolean" ? force : !cmdOpen;
+  if (next && !RBAC.session.authenticated) return;
+  if (next && !cmdOpen) cmdReturnFocus = document.activeElement;
+  cmdOpen = next;
   $("#cmdPal").classList.toggle("open", cmdOpen);
   $("#cmdOverlay").classList.toggle("open", cmdOpen);
-  if (cmdOpen) { $("#cmdInp").value = ""; $("#cmdInp").focus(); renderCmd(""); }
+  if (cmdOpen) { $("#cmdPal").setAttribute("role", "dialog"); $("#cmdPal").setAttribute("aria-modal", "true"); $("#cmdPal").setAttribute("aria-label", "Command palette"); $("#cmdInp").setAttribute("aria-label", "Search accessible modules and records"); $("#cmdInp").value = ""; $("#cmdInp").focus(); renderCmd(""); }
+  else { const target = cmdReturnFocus; cmdReturnFocus = null; if (target?.isConnected && typeof target.focus === "function") target.focus(); }
 }
+document.querySelector(".cmd-hint")?.addEventListener("click", () => toggleCmdPal(true));
 document.addEventListener("keydown", e => {
   if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") {
-    e.preventDefault(); toggleCmdPal();
+    if (!RBAC.session.authenticated) return;
+    e.preventDefault(); toggleCmdPal(true); return;
   }
-  if (e.key === "Escape" && cmdOpen) { toggleCmdPal(); }
+  if (cmdOpen && ["ArrowDown", "ArrowUp"].includes(e.key)) {
+    const buttons = $$("#cmdRes button[data-cmd-view]");
+    if (!buttons.length) return;
+    e.preventDefault();
+    const current = buttons.indexOf(document.activeElement);
+    const next = e.key === "ArrowDown" ? (current + 1) % buttons.length : (current <= 0 ? buttons.length - 1 : current - 1);
+    buttons[next].focus();
+    return;
+  }
+  if (cmdOpen && e.key === "Enter" && document.activeElement === $("#cmdInp")) {
+    const first = $("#cmdRes button[data-cmd-view]");
+    if (first) { e.preventDefault(); first.click(); }
+    return;
+  }
+  if (e.key === "Escape") {
+    if (cmdOpen) { e.preventDefault(); toggleCmdPal(false); }
+    else if ($("#overlay").classList.contains("open")) { e.preventDefault(); closeModal(); }
+    else if ($("#drawerOv").classList.contains("open")) { e.preventDefault(); closeDrawer(); }
+  }
 });
-$("#cmdOverlay").addEventListener("mousedown", () => { if(cmdOpen) toggleCmdPal(); });
+$("#cmdOverlay").addEventListener("click", e => { if (e.target.id === "cmdOverlay" && cmdOpen) toggleCmdPal(false); });
 document.addEventListener("input", e => { if (e.target.id === "cmdInp") renderCmd(e.target.value.toLowerCase()); });
 
 function renderCmd(q) {
   const res = [];
   Object.entries(VIEWS).forEach(([view, meta]) => {
-    if (!q || String(meta[0] || "").toLowerCase().includes(q) || String(meta[3] || "").toLowerCase().includes(q)) {
+    if (RBAC.can(permissionForView(view)) && (!q || String(meta[0] || "").toLowerCase().includes(q) || String(meta[3] || "").toLowerCase().includes(q))) {
       res.push({ type: "Module", name: meta[0], view, icon: meta[2] });
     }
   });
 
-  if (q) {
+  if (q && RBAC.can("fleet.read")) {
     S.machines.forEach(machine => {
       const name = String(machine.assetName || "");
       const id = String(machine.id || "");
@@ -3697,14 +3762,14 @@ function renderCmd(q) {
       }
     });
 
-    S.users.forEach(user => {
+    if (RBAC.can("users.read")) S.users.forEach(user => {
       const name = String(user.fullName || user.mobileNumber || "");
       if (name.toLowerCase().includes(q) || String(user.mobileNumber || "").includes(q) || String(user.role || "").toLowerCase().includes(q)) {
-        res.push({ type: "Workforce · " + String(user.role || "unassigned"), name, view: "registry", icon: "person" });
+        res.push({ type: "Workforce · " + String(user.role || "unassigned"), name, view: "users", icon: "person" });
       }
     });
 
-    S.inventory.forEach(item => {
+    if (RBAC.can("inventory.read")) S.inventory.forEach(item => {
       const name = String(item.partName || "");
       const category = String(item.category || "");
       if (name.toLowerCase().includes(q) || category.toLowerCase().includes(q)) {
@@ -3715,7 +3780,8 @@ function renderCmd(q) {
     });
   }
 
-  const buttons = res.slice(0, 10).map(result => {
+  const permitted = res.filter(result => RBAC.can(permissionForView(result.view)));
+  const buttons = permitted.slice(0, 10).map(result => {
     const machineAttr = result.machineId ? ` data-cmd-machine="${esc(result.machineId)}"` : "";
     return `<button type="button" data-cmd-view="${esc(result.view)}"${machineAttr}><span class="material-symbols-rounded">${esc(result.icon)}</span><div><b>${esc(result.name)}</b><span class="t">${esc(result.type)}</span></div></button>`;
   });
