@@ -287,6 +287,7 @@
       <div class="turf-view-tabs" role="tablist" aria-label="Turf operations views">
         <button class="turf-view-tab active" role="tab" aria-selected="true" data-act="turf-tab" data-tab="workboard"><span class="material-symbols-rounded">view_quilt</span>Workboard</button>
         <button class="turf-view-tab" role="tab" aria-selected="false" data-act="turf-tab" data-tab="applications"><span class="material-symbols-rounded">fact_check</span>Application log</button>
+        <button class="turf-view-tab" role="tab" aria-selected="false" data-act="turf-tab" data-tab="unplanned"><span class="material-symbols-rounded">outbox</span>Out-of-plan issues</button>
         <button class="turf-view-tab" role="tab" aria-selected="false" data-act="turf-tab" data-tab="products"><span class="material-symbols-rounded">inventory_2</span>Products & stock</button>
       </div>
 
@@ -313,6 +314,23 @@
           <div class="turf-filter-bar"><label class="turf-search"><span class="material-symbols-rounded">search</span><input id="turfLogSearch" data-inp="turf-log-search" placeholder="Search product or treated area"></label><label>Category<select id="turfAppCategoryFilter" data-chg="turf-app-category"><option>All categories</option><option>Fertilizers</option><option>Pesticides</option><option>Turf Enhancements</option></select></label><label>Status<select id="turfAppStatusFilter" data-chg="turf-app-status"><option>All statuses</option><option>Planned</option><option>Issued</option><option>Applied</option></select></label><span class="turf-count-pill" id="turfApplicationCount">0 records</span></div>
           <div class="table-wrap" id="turfApplicationsTbl"></div>
           <div class="turf-data-note">“Applied” is a recorded status, not independent proof of physical application.</div>
+        </section>
+      </section>
+
+      <section class="turf-pane" id="turfUnplannedPane" hidden>
+        <section class="card turf-log-card turf-unplanned-log-card">
+          <div class="turf-card-head">
+            <div><div class="turf-card-eyebrow">STOREKEEPER MATERIAL CONTROL</div><h3>Unplanned / out-of-plan material issues</h3><p>Ad-hoc issues are separated from scheduled day-plan dispatches. Each row preserves the issue reference, issuer, destination, quantity and notes for audit.</p></div>
+            <button class="btn" data-act="export-unplanned-issues"><span class="material-symbols-rounded">download</span>Export CSV</button>
+          </div>
+          <div class="turf-filter-bar">
+            <label class="turf-search"><span class="material-symbols-rounded">search</span><input id="unplannedIssueSearch" data-inp="unplanned-issue-search" placeholder="Search material, issue ID, issuer or notes"></label>
+            <label>Category<select id="unplannedIssueCategoryFilter" data-chg="unplanned-issue-category"><option>All categories</option><option>Fertilizers</option><option>Pesticides</option><option>Turf Enhancements</option><option>Other</option></select></label>
+            <label>Status<select id="unplannedIssueStatusFilter" data-chg="unplanned-issue-status"><option>All statuses</option><option>Planned</option><option>Issued</option><option>Applied</option><option>Cancelled</option></select></label>
+            <span class="turf-count-pill" id="unplannedIssueCount">0 issues</span>
+          </div>
+          <div class="table-wrap" id="turfUnplannedIssuesTbl"></div>
+          <div class="turf-data-note">Records are classified by <code>issueType: UNPLANNED</code> or <code>isAdHoc: true</code>, with supported legacy flags as fallback. The web dashboard reads existing plan collections; it does not create or modify issue records.</div>
         </section>
       </section>
 
