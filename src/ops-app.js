@@ -2196,14 +2196,24 @@ function syncListenersForView() {
   setConn('');
   const desired = new Set(VIEW_COLLECTIONS[cur] || []);
   Object.keys(CONFIG.COL).forEach(k => {
-    const permitted = RBAC.can(permissionForCollection(CONFIG.COL[k], false));
+    const requiredPermission = permissionForCollection(CONFIG.COL[k], false);
+    const permitted = RBAC.can(requiredPermission);
+    if (!RBAC.can(requiredPermission)) {
+      if (unsubs.has(k)) stopOneListener(k);
+      // Unauthorised collections never subscribe and their stale rows are cleared.
+      S[k] = [];
+      LOADED[k] = true;
+      if (k === 'zones') drawZones();
+      if (k === 'logs' || k === 'live') updateBadges(k);
+      return;
+    }
     const shouldListen = desired.has(k) && permitted;
     if (!shouldListen) {
       if (unsubs.has(k)) stopOneListener(k);
-      // Clear data not active on this screen, so a role/view transition never keeps
-      // displaying a stale collection snapshot. Unauthorised collections never subscribe.
+      // Clear data not active on this screen, so a view transition never keeps
+      // displaying a stale collection snapshot.
       S[k] = [];
-      LOADED[k] = !permitted;
+      LOADED[k] = false;
       if (k === 'zones') drawZones();
       if (k === 'logs' || k === 'live') updateBadges(k);
       return;
