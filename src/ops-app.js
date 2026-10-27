@@ -243,14 +243,17 @@ function toast(msg, type = 'ok') {
 function setConn(state) { document.documentElement.dataset.firebaseState = state || 'connecting'; const dot=$('#connDot'); if(dot) dot.className='dot '+state; const label=$('#connText'); if(label) label.textContent=state==='ok'?'Connected':state==='err'?'Connection error':'Connecting'; }
 let modalReturnFocus = null;
 let drawerReturnFocus = null;
+function syncLayerState() { document.body.classList.toggle("layer-open", ["#overlay", "#drawerOv", "#cmdOverlay"].some(sel => $(sel)?.classList.contains("open"))); }
 function openModal({ title, sub = '', body = '', footer = '', size = '' }) {
   if (!$('#overlay').classList.contains('open')) modalReturnFocus = document.activeElement;
-  $('#modal').className = 'modal ' + size; $('#modal').setAttribute('role', 'dialog'); $('#modal').setAttribute('aria-modal', 'true'); $('#modal').setAttribute('aria-label', title || 'Dialog'); $('#mTitle').textContent = title; $('#mSub').textContent = sub;
+  $('#modal').className = 'modal ' + size; $('#modal').setAttribute('role', 'dialog'); $('#modal').setAttribute('aria-modal', 'true'); $('#modal').setAttribute('aria-label', title || 'Dialog'); $('#modal').setAttribute('tabindex', '-1'); $('#modal').dataset.dirty = 'false'; $('#mTitle').textContent = title; $('#mSub').textContent = sub;
   $('#mBody').innerHTML = body; $('#mBody')._h = null; $('#mFoot').innerHTML = footer; $('#mFoot').style.display = footer ? 'flex' : 'none';
-  $('#overlay').classList.add('open');
+  $('#overlay').classList.add('open'); syncLayerState();
+  requestAnimationFrame(() => { const first = $('#modal').querySelector('button:not([disabled]),input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])'); (first || $('#modal')).focus({ preventScroll: true }); });
 }
-function closeModal() {
-  $('#overlay').classList.remove('open'); curModalRender = null;
+function closeModal(force = false) {
+  if (!force && $('#modal').dataset.dirty === 'true' && !window.confirm('Discard unsaved changes?')) return;
+  $('#overlay').classList.remove('open'); syncLayerState(); curModalRender = null;
   const target = modalReturnFocus; modalReturnFocus = null;
   if (target?.isConnected && typeof target.focus === 'function') target.focus();
 }
@@ -258,7 +261,7 @@ function openForm({ title, html, submit = 'Save', danger = false, onSubmit }) {
   curModalRender = null;
   openModal({ title, size: 'sm', body: html, footer: `<button class="btn" data-act="close-modal">Cancel</button><button class="btn ${danger ? 'btn-danger fill' : 'btn-primary'}" id="mSubmit">${esc(submit)}</button>` });
   const btn = $('#mSubmit');
-  btn.onclick = async () => { btn.disabled = true; try { const ok = await onSubmit(); if (ok !== false) closeModal(); } catch (e) { console.error(e); toast(e.message || 'Something went wrong', 'err'); } btn.disabled = false; };
+  btn.onclick = async () => { btn.disabled = true; try { const ok = await onSubmit(); if (ok !== false) closeModal(true); } catch (e) { console.error(e); toast(e.message || 'Something went wrong', 'err'); } btn.disabled = false; };
   const first = $('#mBody input,#mBody select'); if (first) setTimeout(() => first.focus(), 30);
 }
 function confirmDelete(col, id, label) {
@@ -268,11 +271,12 @@ function confirmDelete(col, id, label) {
 function openDrawer(title, sub, body) {
   if (!$('#drawerOv').classList.contains('open')) drawerReturnFocus = document.activeElement;
   $('#dTitle').textContent = title; $('#dSub').textContent = sub; $('#dBody').innerHTML = body;
-  $('#drawerOv').setAttribute('role', 'dialog'); $('#drawerOv').setAttribute('aria-modal', 'true'); $('#drawerOv').setAttribute('aria-label', title || 'Details');
-  $('#drawerOv').classList.add('open');
+  $('.drawer').setAttribute('role', 'dialog'); $('.drawer').setAttribute('aria-modal', 'true'); $('.drawer').setAttribute('aria-label', title || 'Details'); $('.drawer').setAttribute('tabindex', '-1');
+  $('#drawerOv').classList.add('open'); syncLayerState();
+  requestAnimationFrame(() => { const first = $('.drawer').querySelector('button:not([disabled]),input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])'); (first || $('.drawer')).focus({ preventScroll: true }); });
 }
 function closeDrawer() {
-  $('#drawerOv').classList.remove('open');
+  $('#drawerOv').classList.remove('open'); syncLayerState();
   const target = drawerReturnFocus; drawerReturnFocus = null;
   if (target?.isConnected && typeof target.focus === 'function') target.focus();
 }
@@ -2843,6 +2847,8 @@ document.addEventListener('input', e => {
   }
 });
 document.addEventListener('input', e => { const el = e.target.closest('[data-inp]'); if (el && ['inQty','inRate','inCustomGst'].includes(el.id)) { previewInward(); } else if (el && el.dataset.inp === 'fleetq') { F.q = el.value; renderFleet(); } else if (el && el.dataset.inp === 'tp-qty') { calcTot(el.dataset.day); } else if (el && el.dataset.inp === 'turf-log-search') { turfAppSearch = el.value; renderTurfApplications(); } });
+$('#mBody').addEventListener('input', () => { if ($('#overlay').classList.contains('open')) $('#modal').dataset.dirty = 'true'; });
+$('#mBody').addEventListener('change', () => { if ($('#overlay').classList.contains('open')) $('#modal').dataset.dirty = 'true'; });
 $('#overlay').addEventListener('click', e => { if (e.target.id === 'overlay') closeModal(); });
 $('#drawerOv').addEventListener('click', e => { if (e.target.id === 'drawerOv') closeDrawer(); });
 
@@ -3744,6 +3750,7 @@ function toggleCmdPal(force) {
   cmdOpen = next;
   $("#cmdPal").classList.toggle("open", cmdOpen);
   $("#cmdOverlay").classList.toggle("open", cmdOpen);
+  syncLayerState();
   if (cmdOpen) { $("#cmdPal").setAttribute("role", "dialog"); $("#cmdPal").setAttribute("aria-modal", "true"); $("#cmdPal").setAttribute("aria-label", "Command palette"); $("#cmdInp").setAttribute("aria-label", "Search accessible modules and records"); $("#cmdInp").value = ""; $("#cmdInp").focus(); renderCmd(""); }
   else { const target = cmdReturnFocus; cmdReturnFocus = null; if (target?.isConnected && typeof target.focus === "function") target.focus(); }
 }
@@ -3767,6 +3774,16 @@ document.addEventListener("keydown", e => {
     if (first) { e.preventDefault(); first.click(); }
     return;
   }
+  if (e.key === "Tab") {
+    const layer = cmdOpen ? $("#cmdPal") : $("#overlay").classList.contains("open") ? $("#modal") : $("#drawerOv").classList.contains("open") ? $(".drawer") : null;
+    if (layer) {
+      const focusable = [...layer.querySelectorAll('a[href],button:not([disabled]),input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])')].filter(el => !el.hidden && el.getClientRects().length);
+      if (!focusable.length) { e.preventDefault(); layer.focus(); return; }
+      const first = focusable[0], last = focusable[focusable.length - 1];
+      if (e.shiftKey && (document.activeElement === first || !layer.contains(document.activeElement))) { e.preventDefault(); last.focus(); }
+      else if (!e.shiftKey && (document.activeElement === last || !layer.contains(document.activeElement))) { e.preventDefault(); first.focus(); }
+    }
+  }
   if (e.key === "Escape") {
     if (cmdOpen) { e.preventDefault(); toggleCmdPal(false); }
     else if ($("#overlay").classList.contains("open")) { e.preventDefault(); closeModal(); }
@@ -3784,8 +3801,8 @@ function renderCmd(q) {
     }
   });
 
-  if (q && RBAC.can("fleet.read")) {
-    S.machines.forEach(machine => {
+  if (q) {
+    if (RBAC.can("fleet.read")) S.machines.forEach(machine => {
       const name = String(machine.assetName || "");
       const id = String(machine.id || "");
       const category = String(machine.category || "");
