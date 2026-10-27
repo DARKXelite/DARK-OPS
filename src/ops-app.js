@@ -2593,7 +2593,7 @@ const H = {
   "tp-confirm-save": () => confirmTpSave(),
   "tp-review-back": () => { closeModal();openTurfPlanner(); },
   "tp-repeat-toggle": d => { tpState.repeatOpen=tpState.repeatOpen===String(d.product)?'':String(d.product);tpState.repeatMonth=tpState.date.slice(0,7);tpState.editingRepeatDate='';renderTp(); },
-  "tp-repeat-date": d => { const p=S.inventory.find(x=>String(x.id)===String(d.product));if(!p)return;const l=tpGetLine(p),set=new Set(l.repeatDates||[]);if(set.has(d.date)){if(d.date!==tpState.date)set.delete(d.date);}else{set.add(d.date);if(l.qtyByDate?.[d.date]===undefined)l.qtyByDate[d.date]=tpQty(l,tpState.date);}l.repeatDates=[...set].sort();l.touchedDates=[...new Set([...(l.touchedDates||[]),d.date])];tpPersistDraft();renderTp(); },
+  "tp-repeat-date": d => { const p=S.inventory.find(x=>String(x.id)===String(d.product));if(!p)return;const l=tpGetLine(p),set=new Set(l.repeatDates||[]);if(set.has(d.date)){if(d.date!==tpState.date)set.delete(d.date);}else{set.add(d.date);if(l.qtyByDate?.[d.date]===undefined)l.qtyByDate[d.date]=tpQty(l,tpState.date);}l.repeatDates=[...set].sort();l.touchedDates=[...new Set([...(l.touchedDates||[]),d.date])];tpPersistDraft();const panel=document.querySelector('.tp-repeat-panel');const cell=panel?.querySelector('[data-act="tp-repeat-date"][data-date="'+d.date+'"]');if(cell){cell.classList.toggle('is-selected',set.has(d.date));const count=panel.querySelector('.tp-repeat-actions span');if(count)count.textContent=set.size+' dates';} },
   "tp-repeat-month": d => { const x=new Date((tpState.repeatMonth||tpState.date.slice(0,7))+'-01T12:00:00');x.setMonth(x.getMonth()+Number(d.delta||0));tpState.repeatMonth=x.getFullYear()+'-'+String(x.getMonth()+1).padStart(2,'0');renderTp(); },
   "tp-repeat-qty-ok": d => { const input=document.querySelector('[data-tp-repeat-qty][data-date="'+d.date+'"]'),p=S.inventory.find(x=>String(x.id)===String(d.product));if(!p)return;const l=tpGetLine(p),q=num(input?.value);if(!(q>0)){toast('Enter a quantity greater than zero.','err');return;}l.overrides=l.overrides||{};l.overrides[d.date]=q;l.qtyByDate[d.date]=q;l.touchedDates=[...new Set([...(l.touchedDates||[]),d.date])];tpState.editingRepeatDate='';tpPersistDraft();renderTp(); },
   "tp-repeat-cancel": () => { tpState.repeatOpen='';tpState.editingRepeatDate='';renderTp(); },
@@ -3578,7 +3578,18 @@ function openTurfPlanner() {
 function tpPersistDraft(){try{sessionStorage.setItem('tpDraftV3',JSON.stringify(tpState));}catch(_){}}
 function tpGetLine(product){
   const key=tpLineKey(tpState.area,tpState.category,product.id);
-  if(tpState.lines[key])return tpState.lines[key];
+  if(tpState.lines[key]) {
+    const existingLine=tpState.lines[key];
+    const foundNow=tpMatchingPlanRecords(tpState.area,tpState.category).filter(p=>String(p.productId||p.itemId||p.inventoryId||'')===String(product.id)&&turfRecordDate(p)===tpState.date);
+    if(existingLine.qtyByDate && existingLine.qtyByDate[tpState.date]===undefined && foundNow.length) {
+      const p0=foundNow[0], per0=tpState.area==='Greens'&&String(p0.scope||'').toLowerCase()==='per_area', total0=num(p0.targetQty??p0.quantity??p0.qty);
+      existingLine.qtyByDate[tpState.date]=per0?total0/18:total0;
+      existingLine.perGreen=per0;
+      existingLine.existingIds={...(existingLine.existingIds||{}),[tpState.date]:p0.id};
+      if(!(existingLine.repeatDates||[]).includes(tpState.date))existingLine.repeatDates=[...(existingLine.repeatDates||[]),tpState.date];
+    }
+    return existingLine;
+  }
   const found=tpMatchingPlanRecords(tpState.area,tpState.category).filter(p=>String(p.productId||p.itemId||p.inventoryId||'')===String(product.id)&&turfRecordDate(p)===tpState.date);
   const p=found[0],per=tpState.area==='Greens'&&String(p?.scope||'').toLowerCase()==='per_area',total=num(p?.targetQty??p?.quantity??p?.qty);
   return tpState.lines[key]={qtyByDate:p?{[tpState.date]:per?total/18:total}:{},perGreen:per,repeatDates:p?[tpState.date]:[],overrides:{},touchedDates:[],existingIds:Object.fromEntries(found.map(x=>[turfRecordDate(x),x.id]))};
@@ -3607,7 +3618,7 @@ function renderTp(){
 function tpBuildChanges(){
  const out=[];
  for(const [key,l] of Object.entries(tpState.lines)){const [area,category,id]=key.split('::'),product=S.inventory.find(p=>String(p.id)===id);if(!product)continue;
- for(const date of new Set([...(l.touchedDates||[]),...(l.repeatDates||[])])){if(l.removedDates?.includes(date))continue;const qty=num(tpQty(l,date));if(!(qty>0))continue;out.push({area,category,id,product,date,qty,total:qty*(area==='Greens'&&l.perGreen?18:1),unit:turfProductUnit(product),perGreen:l.perGreen});}}
+ for(const date of new Set([...(l.touchedDates||[]),...(l.repeatDates||[])])){if(l.removedDates?.includes(date))continue;if(l.existingIds?.[date]&&tpState.deletedPlanIds.includes(l.existingIds[date]))continue;const qty=num(tpQty(l,date));if(!(qty>0))continue;out.push({area,category,id,product,date,qty,total:qty*(area==='Greens'&&l.perGreen?18:1),unit:turfProductUnit(product),perGreen:l.perGreen});}}
  return out;
 }
 function openTpSaveReview(){
