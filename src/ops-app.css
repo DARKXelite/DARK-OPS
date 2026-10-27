@@ -3871,3 +3871,87 @@ details > summary:focus-visible { outline:3px solid #1D4D33!important; }
 .view [class*="menu-panel"] button:hover { color:#1D3425!important;background:#DDE7DD!important; }
 .view [class*="table"] th,.view [class*="table"] thead { background:#DDE7DD!important;color:#34473A!important; }
 .view [class*="table"] td { color:#26352B!important; }
+
+
+/* Day Planner accents: match the site's established olive-green utility palette. */
+:root {
+  --planner-olive: #536047;
+  --planner-olive-deep: #283522;
+  --planner-olive-soft: #D8DFBD;
+  --planner-olive-pale: #EEF0E4;
+}
+.turf-inline-planner > summary,
+#tpContainer .tp-area-sidebar,
+#tpContainer .tp-repeat-panel,
+#tpContainer .tp-inline-review,
+#tpContainer .tp-empty-state,
+#tpContainer .tp-search-empty {
+  border-color: #C1C9AD;
+}
+.turf-inline-planner > summary {
+  background: #EEF0E4;
+}
+.turf-inline-planner > summary > .material-symbols-rounded:first-child,
+#tpContainer .tp-product-icon,
+#tpContainer .tp-cal-day i {
+  color: #536047;
+}
+#tpContainer .tp-area-button.is-active,
+#tpContainer .tp-repeat-trigger.is-active,
+#tpContainer .tp-cal-day.is-current {
+  background: #D8DFBD;
+  color: #283522;
+  border-color: #8D9A70;
+}
+#tpContainer .tp-category-tab.is-active,
+#tpContainer .tp-cal-day.is-selected,
+#tpContainer .tp-primary-action,
+#tpContainer button[data-act="tp-review-save"],
+#tpContainer .tp-inline-review-actions .btn-primary {
+  background: #536047;
+  color: #FFFFFF;
+  border-color: #536047;
+}
+#tpContainer .tp-category-tab.is-active:hover,
+#tpContainer .tp-cal-day.is-selected:hover,
+#tpContainer .tp-primary-action:hover,
+#tpContainer button[data-act="tp-review-save"]:hover {
+  background: #283522;
+  color: #FFFFFF;
+  border-color: #283522;
+}
+#tpContainer .tp-repeat-trigger,
+#tpContainer .tp-saved-entry button,
+#tpContainer .tp-repeat-cal-head button {
+  background: #EEF0E4;
+  color: #34402D;
+  border-color: #C1C9AD;
+}
+#tpContainer .tp-repeat-trigger:hover,
+#tpContainer .tp-saved-entry button:hover,
+#tpContainer .tp-repeat-cal-head button:hover {
+  background: #D8DFBD;
+  color: #283522;
+  border-color: #8D9A70;
+}
+#tpContainer .tp-per-green input {
+  accent-color: #536047;
+}
+#tpContainer .tp-qty-control input:focus,
+#tpContainer .tp-repeat-qty-edit input:focus,
+#tpContainer .tp-date-single:focus-within,
+#tpContainer .tp-product-search:focus-within {
+  border-color: #536047 !important;
+  box-shadow: 0 0 0 2px rgba(83,96,71,.18) !important;
+}
+#tpContainer .tp-inline-review-head b,
+#tpContainer .tp-total-label b {
+  color: #283522;
+}
+#tpContainer .tp-review-table th {
+  background: #D8DFBD;
+  color: #283522;
+}
+#tpContainer .tp-inline-chevron {
+  color: #536047;
+}
