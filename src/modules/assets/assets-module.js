@@ -171,6 +171,7 @@ async function loadRoleIfNeeded() {
     const snap = await getDoc(doc(db,"app_roles",state.user.uid));
     const data = snap.exists() ? snap.data() : {};
     state.role = data.active ? String(data.role || "") : "";
+    ensureDefaultDepartment();
     if (!canManage()) {
       const masters = $('[data-assets-action="masters"]',root); if (masters) masters.hidden = true;
       $('[data-assets-action="new-asset"]',root).hidden = true;
