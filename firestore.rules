@@ -227,6 +227,19 @@ service cloud.firestore {
       allow read: if manager();
       allow create, update, delete: if manager();
     }
+    // Assets are separate records; Fleet-linked machines keep their canonical /machines document.
+    match /asset_departments/{id} {
+      allow read: if opsTeam();
+      allow create, update, delete: if manager();
+    }
+    match /asset_types/{id} {
+      allow read: if opsTeam();
+      allow create, update, delete: if manager();
+    }
+    match /asset_records/{id} {
+      allow read: if opsTeam();
+      allow create, update, delete: if manager();
+    }
     match /machines/{id} {
       allow read: if opsTeam();
       allow write: if manager();
