@@ -15,7 +15,7 @@ const firebaseConfig = {
 const app = getApps().length ? getApp() : initializeApp(firebaseConfig);
 const db = getFirestore(app);
 const $ = (s, root = document) => root.querySelector(s);
-const $ = (s, root = document) => [...root.querySelectorAll(s)];
+const $$ = (s, root = document) => [...root.querySelectorAll(s)];
 const esc = value => String(value ?? "").replace(/[&<>"']/g, c => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#39;" }[c]));
 const nowDate = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`; };
 const state = { user:null, role:"", departments:[], types:[], machines:[], records:[], selectedDepartment:"all", search:"", error:"", unsub:[] };
