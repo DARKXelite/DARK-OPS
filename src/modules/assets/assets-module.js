@@ -18,7 +18,7 @@ const $ = (s, root = document) => root.querySelector(s);
 const $$ = (s, root = document) => [...root.querySelectorAll(s)];
 const esc = value => String(value ?? "").replace(/[&<>"']/g, c => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#39;" }[c]));
 const nowDate = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`; };
-const state = { user:null, role:"", departments:[], types:[], machines:[], records:[], selectedDepartment:"all", search:"", error:"", unsub:[] };
+const state = { user:null, role:"", departments:[], types:[], machines:[], records:[], selectedDepartment:"all", search:"", error:"", unsub:[], departmentsLoaded:false, seedInFlight:false };
 let root, navObserver, renderQueued = false;
 const canManage = () => ["admin","manager"].includes(state.role);
 const cleanKey = s => String(s || "").toLowerCase().trim().replace(/[^a-z0-9]+/g,"_").replace(/^_+|_+$/g,"").slice(0,60);
@@ -180,7 +180,7 @@ async function loadRoleIfNeeded() {
 }
 function watchCollection(name,key) {
   const unsub = onSnapshot(query(collection(db,name),orderBy("name")), snap => {
-    state[key] = snap.docs.map(d => ({id:d.id,...d.data()})); queueRender();
+    state[key] = snap.docs.map(d => ({id:d.id,...d.data()}));\n    if(key==="departments"){state.departmentsLoaded=true;ensureDefaultDepartment();}\n    queueRender();
   }, error => {
     console.error("Assets read failed",name,error);
     state.error = `Cannot read ${name}: ${error.code || error.message}`;
@@ -309,7 +309,7 @@ function parseFields(text) {
     return {key:cleanKey(label),label,type:safeType,required,...(options?{options}:{})};
   }).filter(f=>f&&f.key);
 }
-async function addDepartment(event) {
+async function ensureDefaultDepartment() {\n  if(!canManage()||!state.departmentsLoaded||state.seedInFlight||state.departments.some(d=>d.name?.trim().toLowerCase()==="gold maintenance")) return;\n  state.seedInFlight=true;\n  try { await addDoc(collection(db,"asset_departments"),{name:"Gold Maintenance",normalizedName:"gold maintenance",active:true,createdAt:serverTimestamp(),updatedAt:serverTimestamp(),createdBy:state.user.uid,updatedBy:state.user.uid}); }\n  catch(e) { console.warn("Could not create default Gold Maintenance department",e); }\n  finally { state.seedInFlight=false; }\n}\nasync function addDepartment(event) {
   event.preventDefault(); if(!canManage()) return notify("Only an admin or manager can change Masters.",true);
   const form=event.currentTarget, name=new FormData(form).get("name").trim();
   if(!name) return;
@@ -319,7 +319,7 @@ async function addDepartment(event) {
 }
 async function addType(event) {
   event.preventDefault(); if(!canManage()) return notify("Only an admin or manager can change Masters.",true);
-  const f=new FormData(event.currentTarget),name=String(f.get("name")||"").trim(),departmentId=String(f.get("departmentId")||"");
+  const form=event.currentTarget;\n  const f=new FormData(form),name=String(f.get("name")||"").trim(),departmentId=String(f.get("departmentId")||"");
   if(!name||!departmentId) return notify("Type name and department are required.",true);
   const department=state.departments.find(d=>d.id===departmentId); if(!department) return notify("Choose a valid department.",true);
   const fields=parseFields(f.get("fields"));
