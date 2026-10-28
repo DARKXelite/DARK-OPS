@@ -104,6 +104,24 @@ function ensureView() {
   $("#assetsTypeForm",root).addEventListener("submit", addType);
   root.addEventListener("click", handleClick);
   root.addEventListener("submit", handleSubmit);
+  root.addEventListener("change", event => {
+    if (event.target.name === "assetDepartmentId" && event.target.closest("#assetsEditForm")) {
+      const typeSelect = $("#assetsEditType",root);
+      if (typeSelect) {
+        const depId = event.target.value;
+        typeSelect.innerHTML = '<option value="">Choose type</option>' + state.types.filter(t=>t.departmentId===depId).map(t=>`<option value="${esc(t.id)}">${esc(t.name)}</option>`).join("");
+      }
+      $("#assetsCustomFields",root).innerHTML = "";
+    }
+    if (event.target.id === "assetsEditType") {
+      const type = state.types.find(t=>t.id===event.target.value);
+      $("#assetsCustomFields",root).innerHTML = (type?.fields||[]).map(f => {
+        if(f.type==="select") return `<label class="assets-field">${esc(f.label)}<select name="custom:${esc(f.key)}" ${f.required?"required":""}><option value="">Choose…</option>${(f.options||[]).map(o=>`<option>${esc(o)}</option>`).join("")}</select></label>`;
+        if(f.type==="checkbox") return `<label class="assets-field"><span><input style="width:auto" name="custom:${esc(f.key)}" type="checkbox"> ${esc(f.label)}</span></label>`;
+        return field(f.label,`custom:${f.key}`,"",f.type==="number"?"number":f.type==="date"?"date":"text",f.required);
+      }).join("");
+    }
+  });
 }
 function injectNav() {
   const nav = $("#nav");
