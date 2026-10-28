@@ -1,6 +1,6 @@
 /* Assets & Departments module. Fleet machines remain the canonical machine records. */
 import { getApp, getApps, initializeApp } from "https://www.gstatic.com/firebasejs/12.19.0/firebase-app.js";
-import { getFirestore, collection, doc, getDoc, getDocs, addDoc, updateDoc, deleteDoc, onSnapshot, serverTimestamp, query, orderBy } from "https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore.js";
+import { getFirestore, collection, doc, getDoc, addDoc, updateDoc, deleteDoc, onSnapshot, serverTimestamp, query, orderBy } from "https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore.js";
 
 const firebaseConfig = {
   apiKey: "AIzaSyA0snhaIuA47xB0Ay-5nAgzBstDO5koi-M",
@@ -126,7 +126,9 @@ function ensureView() {
 }
 function injectNav() {
   const nav = $("#nav");
-  if (!nav || !state.user || nav.querySelector('[data-assets-nav="1"]')) return;
+  if (!nav) return;
+  if (!state.user || !["admin","manager","operator"].includes(state.role)) { nav.querySelector('[data-assets-nav="1"]')?.remove(); return; }
+  if (nav.querySelector('[data-assets-nav="1"]')) return;
   const button = document.createElement("button");
   button.className = "nav-btn";
   button.dataset.assetsNav = "1";
@@ -171,6 +173,7 @@ async function loadRoleIfNeeded() {
     const snap = await getDoc(doc(db,"app_roles",state.user.uid));
     const data = snap.exists() ? snap.data() : {};
     state.role = data.active ? String(data.role || "") : "";
+    injectNav();
     ensureDefaultDepartment();
     if (!canManage()) {
       const masters = $('[data-assets-action="masters"]',root); if (masters) masters.hidden = true;
@@ -199,14 +202,9 @@ function startUser(user) {
   watchCollection("asset_departments","departments");
   watchCollection("asset_types","types");
   watchCollection("asset_records","records");
+  const fleetUnsub = onSnapshot(collection(db,"machines"), snap => { state.machines=snap.docs.map(d=>({id:d.id,...d.data(),_fleet:true})); queueRender(); }, error => { console.error("Fleet asset lookup failed",error); state.error="Cannot read machines: "+(error.code||error.message); queueRender(); });
+  state.unsub.push(fleetUnsub);
   loadRoleIfNeeded();
-}
-async function loadFleetMachines() {
-  try {
-    const snap = await getDocs(collection(db,"machines"));
-    state.machines = snap.docs.map(d => ({id:d.id,...d.data(),_fleet:true}));
-    queueRender();
-  } catch (e) { console.error("Fleet asset lookup failed",e); }
 }
 function render() {
   if (!root) return;
@@ -366,7 +364,7 @@ async function saveAsset(form) {
     } else {
       await addDoc(collection(db,"asset_records"),{...data,name,createdAt:serverTimestamp(),createdBy:state.user.uid});
     }
-    $("#assetsModalHost",root).innerHTML=""; await loadFleetMachines(); notify("Asset details saved."); queueRender();
+    $("#assetsModalHost",root).innerHTML=""; notify("Asset details saved."); queueRender();
   } catch(e){notify(`Could not save asset: ${e.code||e.message}`,true);}
 }
 async function handleSubmit(event) {
@@ -414,7 +412,7 @@ function installAuthObserver() {
   import("https://www.gstatic.com/firebasejs/12.19.0/firebase-auth.js").then(({getAuth,onAuthStateChanged})=>{
     onAuthStateChanged(getAuth(app),user=>{
       startUser(user);
-      if(user){ensureView();injectNav();loadFleetMachines();}
+      if(user){ensureView();injectNav();}
     });
   }).catch(e=>console.error("Assets auth observer failed",e));
 }
