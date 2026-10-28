@@ -181,7 +181,8 @@ async function loadRoleIfNeeded() {
 function watchCollection(name,key) {
   const unsub = onSnapshot(query(collection(db,name),orderBy("name")), snap => {
     state[key] = snap.docs.map(d => ({id:d.id,...d.data()}));
-    if(key==="departments"){state.departmentsLoaded=true;ensureDefaultDepartment();}\n    queueRender();
+    if(key==="departments"){state.departmentsLoaded=true;ensureDefaultDepartment();}
+    queueRender();
   }, error => {
     console.error("Assets read failed",name,error);
     state.error = `Cannot read ${name}: ${error.code || error.message}`;
