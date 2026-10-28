@@ -14,7 +14,7 @@ const firebaseConfig = {
 };
 const app = getApps().length ? getApp() : initializeApp(firebaseConfig);
 const db = getFirestore(app);
-const $ = (s, root = document) => root.querySelector(s);
+const $ = (s, root = document) => root.querySelector(s);\nconst $ = (s, root = document) => [...root.querySelectorAll(s)];
 const esc = value => String(value ?? "").replace(/[&<>"']/g, c => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#39;" }[c]));
 const nowDate = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`; };
 const state = { user:null, role:"", departments:[], types:[], machines:[], records:[], selectedDepartment:"all", search:"", error:"", unsub:[] };
@@ -214,7 +214,7 @@ function renderTable() {
   ].filter(a=>{
     const depId=a.assetDepartmentId||a.departmentId||"";
     const depName=departmentFor(a);
-    const depOk=department==="all"||(depId===department)||(department=== "unassigned" && depName==="Unassigned");
+    const selectedDepartmentName=state.departments.find(d=>d.id===department)?.name;\n    const depOk=department==="all"||(depId===department)||(selectedDepartmentName && depName===selectedDepartmentName)||(department=== "unassigned" && depName==="Unassigned");
     const hay=`${a._name} ${a.serialNumber||""} ${a.serialNo||""} ${a._type} ${depName}`.toLowerCase();
     return depOk&&(!queryText||hay.includes(queryText));
   }).sort((a,b)=>a._name.localeCompare(b._name));
@@ -308,7 +308,7 @@ async function addType(event) {
     const data={name,departmentId,departmentName:department.name,fields,active:true,updatedAt:serverTimestamp(),updatedBy:state.user.uid};
     if(existing) await updateDoc(doc(db,"asset_types",existing.id),data);
     else await addDoc(collection(db,"asset_types"),{...data,createdAt:serverTimestamp(),createdBy:state.user.uid});
-    event.currentTarget.reset(); notify("Asset type and field definitions saved.");
+    form.reset(); notify("Asset type and field definitions saved.");
   } catch(e){notify(`Could not save asset type: ${e.code||e.message}`,true);}
 }
 async function saveAsset(form) {
