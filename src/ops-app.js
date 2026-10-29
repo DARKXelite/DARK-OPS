@@ -1553,7 +1553,7 @@ function renderOpsAnalytics(){
   if(loading.length)report='<div class="oa-loading"><span class="material-symbols-rounded">sync</span>Loading '+esc(loading.map(k=>CONFIG.COL[k]).join(', '))+'…</div>';
   else if(OA.domain==='overview')report=oaRenderOverview();
   else if(OA.domain==='fuel')report=OA.view==='daily'?oaRenderFuelDaily():OA.view==='machine'?oaRenderFuelMachine():OA.view==='machine-day'?oaRenderFuelMachineDay():oaRenderFuelTransactions();
-  else if(OA.view==='daily')report=oaRenderTurfDaily();
+  else if(OA.domain==='turf'&&OA.view==='daily')report=oaRenderTurfDaily();
   else if(OA.view==='category')report=oaRenderTurfDimension('category');
   else if(OA.view==='area')report=oaRenderTurfDimension('area');
   else if(OA.view==='item')report=oaRenderTurfDimension('item');
