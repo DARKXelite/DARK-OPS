@@ -1225,7 +1225,7 @@ function openOpsAnalytics(domain, machineId = '') {
   OA.domain=['overview','fuel','turf'].includes(domain)?domain:'overview';
   OA.view=OA.machineFilter?'transactions':'daily'; OA.from=addDays(today(),-29); OA.to=today(); OA.drill={kind:'',key:''};
   curModalRender=renderOpsAnalytics;
-  openModal({title:'Operational Analytics & Ledgers',sub:'Shared date filters · machine usage · turf treatments · item-level reconciliation',size:'ops-analytics-modal',body:'<div id="opsAnalyticsRoot"></div>',footer:'<button class="btn" data-act="export-ops-analytics"><span class="material-symbols-rounded">download</span>Export report</button><button class="btn btn-primary" data-act="close-modal">Close</button>'});
+  openModal({title:'Operational Analytics & Ledgers',sub:'Shared date filters · machine usage · turf treatments · item-level reconciliation',size:'ops-analytics-modal',body:'<div id="opsAnalyticsRoot"></div>',footer:'<button class="btn" data-act="export-ops-analytics"><span class="material-symbols-rounded">download</span>Export current report CSV</button><button class="btn btn-primary" data-act="export-workbook"><span class="material-symbols-rounded">table_view</span>Download all ledgers Excel</button><button class="btn" data-act="close-modal">Close</button>'});
   renderOpsAnalytics();
 }
 function oaSetRange(preset) {
@@ -1976,31 +1976,47 @@ function openStoreRecordsEditor() {
   renderStoreRecordsEditor();
 }
 const RESET_GROUPS = [
-  {key:'users', label:'Users & access', col:'users', note:'User profiles and role records'},
-  {key:'machines', label:'Machines / fleet', col:'machines', note:'Machine master records'},
-  {key:'plans', label:'Turf plans & issues', col:'plans', note:'Planned tasks and recorded issue/application lines'},
-  {key:'inventory', label:'Inventory master & stock', col:'inventory', note:'Item masters and current stock balances'},
-  {key:'inwards', label:'Goods receipts', col:'inwards', note:'GRN / inward receipt records'},
-  {key:'fuel', label:'Fuel issues', col:'fuel', note:'Fuel issue logs'},
-  {key:'shifts', label:'Shifts & attendance', col:'shifts', note:'Shift records'},
-  {key:'maintenance', label:'Maintenance records', col:'maintenance', note:'Service and repair history'},
-  {key:'assignments', label:'Assignments', col:'assignments', note:'Operator / machine assignment history'},
-  {key:'logs', label:'Operational logs', col:'logs', note:'General operational and issue logs'},
-  {key:'zones', label:'Course zones', col:'zones', note:'Geofence / area configuration'},
-  {key:'live', label:'Live telemetry', col:'live', note:'Latest live machine telemetry'},
+  {key:'users', label:'Users & profiles', cols:['users'], note:'User profiles only. Does not delete Firebase Authentication accounts or app_roles access policies.'},
+  {key:'machines', label:'Machines / fleet', cols:['machines'], note:'Machine master records.'},
+  {key:'plans', label:'Turf plans', cols:['plans'], note:'Records in turf_plans.'},
+  {key:'dailyPlans', label:'Daily application plans & issues', cols:['dailyPlans'], note:'Records in daily_application_plans, including application/issue records stored there.'},
+  {key:'inventory', label:'Inventory master & stock', cols:['inventory'], note:'Item masters and current stock balances.'},
+  {key:'inwards', label:'Goods receipts', cols:['inwards'], note:'store_inwards receipts. Does not automatically reverse stock balances.'},
+  {key:'fuel', label:'Fuel issues & ledger', cols:['fuel'], note:'Fuel issue transactions.'},
+  {key:'shifts', label:'Shifts & attendance', cols:['shifts'], note:'Shift, engine-hour and distance records.'},
+  {key:'maintenance', label:'Maintenance records', cols:['maintenance'], note:'Service and repair history.'},
+  {key:'assignments', label:'Assignments', cols:['assignments'], note:'Operator / machine assignment history.'},
+  {key:'logs', label:'Operational logs', cols:['logs'], note:'General operational and issue logs.'},
+  {key:'zones', label:'Course zones', cols:['zones'], note:'Geofence / area configuration.'},
+  {key:'live', label:'Live telemetry', cols:['live'], note:'Latest live machine telemetry.'},
+  {key:'expenses', label:'Local expenses', cols:['expenses'], note:'Local expense and bill records.'},
+  {key:'fnbOrders', label:'F&B orders', cols:['fnbOrders'], note:'F&B order records. Review linked receipts before reset.'},
+  {key:'fnbReceipts', label:'F&B receipts', cols:['fnbReceipts'], note:'F&B receipt records.'},
+  {key:'assetDepartments', label:'Asset departments', collections:['asset_departments'], note:'Assets module department masters.'},
+  {key:'assetTypes', label:'Asset types & custom fields', collections:['asset_types'], note:'Assets module type and field definitions.'},
+  {key:'assetRecords', label:'Asset records', collections:['asset_records'], note:'Standalone asset records. Fleet-linked machine records are in Machines / fleet.'}
 ];
 function openDataReset() {
   const choices = RESET_GROUPS.map(g=>`<label class="reset-data-option"><input type="checkbox" name="resetGroup" value="${g.key}"><span><b>${esc(g.label)}</b><small>${esc(g.note)}</small></span></label>`).join('');
-  openForm({title:'Reset selected data',submit:'Permanently reset selected',danger:true,html:`<div class="alert-box" style="margin-bottom:12px"><b>Destructive action.</b> Selected records will be permanently deleted from Firebase. This cannot be undone. Export or back up data first.</div><div style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap"><button type="button" class="btn btn-sm" id="resetSelectAll">Select all</button><button type="button" class="btn btn-sm" id="resetSelectNone">Clear selection</button></div><div class="reset-data-list">${choices}</div><div class="field" style="margin-top:14px"><label class="f">Type RESET to confirm</label><input id="resetConfirmText" autocomplete="off" placeholder="Type RESET"></div><p class="muted sm">Inventory and goods receipts are separate selections. Resetting one does not automatically reset the other. Turf plans & issues share the turf_plans collection.</p>`,onSubmit:async()=>{
+  openForm({title:'Reset selected data',submit:'Permanently reset selected',danger:true,html:`<div class="alert-box" style="margin-bottom:12px"><b>Destructive action.</b> Selected records will be permanently deleted from Firebase. This cannot be undone. Export or back up data first.</div><div style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap"><button type="button" class="btn btn-sm" id="resetSelectAll">Select all</button><button type="button" class="btn btn-sm" id="resetSelectNone">Clear selection</button></div><div class="reset-data-list">${choices}</div><div class="field" style="margin-top:14px"><label class="f">Type RESET to confirm</label><input id="resetConfirmText" autocomplete="off" placeholder="Type RESET"></div><p class="muted sm">Each selected collection is deleted independently. Stock balances are not automatically recalculated when receipts or issue history are reset. Firebase Authentication accounts and app_roles access policies are intentionally excluded to prevent accidental lockout.</p>`,onSubmit:async()=>{
     const selected=$$('#mBody input[name="resetGroup"]:checked').map(el=>RESET_GROUPS.find(g=>g.key===el.value)).filter(Boolean);
     if(!selected.length){toast('Select at least one data group','err');return false;}
     if($('#resetConfirmText')?.value.trim()!=='RESET'){toast('Type RESET exactly to confirm','err');return false;}
     const summary=[];
     for(const group of selected){
-      const snap=await getDocs(collection(db,CONFIG.COL[group.col]));
-      let deleted=0; const docs=snap.docs;
-      for(let i=0;i<docs.length;i+=400){const batch=writeBatch(db);docs.slice(i,i+400).forEach(d=>batch.delete(d.ref));await batch.commit();deleted+=Math.min(400,docs.length-i);}
-      summary.push(`${group.label}: ${deleted}`);
+      const names = group.collections || (group.cols || []).map(key => CONFIG.COL[key]).filter(Boolean);
+      let groupDeleted=0;
+      for(const name of names){
+        const snap=await getDocs(collection(db,name));
+        const docs=snap.docs;
+        for(let i=0;i<docs.length;i+=400){
+          const batch=writeBatch(db);
+          docs.slice(i,i+400).forEach(d=>batch.delete(d.ref));
+          await batch.commit();
+          groupDeleted+=Math.min(400,docs.length-i);
+        }
+      }
+      summary.push(`${group.label}: ${groupDeleted}`);
     }
     toast(`Reset complete · ${summary.join(' · ')}`);
     scheduleRender();
