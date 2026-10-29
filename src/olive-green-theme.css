@@ -459,3 +459,105 @@ pre, code, .code-block, .log-output {
   outline: 2px solid #D7DF91 !important;
   outline-offset: 2px;
 }
+
+
+/* THIRD PASS: targeted neutralization of legacy light-theme rules found in ops-app.css/rbac.css. */
+#pinGate,
+#login, #login .login-layout, #login .login-panel,
+#login .login-card, #login .phone-control, #login .otp-input,
+#login .phone-country, #login #loginPhone,
+.card, .panel, .stat-card, .kmenu, .drawer, .login-card,
+.modal, .modal-content, .dropdown-menu, .popover,
+.table-wrap, .table-container,
+.m-head, .m-foot, .modal-header, .modal-footer,
+.m-body, .d-body,
+input, select, textarea, .modal input, .modal select, .modal textarea,
+select option, select optgroup,
+button.secondary, .btn-secondary,
+.table-wrap table, table,
+.table-wrap table tbody tr, table tbody tr,
+.table-wrap table input, .table-wrap table select, .table-wrap table textarea,
+.user-search, .user-role-filter select,
+#usersTbl td .btn-danger,
+#v-users .badge.warn, #v-registry .badge.warn, .local-expenses .badge.warn,
+#tpContainer .tp-date-single,
+#tpContainer .tp-date-single input,
+#tpContainer .tp-category-tab,
+#tpContainer .tp-product-search,
+#tpContainer .tp-product-row,
+#tpContainer .tp-qty-control input,
+#tpContainer .tp-repeat-cal-head button,
+#tpContainer .tp-cal-day,
+#tpContainer .tp-repeat-qty-edit,
+#tpContainer .tp-saved-list,
+#tpContainer .tp-review-table-wrap,
+#tpContainer .tp-review-table,
+#tpContainer .tp-review-table td,
+#tpContainer .tp-repeat-trigger,
+#tpContainer .tp-saved-entry button {
+  background-color: #192116 !important;
+  background-image: none !important;
+  color: #E9EDDC !important;
+  border-color: #465338 !important;
+  box-shadow: none;
+}
+#login, #login .login-layout, #login .login-panel, #pinGate {
+  background-color: #10150D !important;
+  background-image: radial-gradient(ellipse at 50% 18%, rgba(113,131,74,.18), transparent 52%) !important;
+}
+#login .login-card, .card, .panel, .stat-card, .kmenu, .drawer,
+.modal, .modal-content, .dropdown-menu, .popover, .table-wrap, .table-container,
+.m-body, .d-body, .m-head, .m-foot {
+  background-color: #192116 !important;
+}
+#tpContainer .tp-category-tab.is-active,
+#tpContainer .tp-cal-day.is-selected,
+#tpContainer .tp-cal-day.is-current,
+#tpContainer .tp-primary-action,
+#tpContainer button[data-act="tp-review-save"],
+#tpContainer .tp-inline-review-actions .btn-primary,
+#tpContainer .tp-repeat-trigger.is-active {
+  background-color: #465A30 !important;
+  background-image: none !important;
+  color: #FFFFFF !important;
+  border-color: #829653 !important;
+}
+#usersTbl td .btn-danger {
+  background-color: #40221D !important;
+  color: #FFB8AD !important;
+  border-color: #8D4940 !important;
+}
+#v-users .badge.warn, #v-registry .badge.warn, .local-expenses .badge.warn,
+.badge.warn, .badge.warning, .status-pill.warning, .tag.warning {
+  background-color: #3B3018 !important;
+  color: #F0D184 !important;
+  border-color: #7C6533 !important;
+}
+.badge.bad, .badge.error, .status-pill.error, .tag.error {
+  background-color: #40221D !important;
+  color: #FFB8AD !important;
+  border-color: #8D4940 !important;
+}
+#tpContainer .tp-review-table th {
+  background-color: #26331D !important;
+  color: #F3F4E8 !important;
+}
+#tpContainer .tp-repeat-trigger:hover,
+#tpContainer .tp-saved-entry button:hover,
+#tpContainer .tp-repeat-cal-head button:hover,
+#tpContainer .tp-category-tab:hover,
+#tpContainer .tp-cal-day:hover {
+  background-color: #2B3921 !important;
+  color: #FFFFFF !important;
+  border-color: #829653 !important;
+}
+#tpContainer .tp-date-single input,
+#login .otp-input, #login #loginPhone {
+  background-color: transparent !important;
+}
+#login .login-submit, button.btn-primary, .btn.btn-primary {
+  background-color: #465A30 !important;
+  background-image: none !important;
+  color: #FFFFFF !important;
+  border-color: #829653 !important;
+}
