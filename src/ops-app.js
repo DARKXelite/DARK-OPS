@@ -1273,7 +1273,8 @@ const OA = { domain:'overview', view:'daily', from:addDays(today(),-29), to:toda
 const OA_VIEWS = {
   overview:[['daily','Operations by day']],
   fuel:[['daily','Daily fuel'],['machine','By machine'],['machine-day','Machine × day'],['transactions','Fuel ledger']],
-  turf:[['daily','Daily turf'],['category','By category'],['area','By area'],['item','By item'],['variance','Planned vs actual'],['unplanned','Unplanned issues'],['transactions','Application ledger']]
+  turf:[['daily','Daily turf'],['category','By category'],['area','By area'],['item','By item'],['variance','Planned vs actual'],['unplanned','Unplanned issues'],['transactions','Application ledger']],
+  inventory:[['daily','Stock register']], maintenance:[['daily','Maintenance ledger']], expenses:[['daily','Expense ledger']], shifts:[['daily','Shift ledger']], fnb:[['daily','Orders & receipts']], assets:[['daily','Asset register']]
 };
 function openOpsAnalytics(domain, machineId = '') {
   OA.machineFilter = machineId || '';
@@ -1534,12 +1535,13 @@ function oaRenderTurfUnplanned() {
 
 function renderOpsAnalytics(){
   const root=$('#opsAnalyticsRoot');if(!root)return;
-  const domains=[['overview','Overall Ops','query_stats'],['fuel','Fuel Ops','local_gas_station'],['turf','Turf Ops','grass']];
+  const domains=[['overview','Overall Ops','query_stats'],['fuel','Fuel Ops','local_gas_station'],['turf','Turf Ops','grass'],['inventory','Inventory','inventory_2'],['maintenance','Maintenance','build'],['expenses','Expenses','receipt_long'],['shifts','Shifts','schedule'],['fnb','F&B','restaurant'],['assets','Assets','domain']];
   const domainTabs=domains.map(d=>'<button type="button" class="oa-domain-tab '+(OA.domain===d[0]?'active':'')+'" data-act="oa-domain" data-domain="'+d[0]+'"><span class="material-symbols-rounded">'+d[2]+'</span>'+d[1]+'</button>').join('');
   const views=(OA_VIEWS[OA.domain]||OA_VIEWS.overview),viewTabs=views.map(v=>'<button type="button" class="oa-view-tab '+(OA.view===v[0]?'active':'')+'" data-act="oa-view" data-view="'+v[0]+'">'+v[1]+'</button>').join('');
   const presetDefs=[['today','Today'],['yesterday','Yesterday'],['7d','7 days'],['30d','30 days'],['mtd','Month to date'],['last-month','Last month']];
   const presets=presetDefs.map(p=>'<button type="button" class="oa-preset" data-act="oa-preset" data-range="'+p[0]+'">'+p[1]+'</button>').join('');
-  const required=OA.domain==='overview'?['fuel','machines','shifts','inventory','plans','maintenance']:OA.domain==='fuel'?['fuel','machines','shifts']:['plans','inventory'];
+  const requiredMap={overview:['fuel','machines','shifts','inventory','plans','dailyPlans','maintenance','expenses','inwards','fnbOrders','fnbReceipts'],fuel:['fuel','machines','shifts'],turf:['plans','dailyPlans','inventory'],inventory:['inventory','inwards'],maintenance:['maintenance'],expenses:['expenses'],shifts:['shifts'],fnb:['fnbOrders','fnbReceipts'],assets:['machines']};
+  const required=requiredMap[OA.domain]||[];
   const denied=required.filter(k=>!RBAC.can(permissionForCollection(CONFIG.COL[k],false)));
   const loading=required.filter(k=>!LOADED[k]&&RBAC.can(permissionForCollection(CONFIG.COL[k],false)));
   let report='';
@@ -1551,10 +1553,33 @@ function renderOpsAnalytics(){
   else if(OA.view==='area')report=oaRenderTurfDimension('area');
   else if(OA.view==='item')report=oaRenderTurfDimension('item');
   else if(OA.view==='variance')report=oaRenderTurfVariance();
-  else if(OA.view==='unplanned')report=oaRenderTurfUnplanned();
-  else {const lines=oaScheduledTurfLines(),actual=lines.filter(x=>x.status==='Issued'||x.status==='Applied'),priced=actual.filter(x=>x.cost!==null);report='<div class="oa-kpi-grid">'+oaKpi('Application records',lines.length,'Selected period')+oaKpi('Issued / applied',actual.length,'Existing status records')+oaKpi('Priced actuals',priced.length,'Records with usable price')+oaKpi('Unpriced actuals',actual.length-priced.length,'Missing rate, product or unit match')+'</div><section class="oa-panel"><div class="oa-panel-head"><div><small>SOURCE TRANSACTIONS</small><h3>Application ledger</h3><p>All non-cancelled treatment records for the date range.</p></div></div>'+oaTable(['Date','Time','Category','Product','Area','Status','Quantity','Rate','Cost*','Notes'],oaTurfTransactionRows(lines),'No turf records.')+'</section>';}
+  else if(OA.domain==='turf'&&OA.view==='unplanned')report=oaRenderTurfUnplanned();
+  else if(OA.domain==='turf'){const lines=oaScheduledTurfLines(),actual=lines.filter(x=>x.status==='Issued'||x.status==='Applied'),priced=actual.filter(x=>x.cost!==null);report='<div class="oa-kpi-grid">'+oaKpi('Application records',lines.length,'Selected period')+oaKpi('Issued / applied',actual.length,'Existing status records')+oaKpi('Priced actuals',priced.length,'Records with usable price')+oaKpi('Unpriced actuals',actual.length-priced.length,'Missing rate, product or unit match')+'</div><section class="oa-panel"><div class="oa-panel-head"><div><small>SOURCE TRANSACTIONS</small><h3>Application ledger</h3><p>All non-cancelled treatment records for the date range.</p></div></div>'+oaTable(['Date','Time','Category','Product','Area','Status','Quantity','Rate','Cost*','Notes'],oaTurfTransactionRows(lines),'No turf records.')+'</section>';}
+  else report=oaRenderGenericLedger(OA.domain);
   root.innerHTML='<div class="oa-toolbar"><div class="oa-date-controls"><label>From<input type="date" value="'+esc(OA.from)+'" data-chg="oa-from"></label><label>To<input type="date" value="'+esc(OA.to)+'" data-chg="oa-to"></label></div><div class="oa-presets">'+presets+'</div></div><div class="oa-domain-tabs">'+domainTabs+'</div><div class="oa-view-tabs">'+viewTabs+'</div>'+(denied.length?'<p class="oa-access-note"><span class="material-symbols-rounded">lock</span>Some source records are hidden by your current role, so totals may be partial.</p>':'')+'<div class="oa-report">'+report+'</div>';
 }
+function oaGenericLedgerRows(domain) {
+  const assetData=window.__cloverAssetsExportData?window.__cloverAssetsExportData():null;
+  const source={
+    inventory:(S.inventory||[]).map(x=>({...x,_date:'',_kind:'Stock item',_label:itemName(x),_ref:x.id,_qty:x.stockQuantity,_amount:num(x.stockQuantity)*num(x.unitCost)})),
+    maintenance:(S.maintenance||[]).map(x=>({...x,_date:normDate(x.date||x.serviceDate||x.createdAt,x.timestamp||x.createdAt),_kind:'Maintenance',_label:x.machineName||mName(x.machineId)||x.title||x.description||'Maintenance record',_ref:x.id||x.workOrderId||'',_qty:x.engineHours??x.hours??'',_amount:x.cost??x.totalCost??''})),
+    expenses:(S.expenses||[]).map(x=>({...x,_date:normDate(x.date||x.expenseDate||x.billDate||x.createdAt,x.timestamp||x.createdAt),_kind:'Local expense',_label:x.description||x.vendor||x.category||'Expense',_ref:x.invoiceNumber||x.reference||x.id||'',_qty:x.quantity??'',_amount:x.amount??x.total??x.totalAmount??''})),
+    shifts:(S.shifts||[]).map(x=>({...x,_date:normDate(x.date||x.shiftDate||x.createdAt,x.timestamp||x.createdAt),_kind:'Shift',_label:x.machineName||mName(x.machineId)||x.operatorName||x.operatorId||'Shift',_ref:x.id||'',_qty:x.engineHoursLogged??x.distanceKm??'',_amount:''})),
+    fnb:[...(S.fnbOrders||[]).map(x=>({...x,_kind:'F&B order',_date:normDate(x.date||x.orderDate||x.createdAt,x.timestamp||x.createdAt),_label:x.orderName||x.customerName||x.tableName||x.id,_ref:x.orderNumber||x.id||'',_qty:x.quantity??'',_amount:x.total??x.totalAmount??x.amount??''})),...(S.fnbReceipts||[]).map(x=>({...x,_kind:'F&B receipt',_date:normDate(x.date||x.receiptDate||x.createdAt,x.timestamp||x.createdAt),_label:x.supplier||x.itemName||x.id,_ref:x.invoiceNumber||x.orderId||x.id||'',_qty:x.quantity??'',_amount:x.total??x.totalAmount??x.amount??''}))],
+    assets:[...(assetData?.records||[]).map(x=>({...x,_kind:'Asset record',_date:normDate(x.startedDate||x.commissionedDate||x.purchaseDate||x.createdAt,x.timestamp||x.createdAt),_label:x.name||x.assetName||x.title||x.id,_ref:x.serialNumber||x.serialNo||x.id||'',_qty:'',_amount:x.purchaseCost??x.value??''})),...(S.machines||[]).map(x=>({...x,_kind:'Fleet-linked asset',_date:normDate(x.startedDate||x.commissionedDate||x.createdAt,x.timestamp||x.createdAt),_label:x.assetName||x.name||x.id,_ref:x.serialNumber||x.serialNo||x.id||'',_qty:x.currentHours??'',_amount:x.purchaseCost??''}))]
+  };
+  const rows=source[domain]||[];
+  return rows.filter(r=>!r._date||(r._date>=OA.from&&r._date<=OA.to)).sort((a,b)=>String(b._date||'').localeCompare(String(a._date||'')));
+}
+function oaRenderGenericLedger(domain) {
+  const rows=oaGenericLedgerRows(domain);
+  const amount=rows.reduce((sum,r)=>sum+Math.max(0,num(r._amount)),0);
+  const qty=rows.reduce((sum,r)=>sum+Math.max(0,num(r._qty)),0);
+  const title={inventory:'Inventory stock register',maintenance:'Maintenance ledger',expenses:'Local expense ledger',shifts:'Shift and machine-hours ledger',fnb:'F&B orders and receipts',assets:'Asset register'}[domain]||'Operational ledger';
+  const body=rows.map(r=>'<tr><td>'+esc(r._date||'Master record')+'</td><td><b>'+esc(r._label||'—')+'</b><div class="oa-dim">'+esc(r._kind||'Record')+'</div></td><td>'+esc(r._ref||r.id||'—')+'</td><td>'+esc(r.status||r.state||'—')+'</td><td class="num">'+(r._qty!==''&&r._qty!=null?esc(fmt(num(r._qty),2)):'—')+'</td><td class="num">'+(r._amount!==''&&r._amount!=null?money(num(r._amount),2):'—')+'</td></tr>').join('');
+  return '<div class="oa-kpi-grid">'+oaKpi('Records',rows.length,'Loaded records in the selected date range')+oaKpi('Quantity / hours total',fmt(qty,2),'Mixed units may apply; inspect detail rows')+oaKpi('Recorded amounts',money(amount,2),'Only fields with recognized amount names')+oaKpi('Export coverage','Full rows','Use Download all ledgers Excel for every source field')+'</div><section class="oa-panel"><div class="oa-panel-head"><div><small>RECORD REGISTER</small><h3>'+esc(title)+'</h3><p>Use the date range for dated records. Master records without a date remain visible.</p></div><span class="oa-panel-meta">'+rows.length+' records</span></div>'+oaTable(['Date','Record','Reference','Status','Quantity / hours','Recorded amount'],body,'No records in this date range.')+'</section>';
+}
+
 function exportOpsAnalytics(){
   const range=OA.from+'_to_'+OA.to;
   if(OA.domain==='overview'){
@@ -1565,6 +1590,11 @@ function exportOpsAnalytics(){
       return[date,f.length,fq,fuelPriced?fc:'',t.length,a.length,turfPriced?tc:'',m.length,m.length?mc:'',(fuelPriced||turfPriced||m.length)?fc+tc+mc:'',f.filter(x=>rateForFuelLog(x)<=0).length,a.filter(x=>x.cost===null).length];
     });
     return downloadCSV('ops_daily_overview_'+range+'.csv',[['Date','Fuel entries','Fuel litres','Priced fuel cost','Turf records','Issued/applied lines','Priced turf cost','Maintenance rows','Recorded maintenance cost','Combined priced/recorded cost','Unpriced fuel entries','Unpriced turf actuals'],...rows]);
+  }
+  if(['inventory','maintenance','expenses','shifts','fnb','assets'].includes(OA.domain)){
+    const rows=oaGenericLedgerRows(OA.domain);
+    const fields=[...new Set(rows.flatMap(r=>Object.keys(r)))];
+    return downloadCSV('ops_'+OA.domain+'_ledger_'+range+'.csv',[fields,...rows.map(r=>fields.map(k=>r[k]&&typeof r[k]==='object'?JSON.stringify(r[k]):r[k]??''))]);
   }
   if(OA.domain==='fuel'){
     if(OA.view==='daily')return downloadCSV('fuel_daily_'+range+'.csv',[['Date','Entries','Machines','Diesel L','Petrol L','Other L','Litres','Run hours','L/hr','Priced cost','Unpriced litres'],...oaFuelDaily().map(r=>[r.date,r.entries,r.machineCount,r.diesel,r.petrol,r.unknown,r.litres,r.hours,r.lph??'',r.priced>0?r.cost:'',r.unpriced])]);
