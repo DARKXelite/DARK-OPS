@@ -270,17 +270,71 @@ function downloadWorkbook(filename, sheets) {
   toast('Excel workbook downloaded.');
 }
 function exportWorkflowWorkbook() {
-  const fuelRows = (S.fuel || []).map(f => ({date:fuelRecordDate(f),time:timeOf(tsMs(f.timestamp ?? f.issuedAt ?? f.createdAt)),machine:f.machineName || mName(f.machineId),machineId:f.machineId || '',fuelType:fuelTypeFromRecord(f),litres:num(f.litres ?? f.quantity ?? f.qty),ratePerLitre:rateForFuelLog(f)||'',modeledCost:rateForFuelLog(f)>0?fuelLogCost(f):'',issuedBy:f.issuedBy||f.recordedBy||'',notes:f.notes||f.reason||''}));
-  const machineFuel = [...new Set(fuelRows.map(r=>String(r.machineId||r.machine)))].map(id=>{const rows=fuelRows.filter(r=>String(r.machineId||r.machine)===id);return {machine:rows[0]?.machine||id,machineId:rows[0]?.machineId||'',fuelType:rows[0]?.fuelType||'',entries:rows.length,litres:rows.reduce((s,r)=>s+num(r.litres),0),pricedCost:rows.reduce((s,r)=>s+num(r.modeledCost),0),unpricedLitres:rows.filter(r=>r.modeledCost==='').reduce((s,r)=>s+num(r.litres),0)};});
-  const turfRows = typeof allTurfPlanRecords==='function' ? allTurfPlanRecords().map(p=>({date:turfRecordDate(p),time:timeOf(turfRecordTimestamp(p)),category:turfPlanCategory(p),item:turfRecordProductName(p),itemId:p.partId||p.productId||p.itemId||'',quantity:turfRecordQuantity(p),unit:p.unit||p.stockUnit||p.uom||'',zone:p.targetZoneOrMachine||p.targetArea||p.area||p.location||'',status:turfRecordStatus(p),issuedBy:p.issuedBy||p.performedBy||p.recordedBy||'',cost:p.unitCost!=null?num(p.unitCost)*num(turfRecordQuantity(p)):'',notes:p.notes||p.reason||'',source:p._sourceCollection||''})) : [];
-  const generic = list => (list||[]).map(x=>({...x}));
-  downloadWorkbook('clover_ops_workflow_ledgers_'+today()+'_all_records.xlsx', [
-    ['Fuel Ledger',fuelRows],['Machine Fuel Summary',machineFuel],
-    ['Chemical Item Ledger',turfRows.filter(r=>/chemical|fertiliz|pesticid|turf/i.test(String(r.category+' '+r.item)))],
-    ['Turf Application Ledger',turfRows],['Machine Register',(S.machines||[]).map(m=>({machineId:m.id,name:m.assetName,category:m.category,fuelType:m.fuelType,status:m.status,currentHours:m.currentHours,serialNumber:m.serialNumber||'',commissionedDate:m.commissionedDate||m.startedDate||''}))],
-    ['Inventory Stock',generic(S.inventory)],['Goods Inwards',generic(S.inwards)],['Maintenance',generic(S.maintenance)],['Assignments',generic(S.assignments)],['Shifts',generic(S.shifts)],['Local Expenses',generic(S.expenses)],['Users',generic(S.users)],['FNB Orders',generic(S.fnbOrders)],['FNB Receipts',generic(S.fnbReceipts)],['Store Logs',generic(S.logs)]
-  ]);
+  if (!window.XLSX) { toast('Excel workbook library did not load. Refresh and try again.', 'err'); return; }
+  const generic = list => (list || []).map(x => ({...x}));
+  const flat = rows => (rows || []).map(row => Object.fromEntries(Object.entries(row || {}).map(([k,v]) => [k, v == null ? '' : (typeof v === 'object' ? JSON.stringify(v) : v)])));
+  const fuelRows = (S.fuel || []).map(f => {
+    const rate=rateForFuelLog(f), litres=Math.max(0,num(f.litres ?? f.quantity ?? f.qty));
+    return {date:fuelRecordDate(f),time:timeOf(tsMs(f.timestamp ?? f.issuedAt ?? f.createdAt)),machine:f.machineName||mName(f.machineId),machineId:f.machineId||f.machineID||f.assetId||'',fuelType:fuelTypeFromRecord(f),litres,ratePerLitre:rate||'',modeledCost:rate>0?litres*rate:'',costStatus:rate>0?'Priced':'Unpriced',issuedBy:f.issuedBy||f.recordedBy||f.operatorName||'',reference:f.id||'',notes:f.notes||f.reason||'',...f};
+  });
+  const fuelMachineRows = [...new Set(fuelRows.map(r=>String(r.machineId||r.machine||'Unassigned')))].map(id=>{
+    const rows=fuelRows.filter(r=>String(r.machineId||r.machine||'Unassigned')===id);
+    return {machine:rows[0]?.machine||id,machineId:rows[0]?.machineId||'',entries:rows.length,litres:rows.reduce((s,r)=>s+num(r.litres),0),dieselLitres:rows.filter(r=>r.fuelType==='Diesel').reduce((s,r)=>s+num(r.litres),0),petrolLitres:rows.filter(r=>r.fuelType==='Petrol').reduce((s,r)=>s+num(r.litres),0),pricedCost:rows.reduce((s,r)=>s+num(r.modeledCost),0),pricedEntries:rows.filter(r=>r.costStatus==='Priced').length,unpricedEntries:rows.filter(r=>r.costStatus==='Unpriced').length,unpricedLitres:rows.filter(r=>r.costStatus==='Unpriced').reduce((s,r)=>s+num(r.litres),0)};
+  });
+  const turfRaw = typeof allTurfPlanRecords==='function' ? allTurfPlanRecords() : [...(S.plans||[]),...(S.dailyPlans||[])];
+  const turfRows = turfRaw.map(p=>({
+    date:turfRecordDate(p),time:timeOf(tsMs(p.issuedAt??p.appliedAt??p.issueTimestamp??p.timestamp??p.createdAt)),
+    sourceCollection:p._sourceCollection||'',recordId:p.id||'',planId:p.planId||'',
+    category:turfPlanCategory(p),item:turfRecordProductName(p),itemId:p.partId||p.productId||p.productID||p.itemId||p.inventoryId||'',
+    quantity:turfRecordQuantity(p),unit:p.unit||p.stockUnit||p.uom||p.unitOfMeasure||'',
+    zone:p.targetZoneOrMachine||p.targetArea||p.area||p.location||'',status:turfRecordStatus(p),
+    issueType:p.issueType||'',isAdHoc:p.isAdHoc===true?'Yes':p.isAdHoc===false?'No':'',
+    issuedBy:p.issuedBy||p.performedBy||p.recordedBy||p.operatorName||'',
+    rate:p.unitCost!=null?num(p.unitCost):'',recordedCost:p.unitCost!=null?num(p.unitCost)*num(turfRecordQuantity(p)):'',
+    notes:p.notes||p.reason||'',...p
+  }));
+  const itemLedger = turfRows.filter(r=>/chemical|fertiliz|pesticid|turf|enhanc/i.test(String(r.category+' '+r.item)));
+  const machineRows = (S.machines||[]).map(m=>({machineId:m.id||'',name:m.assetName||m.name||'',category:m.category||'',fuelType:m.fuelType||'',status:m.status||'',currentHours:m.currentHours??'',serialNumber:m.serialNumber||m.serialNo||'',commissionedDate:m.commissionedDate||m.startedDate||'',...m}));
+  const assets = window.__cloverAssetsExportData ? window.__cloverAssetsExportData() : null;
+  const workbook = XLSX.utils.book_new();
+  const addSheet = (name, rows) => {
+    const safe=flat(rows);
+    const ws=XLSX.utils.json_to_sheet(safe.length?safe:[{Info:'No records available to this signed-in user'}]);
+    ws['!cols']=Object.keys(safe[0]||{Info:''}).map(k=>({wch:Math.min(40,Math.max(12,k.length+2))}));
+    XLSX.utils.book_append_sheet(workbook,ws,name.slice(0,31));
+  };
+  addSheet('Fuel Ledger',fuelRows);
+  addSheet('Fuel By Machine',fuelMachineRows);
+  addSheet('Fuel By Day',oaFuelDaily().map(r=>({date:r.date,entries:r.entries,machines:r.machineCount,dieselLitres:r.diesel,petrolLitres:r.petrol,otherLitres:r.unknown,totalLitres:r.litres,runHours:r.hours,litresPerHour:r.lph??'',pricedCost:r.priced?r.cost:'',unpricedLitres:r.unpriced})));
+  addSheet('Machine Day Ledger',oaFuelMachineDays().map(r=>({date:r.date,machine:r.name,machineId:r.id,entries:r.entries,litres:r.litres,dieselLitres:r.diesel,petrolLitres:r.petrol,runHours:r.hours,litresPerHour:r.lph??'',distanceKm:r.km,pricedCost:r.priced?r.cost:'',unpricedLitres:r.unpriced})));
+  addSheet('Turf Application Ledger',turfRows);
+  addSheet('Chemical Item Ledger',itemLedger);
+  addSheet('Turf Daily Analytics',oaTurfDaily().map(r=>({date:r.date,records:r.records,planned:r.planned,issued:r.issued,applied:r.applied,categories:r.categories.size,areas:r.areas.size,plannedQuantityByUnit:r.plannedUnits,actualQuantityByUnit:r.actualUnits,pricedCost:r.priced?r.cost:'',unpricedActuals:r.unpriced})));
+  addSheet('Turf Item Analytics',oaTurfGroups('item').map(r=>({item:r.name,categories:r.categoryLabel,areas:r.areaLabel,records:r.records,planned:r.planned,issued:r.issued,applied:r.applied,plannedQuantityByUnit:r.plannedUnits,actualQuantityByUnit:r.actualUnits,pricedValue:r.priced?r.cost:'',unpricedActuals:r.unpriced,lastActivity:r.lastDate})));
+  addSheet('Turf Variance',oaTurfVariance().map(r=>({item:r.name,category:r.category,unit:r.unit,planned:r.planned,issuedApplied:r.issued,variance:r.issued-r.planned,plannedLines:r.plannedCount,actualLines:r.issuedCount,areas:[...r.areas].join(', '),lastActivity:r.lastDate})));
+  addSheet('Unplanned Issues',oaUnplannedLines().map(r=>({date:r.date,time:r.time,recordId:r.record?.id||'',planId:r.planId,issueType:r.issueType,status:r.status,category:r.category,item:r.name,itemId:r.productId,quantity:r.qty,unit:r.unit,area:r.area,issuedBy:r.issuedBy,rate:r.rate||'',recordedCost:r.cost===null?'':r.cost,notes:r.notes,sourceCollection:r.sourceCollection})));
+  addSheet('Machine Register',machineRows);
+  addSheet('Inventory Stock',generic(S.inventory));
+  addSheet('Goods Inwards',generic(S.inwards));
+  addSheet('Maintenance Ledger',generic(S.maintenance));
+  addSheet('Assignments Ledger',generic(S.assignments));
+  addSheet('Shifts Ledger',generic(S.shifts));
+  addSheet('Local Expenses',generic(S.expenses));
+  addSheet('Operational Logs',generic(S.logs));
+  addSheet('Course Zones',generic(S.zones));
+  addSheet('Live Telemetry',generic(S.live));
+  addSheet('Users',generic(S.users));
+  addSheet('FNB Orders',generic(S.fnbOrders));
+  addSheet('FNB Receipts',generic(S.fnbReceipts));
+  if(assets){
+    addSheet('Asset Register',assets.records||[]);
+    addSheet('Asset Departments',assets.departments||[]);
+    addSheet('Asset Types Fields',assets.types||[]);
+  }
+  XLSX.writeFile(workbook,'clover_ops_complete_ledgers_'+today()+'.xlsx');
+  toast('Complete Excel workbook downloaded. Includes detailed ledgers and derived analytics for records currently loaded under your role.');
 }
+
 function downloadCSV(name, rows) {
   const csv = rows.map(r => r.map(c => `"${String(c ?? '').replace(/"/g, '""')}"`).join(',')).join('\n');
   const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8' })); a.download = name;
