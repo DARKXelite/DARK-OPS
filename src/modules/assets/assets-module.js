@@ -92,7 +92,7 @@ function ensureView() {
     <div id="assetsNotice" class="assets-notice" hidden></div>
     <div class="assets-stats"><div class="assets-stat"><small>Total assets</small><strong id="assetsTotal">—</strong></div><div class="assets-stat"><small>Fleet-linked assets</small><strong id="assetsFleetTotal">—</strong></div><div class="assets-stat"><small>Departments</small><strong id="assetsDeptTotal">—</strong></div></div>
     <div class="assets-toolbar"><input id="assetsSearch" placeholder="Search asset, serial number, category…" aria-label="Search assets"><select id="assetsDepartmentFilter" aria-label="Filter department"><option value="all">All departments</option></select><button class="assets-btn primary" data-assets-action="new-asset">＋ Add asset</button></div>
-    <section class="assets-panel"><div class="assets-panel-head"><div><h3>Asset register</h3><p>Fleet machines are linked by their existing machine ID. No duplicate machine records.</p></div><button class="assets-btn" data-assets-action="masters">⚙ Masters</button></div><div class="assets-table-wrap" id="assetsTable"></div></section>
+    <section class="assets-panel"><div class="assets-panel-head"><div><h3>Asset register</h3><p>Fleet machines are linked by their existing machine ID. No duplicate machine records.</p></div><button class="assets-btn" data-assets-action="export-assets">⇩ Export Excel</button><button class="assets-btn" data-assets-action="masters">⚙ Masters</button></div><div class="assets-table-wrap" id="assetsTable"></div></section>
     <section class="assets-panel" id="assetsMasters" hidden><div class="assets-panel-head"><div><h3>Masters</h3><p>Manage departments, asset types and their custom fields.</p></div><button class="assets-btn" data-assets-action="close-masters">Close</button></div>
       <div class="assets-two-col"><div><h3 style="margin-bottom:10px">Departments</h3><form id="assetsDepartmentForm" class="assets-form"><label class="assets-field full">Department name<input name="name" required maxlength="80" placeholder="e.g. Gold Maintenance"></label><div class="assets-field full"><button class="assets-btn primary" type="submit">Add department</button></div></form><div class="assets-list" id="assetsDepartmentsList"></div></div>
       <div><h3 style="margin-bottom:10px">Asset types & fields</h3><form id="assetsTypeForm" class="assets-form"><label class="assets-field full">Type name<input name="name" required maxlength="80" placeholder="e.g. Workshop machinery"></label><label class="assets-field full">Department<select name="departmentId" required id="assetsTypeDepartment"></select></label><label class="assets-field full">Custom fields<textarea name="fields" rows="5" placeholder="One field per line: Serial number | text | required\nStarted date | date\nWarranty expiry | date\nPurchase cost | number"></textarea></label><div class="assets-field full"><small>Supported types: text, date, number, select, checkbox. For select options, use: Condition | select | Good, Fair, Poor</small><button class="assets-btn primary" type="submit">Save asset type</button></div></form><div class="assets-list" id="assetsTypesList"></div></div></div>
@@ -246,6 +246,22 @@ function renderTable() {
     return `<tr><td><b>${esc(a._name)}</b><span class="assets-sub">${esc(a._type)}</span></td><td>${esc(departmentFor(a))}</td><td>${esc(serial)}</td><td>${esc(started)}</td><td><span class="assets-tag">${a._fleet?"Fleet link":"Asset record"}</span></td><td><div class="assets-actions"><button class="assets-btn" data-assets-action="edit-asset" data-id="${esc(id)}" data-source="${a._fleet?"fleet":"record"}">Edit</button></div></td></tr>`;
   }).join("")}</tbody></table>`;
 }
+function exportAssetsWorkbook() {
+  if (!window.XLSX) return notify("Excel workbook library did not load. Refresh and try again.", true);
+  const wb = XLSX.utils.book_new();
+  const addSheet = (name, rows) => {
+    const flat = (rows || []).map(row => Object.fromEntries(Object.entries(row || {}).map(([k,v]) => [k, v == null ? "" : typeof v === "object" ? JSON.stringify(v) : v])));
+    const ws = XLSX.utils.json_to_sheet(flat.length ? flat : [{Info:"No records available"}]);
+    XLSX.utils.book_append_sheet(wb, ws, name.slice(0,31));
+  };
+  const fleet = state.machines.map(m => ({recordType:"Fleet machine", machineId:m.id, name:m.assetName, department:departmentFor(m), serialNumber:m.serialNumber||m.serialNo||"", startedDate:m.startedDate||m.commissionedDate||"", category:m.category||"", fuelType:m.fuelType||"", status:m.status||"", currentHours:m.currentHours||""}));
+  const custom = state.records.map(r => ({recordType:"Registered asset", ...r, department:departmentFor(r)}));
+  addSheet("Asset Register", [...fleet,...custom]);
+  addSheet("Departments", state.departments);
+  addSheet("Asset Types & Fields", state.types);
+  XLSX.writeFile(wb, "clover_ops_assets_"+today()+".xlsx");
+  notify("Assets Excel workbook downloaded.");
+}
 function renderMasters() {
   const d=$("#assetsDepartmentsList",root), t=$("#assetsTypesList",root);
   d.innerHTML=state.departments.map(x=>`<div class="assets-list-item"><div><b>${esc(x.name)}</b><small>${x.active===false?"Inactive":"Active"}</small></div><div class="assets-actions"><button class="assets-btn" data-assets-action="rename-department" data-id="${esc(x.id)}">Rename</button><button class="assets-btn danger" data-assets-action="toggle-department" data-id="${esc(x.id)}">${x.active===false?"Activate":"Disable"}</button></div></div>`).join("")||'<div class="assets-empty">No departments yet.</div>';
@@ -381,6 +397,7 @@ async function handleSubmit(event) {
 async function handleClick(event) {
   const button=event.target.closest("[data-assets-action]"); if(!button)return;
   const action=button.dataset.assetsAction,id=button.dataset.id;
+  if(action==="export-assets"){exportAssetsWorkbook();return;}
   if(action==="masters"){if(!canManage())return notify("Only an admin or manager can manage Masters.",true);$("#assetsMasters",root).hidden=false;$("#assetsMasters",root).scrollIntoView({behavior:"smooth",block:"start"});}
   if(action==="close-masters")$("#assetsMasters",root).hidden=true;
   if(action==="new-asset"){if(!canManage())return notify("Only an admin or manager can add assets.",true);openAssetForm("record","");}
