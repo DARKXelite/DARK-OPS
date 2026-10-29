@@ -275,7 +275,7 @@ function exportWorkflowWorkbook() {
   const flat = rows => (rows || []).map(row => Object.fromEntries(Object.entries(row || {}).map(([k,v]) => [k, v == null ? '' : (typeof v === 'object' ? JSON.stringify(v) : v)])));
   const fuelRows = (S.fuel || []).map(f => {
     const rate=rateForFuelLog(f), litres=Math.max(0,num(f.litres ?? f.quantity ?? f.qty));
-    return {date:fuelRecordDate(f),time:timeOf(tsMs(f.timestamp ?? f.issuedAt ?? f.createdAt)),machine:f.machineName||mName(f.machineId),machineId:f.machineId||f.machineID||f.assetId||'',fuelType:fuelTypeFromRecord(f),litres,ratePerLitre:rate||'',modeledCost:rate>0?litres*rate:'',costStatus:rate>0?'Priced':'Unpriced',issuedBy:f.issuedBy||f.recordedBy||f.operatorName||'',reference:f.id||'',notes:f.notes||f.reason||'',...f};
+    return {...f,date:fuelRecordDate(f),time:timeOf(tsMs(f.timestamp ?? f.issuedAt ?? f.createdAt)),machine:f.machineName||mName(f.machineId),machineId:f.machineId||f.machineID||f.assetId||'',fuelType:fuelTypeFromRecord(f),litres,ratePerLitre:rate||'',modeledCost:rate>0?litres*rate:'',costStatus:rate>0?'Priced':'Unpriced',issuedBy:f.issuedBy||f.recordedBy||f.operatorName||'',reference:f.id||'',notes:f.notes||f.reason||''};
   });
   const fuelMachineRows = [...new Set(fuelRows.map(r=>String(r.machineId||r.machine||'Unassigned')))].map(id=>{
     const rows=fuelRows.filter(r=>String(r.machineId||r.machine||'Unassigned')===id);
@@ -283,6 +283,7 @@ function exportWorkflowWorkbook() {
   });
   const turfRaw = typeof allTurfPlanRecords==='function' ? allTurfPlanRecords() : [...(S.plans||[]),...(S.dailyPlans||[])];
   const turfRows = turfRaw.map(p=>({
+    ...p,
     date:turfRecordDate(p),time:timeOf(tsMs(p.issuedAt??p.appliedAt??p.issueTimestamp??p.timestamp??p.createdAt)),
     sourceCollection:p._sourceCollection||'',recordId:p.id||'',planId:p.planId||'',
     category:turfPlanCategory(p),item:turfRecordProductName(p),itemId:p.partId||p.productId||p.productID||p.itemId||p.inventoryId||'',
@@ -291,7 +292,7 @@ function exportWorkflowWorkbook() {
     issueType:p.issueType||'',isAdHoc:p.isAdHoc===true?'Yes':p.isAdHoc===false?'No':'',
     issuedBy:p.issuedBy||p.performedBy||p.recordedBy||p.operatorName||'',
     rate:p.unitCost!=null?num(p.unitCost):'',recordedCost:p.unitCost!=null?num(p.unitCost)*num(turfRecordQuantity(p)):'',
-    notes:p.notes||p.reason||'',...p
+    notes:p.notes||p.reason||''
   }));
   const itemLedger = turfRows.filter(r=>/chemical|fertiliz|pesticid|turf|enhanc/i.test(String(r.category+' '+r.item)));
   const machineRows = (S.machines||[]).map(m=>({machineId:m.id||'',name:m.assetName||m.name||'',category:m.category||'',fuelType:m.fuelType||'',status:m.status||'',currentHours:m.currentHours??'',serialNumber:m.serialNumber||m.serialNo||'',commissionedDate:m.commissionedDate||m.startedDate||'',...m}));
