@@ -339,3 +339,123 @@ details > summary:hover { background: #202B1B; }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; transition-duration: .01ms !important; }
 }
+
+
+/* SECOND PASS: remove browser-default pale scrollbars and remaining light control surfaces. */
+:root {
+  color-scheme: dark;
+  scrollbar-color: #586747 #151C12;
+  scrollbar-width: thin;
+}
+*, *::before, *::after {
+  scrollbar-color: #586747 #151C12;
+}
+*::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+*::-webkit-scrollbar-track {
+  background: #151C12 !important;
+  border: 1px solid #252F1E !important;
+  border-radius: 8px;
+}
+*::-webkit-scrollbar-thumb {
+  background: #586747 !important;
+  border: 2px solid #151C12 !important;
+  border-radius: 8px;
+}
+*::-webkit-scrollbar-thumb:hover {
+  background: #829653 !important;
+}
+*::-webkit-scrollbar-corner {
+  background: #151C12 !important;
+}
+
+/* Browser-rendered controls: selects, date/time inputs, autocomplete and option menus. */
+html, body, input, button, select, textarea {
+  color-scheme: dark;
+}
+select, option, optgroup,
+input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]),
+textarea {
+  color: #F0F2E5 !important;
+  background-color: #192116 !important;
+  border-color: #465338 !important;
+}
+select option, select optgroup {
+  color: #F0F2E5 !important;
+  background: #192116 !important;
+}
+input::placeholder, textarea::placeholder {
+  color: #AEB89D !important;
+  opacity: 1 !important;
+}
+input:disabled, select:disabled, textarea:disabled,
+button:disabled, [aria-disabled="true"] {
+  color: #9DA68B !important;
+  background-color: #20271B !important;
+  border-color: #39452D !important;
+  opacity: .82;
+}
+input[type="date"], input[type="datetime-local"], input[type="time"],
+input[type="month"], input[type="week"] {
+  color-scheme: dark;
+}
+input[type="date"]::-webkit-calendar-picker-indicator,
+input[type="datetime-local"]::-webkit-calendar-picker-indicator,
+input[type="time"]::-webkit-calendar-picker-indicator {
+  filter: invert(.82) sepia(.25) saturate(.65) hue-rotate(28deg);
+  opacity: .9;
+}
+input[type="number"]::-webkit-inner-spin-button,
+input[type="number"]::-webkit-outer-spin-button {
+  filter: invert(.8) sepia(.2) saturate(.7) hue-rotate(28deg);
+}
+
+/* Neutralize common legacy light utility surfaces, including nested/scrollable content. */
+.card, .panel, .surface, .section-card, .stat-card, .metric-card,
+.table-wrap, .table-container, .scroll-container, .scrollable,
+.dropdown-menu, .dropdown-content, .select-menu, .autocomplete-menu,
+.tooltip, [role="tooltip"], .popover, [role="listbox"],
+.modal, .modal-content, .modal-body, .m-body, .m-foot,
+.drawer, .d-body, .drawer-body, .empty-state, .empty-state-card,
+.toast, .toast-message, .pagination, .pagination button,
+.calendar, .datepicker, .date-picker, .flatpickr-calendar,
+.flatpickr-months, .flatpickr-weekdays, .flatpickr-days,
+.flatpickr-day, .flatpickr-time, .flatpickr-calendar .flatpickr-time input {
+  color: #E9EDDC;
+}
+.dropdown-menu, .dropdown-content, .select-menu, .autocomplete-menu,
+.tooltip, [role="tooltip"], .popover, [role="listbox"],
+.calendar, .datepicker, .date-picker, .flatpickr-calendar {
+  background: #192116 !important;
+  border-color: #465338 !important;
+  box-shadow: 0 12px 32px rgba(0,0,0,.36) !important;
+}
+.flatpickr-calendar.arrowTop:before, .flatpickr-calendar.arrowTop:after,
+.flatpickr-calendar.arrowBottom:before, .flatpickr-calendar.arrowBottom:after {
+  border-bottom-color: #192116 !important;
+  border-top-color: #192116 !important;
+}
+.flatpickr-day { color: #E9EDDC !important; }
+.flatpickr-day:hover, .flatpickr-day:focus {
+  color: #FFFFFF !important; background: #2B3921 !important; border-color: #71834A !important;
+}
+.flatpickr-day.selected, .flatpickr-day.startRange, .flatpickr-day.endRange,
+.flatpickr-day.selected:hover {
+  color: #FFFFFF !important; background: #465A30 !important; border-color: #829653 !important;
+}
+
+/* Scrollable tables and code/data panes should retain a dark surface all the way through. */
+.table-wrap, .table-container, .scroll-container, .scrollable,
+pre, code, .code-block, .log-output {
+  scrollbar-color: #586747 #151C12;
+}
+::selection {
+  color: #FFFFFF;
+  background: #53663A;
+}
+:focus-visible {
+  outline: 2px solid #D7DF91 !important;
+  outline-offset: 2px;
+}
