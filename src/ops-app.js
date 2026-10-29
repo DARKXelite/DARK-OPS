@@ -83,7 +83,7 @@ function normDate(v, ts) {
   else if (typeof v === 'number') return ymd(new Date(v < 1e12 ? v * 1000 : v));
   const t = tsMs(ts); return t ? ymd(new Date(t)) : '';
 }
-function daysBetween(a, b) { const out = []; let d = a, n = 0; while (d <= b && n++ < 400) { out.push(d); d = addDays(d, 1); } return out; }
+function daysBetween(a, b) { const out = []; let d = a, n = 0; while (d <= b && n++ < 10000) { out.push(d); d = addDays(d, 1); } return out; }
 function setHTML(el, html) { if (el && el._h !== html) { el.innerHTML = html; el._h = html; } }
 
 /* ================= STATE ================= */
@@ -298,7 +298,7 @@ function exportWorkflowWorkbook() {
   const machineRows = (S.machines||[]).map(m=>({machineId:m.id||'',name:m.assetName||m.name||'',category:m.category||'',fuelType:m.fuelType||'',status:m.status||'',currentHours:m.currentHours??'',serialNumber:m.serialNumber||m.serialNo||'',commissionedDate:m.commissionedDate||m.startedDate||'',...m}));
   const assets = window.__cloverAssetsExportData ? window.__cloverAssetsExportData() : null;
   const savedRange={from:OA.from,to:OA.to,machineFilter:OA.machineFilter,drill:OA.drill};
-  const dated=[...fuelRows.map(r=>r.date),...turfRows.map(r=>r.date)].filter(d=>/^\\d{4}-\\d{2}-\\d{2}$/.test(String(d||''))).sort();
+  const dated=[...fuelRows.map(r=>r.date),...turfRows.map(r=>r.date)].filter(d=>typeof d==='string'&&d.length===10&&d[4]==='-'&&d[7]==='-').sort();
   OA.from=dated[0]||'2000-01-01'; OA.to=dated[dated.length-1]&&dated[dated.length-1]>today()?dated[dated.length-1]:today(); OA.machineFilter=''; OA.drill={kind:'',key:''};
   const allFuelDaily=oaFuelDaily(), allMachineDays=oaFuelMachineDays(), allTurfDaily=oaTurfDaily(), allTurfItems=oaTurfGroups('item'), allTurfVariance=oaTurfVariance(), allUnplanned=oaUnplannedLines();
   OA.from=savedRange.from; OA.to=savedRange.to; OA.machineFilter=savedRange.machineFilter; OA.drill=savedRange.drill;
@@ -2067,6 +2067,7 @@ function openStoreRecordsEditor() {
 }
 const RESET_GROUPS = [
   {key:'users', label:'Users & profiles', cols:['users'], note:'User profiles only. Does not delete Firebase Authentication accounts or app_roles access policies.'},
+  {key:'roles', label:'Access role policies (danger)', collections:['app_roles'], note:'Deleting these may remove authorization mappings and lock users out. Do not select unless rebuilding access policies intentionally.'},
   {key:'machines', label:'Machines / fleet', cols:['machines'], note:'Machine master records.'},
   {key:'plans', label:'Turf plans', cols:['plans'], note:'Records in turf_plans.'},
   {key:'dailyPlans', label:'Daily application plans & issues', cols:['dailyPlans'], note:'Records in daily_application_plans, including application/issue records stored there.'},
