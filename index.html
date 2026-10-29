@@ -208,7 +208,7 @@
         <button class="btn" data-act="group-tab" data-v="expenses" title="Open the local expenses table"><span class="material-symbols-rounded">receipt_long</span>Local Expenses</button>
         <button class="btn btn-primary" data-act="add-local-expense" title="Add a local expense bill"><span class="material-symbols-rounded">add</span>Add Local Bill</button>
         <button class="btn" data-act="open-fuel"><span class="material-symbols-rounded">insights</span>Consumption analysis</button>
-        <button class="btn" data-act="export-ledger"><span class="material-symbols-rounded">download</span>Export CSV</button>
+        <button class="btn" data-act="export-ledger"><span class="material-symbols-rounded">download</span>Export CSV</button><button class="btn btn-primary" data-act="export-workbook"><span class="material-symbols-rounded">table_view</span>Export all Excel ledgers</button>
       </div>
       <div class="card" id="ledgerCard"></div>
     </section>
@@ -257,14 +257,14 @@
           <button class="chip" data-act="rec-tab" data-tab="fuel">Fuel history</button>
         </div>
         <div class="grow"></div>
-        <button class="btn" data-act="export-records"><span class="material-symbols-rounded">download</span>Export</button>
+        <button class="btn" data-act="export-records"><span class="material-symbols-rounded">download</span>Export</button><button class="btn btn-primary" data-act="export-workbook"><span class="material-symbols-rounded">table_view</span>Export all Excel ledgers</button>
       </div>
       <div class="card" id="recordsCard"></div>
     </section>
 
     <!-- INVENTORY MASTER / GOODS RECEIPTS -->
     <section class="view" id="v-registry">
-      <div class="toolbar" style="gap:10px;flex-wrap:wrap"><div class="grow"></div><button class="btn" data-act="open-store-records"><span class="material-symbols-rounded">manage_search</span>Records editor</button><button class="btn btn-danger" data-act="open-data-reset"><span class="material-symbols-rounded">delete_sweep</span>Reset data</button><button class="btn btn-primary" data-act="add-inward"><span class="material-symbols-rounded">move_to_inbox</span> New inward</button><button class="btn" data-act="add-part"><span class="material-symbols-rounded">add_box</span> New item master</button></div>
+      <div class="toolbar" style="gap:10px;flex-wrap:wrap"><div class="grow"></div><button class="btn btn-primary" data-act="export-workbook"><span class="material-symbols-rounded">table_view</span>Export all Excel ledgers</button><button class="btn" data-act="open-store-records"><span class="material-symbols-rounded">manage_search</span>Records editor</button><button class="btn btn-danger" data-act="open-data-reset"><span class="material-symbols-rounded">delete_sweep</span>Reset data</button><button class="btn btn-primary" data-act="add-inward"><span class="material-symbols-rounded">move_to_inbox</span> New inward</button><button class="btn" data-act="add-part"><span class="material-symbols-rounded">add_box</span> New item master</button></div>
       <div class="kpi-grid" id="storeKpis"></div>
       <div class="card mt"><div class="card-h"><h3>Item master & current stock</h3><button class="btn btn-sm" data-act="export-stock">Export stock</button></div><div class="table-wrap" id="invTbl"></div></div>
       <div class="card mt"><div class="card-h"><h3>Goods receipt register</h3><button class="btn btn-sm" data-act="export-inwards">Export inwards</button></div><div class="table-wrap" id="inwardTbl"></div></div>
@@ -281,7 +281,7 @@
     <section class="view" id="v-turfcare">
       <div class="turf-page-head">
         <div><div class="turf-eyebrow">COURSE INPUTS · APPLICATION CONTROL</div><h2>Application workboard</h2><p>Plan applications, review records and check current stock before work.</p></div>
-        <div class="turf-primary-actions"><button class="btn" data-act="open-ops-analytics" data-domain="turf"><span class="material-symbols-rounded">analytics</span>Analytics &amp; Ledgers</button><button class="btn" data-act="turf-open-plans"><span class="material-symbols-rounded">view_list</span>View plans</button><button class="btn" data-act="turf-tab" data-tab="products"><span class="material-symbols-rounded">inventory_2</span>Products & stock</button><button class="btn btn-primary" data-act="open-planner"><span class="material-symbols-rounded">calendar_month</span>Build weekly plan</button></div>
+        <div class="turf-primary-actions"><button class="btn" data-act="export-workbook"><span class="material-symbols-rounded">table_view</span>Export all Excel ledgers</button><button class="btn" data-act="open-ops-analytics" data-domain="turf"><span class="material-symbols-rounded">analytics</span>Analytics &amp; Ledgers</button><button class="btn" data-act="turf-open-plans"><span class="material-symbols-rounded">view_list</span>View plans</button><button class="btn" data-act="turf-tab" data-tab="products"><span class="material-symbols-rounded">inventory_2</span>Products & stock</button><button class="btn btn-primary" data-act="open-planner"><span class="material-symbols-rounded">calendar_month</span>Build weekly plan</button></div>
       </div>
       <div class="turf-metrics" id="turfKpiGrid"></div>
       <div class="turf-view-tabs" role="tablist" aria-label="Turf operations views">
