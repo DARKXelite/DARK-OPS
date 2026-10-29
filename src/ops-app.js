@@ -254,6 +254,33 @@ function confirmDelete(col, id, label) {
 }
 function openDrawer(title, sub, body) { $('#dTitle').textContent = title; $('#dSub').textContent = sub; $('#dBody').innerHTML = body; $('#drawerOv').classList.add('open'); }
 function closeDrawer() { $('#drawerOv').classList.remove('open'); }
+function workbookSheetRows(rows) {
+  return (rows || []).map(row => Object.fromEntries(Object.entries(row || {}).map(([k,v]) => [k, v == null ? '' : (typeof v === 'object' ? JSON.stringify(v) : v)])));
+}
+function downloadWorkbook(filename, sheets) {
+  if (!window.XLSX) { toast('Excel workbook library did not load. Try again after refreshing.', 'err'); return; }
+  const wb = XLSX.utils.book_new();
+  for (const [name, rows] of sheets) {
+    const safeRows = workbookSheetRows(rows);
+    const ws = XLSX.utils.json_to_sheet(safeRows.length ? safeRows : [{Info:'No records available'}]);
+    ws['!cols'] = Object.keys(safeRows[0] || {Info:''}).map(k => ({wch:Math.min(32,Math.max(12,k.length+2))}));
+    XLSX.utils.book_append_sheet(wb, ws, String(name).slice(0,31));
+  }
+  XLSX.writeFile(wb, filename);
+  toast('Excel workbook downloaded.');
+}
+function exportWorkflowWorkbook() {
+  const fuelRows = (S.fuel || []).map(f => ({date:fuelRecordDate(f),time:timeOf(tsMs(f.timestamp ?? f.issuedAt ?? f.createdAt)),machine:f.machineName || mName(f.machineId),machineId:f.machineId || '',fuelType:fuelTypeFromRecord(f),litres:num(f.litres ?? f.quantity ?? f.qty),ratePerLitre:rateForFuelLog(f)||'',modeledCost:rateForFuelLog(f)>0?fuelLogCost(f):'',issuedBy:f.issuedBy||f.recordedBy||'',notes:f.notes||f.reason||''}));
+  const machineFuel = [...new Set(fuelRows.map(r=>String(r.machineId||r.machine)))].map(id=>{const rows=fuelRows.filter(r=>String(r.machineId||r.machine)===id);return {machine:rows[0]?.machine||id,machineId:rows[0]?.machineId||'',fuelType:rows[0]?.fuelType||'',entries:rows.length,litres:rows.reduce((s,r)=>s+num(r.litres),0),pricedCost:rows.reduce((s,r)=>s+num(r.modeledCost),0),unpricedLitres:rows.filter(r=>r.modeledCost==='').reduce((s,r)=>s+num(r.litres),0)};});
+  const turfRows = typeof allTurfPlanRecords==='function' ? allTurfPlanRecords().map(p=>({date:turfRecordDate(p),time:timeOf(turfRecordTimestamp(p)),category:turfPlanCategory(p),item:turfRecordProductName(p),itemId:p.partId||p.productId||p.itemId||'',quantity:turfRecordQuantity(p),unit:p.unit||p.stockUnit||p.uom||'',zone:p.targetZoneOrMachine||p.targetArea||p.area||p.location||'',status:turfRecordStatus(p),issuedBy:p.issuedBy||p.performedBy||p.recordedBy||'',cost:p.unitCost!=null?num(p.unitCost)*num(turfRecordQuantity(p)):'',notes:p.notes||p.reason||'',source:p._sourceCollection||''})) : [];
+  const generic = list => (list||[]).map(x=>({...x}));
+  downloadWorkbook('clover_ops_workflow_ledgers_'+today()+'_all_records.xlsx', [
+    ['Fuel Ledger',fuelRows],['Machine Fuel Summary',machineFuel],
+    ['Chemical Item Ledger',turfRows.filter(r=>/chemical|fertiliz|pesticid|turf/i.test(String(r.category+' '+r.item)))],
+    ['Turf Application Ledger',turfRows],['Machine Register',(S.machines||[]).map(m=>({machineId:m.id,name:m.assetName,category:m.category,fuelType:m.fuelType,status:m.status,currentHours:m.currentHours,serialNumber:m.serialNumber||'',commissionedDate:m.commissionedDate||m.startedDate||''}))],
+    ['Inventory Stock',generic(S.inventory)],['Goods Inwards',generic(S.inwards)],['Maintenance',generic(S.maintenance)],['Assignments',generic(S.assignments)],['Shifts',generic(S.shifts)],['Local Expenses',generic(S.expenses)],['Users',generic(S.users)],['FNB Orders',generic(S.fnbOrders)],['FNB Receipts',generic(S.fnbReceipts)],['Store Logs',generic(S.logs)]
+  ]);
+}
 function downloadCSV(name, rows) {
   const csv = rows.map(r => r.map(c => `"${String(c ?? '').replace(/"/g, '""')}"`).join(',')).join('\n');
   const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8' })); a.download = name;
@@ -1187,7 +1214,7 @@ function drawerFuel(id) {
 /* ================= FUEL MODAL (KPI drill-down) ================= */
 
 /* UNIFIED OPERATIONAL ANALYTICS — read-only views over existing collections */
-const OA = { domain:'overview', view:'daily', from:addDays(today(),-29), to:today(), drill:{kind:'',key:''} };
+const OA = { domain:'overview', view:'daily', from:addDays(today(),-29), to:today(), drill:{kind:'',key:''}, machineFilter:'' };
 const OA_VIEWS = {
   overview:[['daily','Operations by day']],
   fuel:[['daily','Daily fuel'],['machine','By machine'],['machine-day','Machine × day'],['transactions','Fuel ledger']],
@@ -1195,7 +1222,7 @@ const OA_VIEWS = {
 };
 function openOpsAnalytics(domain) {
   OA.domain=['overview','fuel','turf'].includes(domain)?domain:'overview';
-  OA.view='daily'; OA.from=addDays(today(),-29); OA.to=today(); OA.drill={kind:'',key:''};
+  OA.view=OA.machineFilter?'transactions':'daily'; OA.from=addDays(today(),-29); OA.to=today(); OA.drill={kind:'',key:''};
   curModalRender=renderOpsAnalytics;
   openModal({title:'Operational Analytics & Ledgers',sub:'Shared date filters · machine usage · turf treatments · item-level reconciliation',size:'ops-analytics-modal',body:'<div id="opsAnalyticsRoot"></div>',footer:'<button class="btn" data-act="export-ops-analytics"><span class="material-symbols-rounded">download</span>Export report</button><button class="btn btn-primary" data-act="close-modal">Close</button>'});
   renderOpsAnalytics();
@@ -1224,7 +1251,7 @@ function oaDates(){return daysBetween(OA.from,OA.to);}
 function oaFuelQty(f){return Math.max(0,num(f.litres??f.quantity??f.qty));}
 function oaFuelMachine(f){return f.machineId??f.machineID??f.machine??f.assetId??f.machineName??'';}
 function oaFuelTime(f){return timeOf(tsMs(f.timestamp??f.issuedAt??f.issueTimestamp??f.createdAt??f.createdTime??f.recordedAt))||'—';}
-function oaFuelRows(){return fuelIn(OA.from,OA.to).slice().sort((a,b)=>fuelRecordDate(b).localeCompare(fuelRecordDate(a))||tsMs(b.timestamp??b.issuedAt??b.createdAt)-tsMs(a.timestamp??a.issuedAt??a.createdAt));}
+function oaFuelRows(){return fuelIn(OA.from,OA.to).filter(f=>!OA.machineFilter||String(f.machineId||'')===String(OA.machineFilter)||String(f.machineName||'')===String(mx().get(OA.machineFilter)?.assetName||'')).slice().sort((a,b)=>fuelRecordDate(b).localeCompare(fuelRecordDate(a))||tsMs(b.timestamp??b.issuedAt??b.createdAt)-tsMs(a.timestamp??a.issuedAt??a.createdAt));}
 function oaShiftRows(){return shiftsIn(OA.from,OA.to);}
 function oaFuelDaily(){
   const map=new Map();
@@ -2604,12 +2631,13 @@ const inventoryImporter = createInventoryImporter({ db, collection, doc, writeBa
 const H = {
   'cost-model': () => openCostModel(),
   'open-ops-analytics': d => openOpsAnalytics(d.domain || 'overview'),
-  'oa-domain': d => { OA.domain = ['overview','fuel','turf'].includes(d.domain) ? d.domain : 'overview'; OA.view = 'daily'; renderOpsAnalytics(); },
+  'oa-domain': d => { OA.domain = ['overview','fuel','turf'].includes(d.domain) ? d.domain : 'overview'; OA.view = OA.domain==='fuel'&&OA.machineFilter?'transactions':'daily'; renderOpsAnalytics(); },
   'oa-view': d => { OA.view = (OA_VIEWS[OA.domain] || OA_VIEWS.overview).some(v => v[0] === d.view) ? d.view : 'daily'; renderOpsAnalytics(); },
   'oa-preset': d => oaSetRange(d.range || '30d'),
   'oa-drill': d => { OA.drill = { kind:d.kind || '', key:d.key || '' }; renderOpsAnalytics(); },
   'oa-clear-drill': () => { OA.drill = { kind:'', key:'' }; renderOpsAnalytics(); },
   'export-ops-analytics': () => exportOpsAnalytics(),
+  'export-workbook': () => exportWorkflowWorkbook(),
   'open-day-cost': d => d.domain === 'turf' ? openTurfCostAnalytics() : openDayCostLedger(d.domain),
   'export-day-cost': d => exportDayCostLedger(d.domain),
   'turf-cost-apply': () => renderTurfCostAnalytics($('#turfCostFrom')?.value, $('#turfCostTo')?.value),
@@ -2732,7 +2760,7 @@ const H = {
   'nav-group': d => { if (d.group === 'turfops') setTurfSection('workboard'); openNavGroup(d.group); },
   'group-tab': d => switchView(d.v),
   'map-mode': d => switchView(d.mode),
-  'drawer-route': d => drawerRoute(d.id), 'view-path': d => showShiftPathMap(d.sid, d.mname), 'drawer-fuel': d => drawerFuel(d.id),
+  'drawer-route': d => drawerRoute(d.id), 'view-path': d => showShiftPathMap(d.sid, d.mname), 'drawer-fuel': d => { const m=mx().get(d.id); if(!m)return; OA.machineFilter=m.id; openOpsAnalytics('fuel'); OA.view='transactions'; renderOpsAnalytics(); },
   'export-fuel': () => { const st = R.fuel; downloadCSV(`fuel_${st.from}_to_${st.to}.csv`, [['Date', 'Machine', 'Fuel type', 'Litres', 'Rate / L', 'Modeled cost', 'Pricing source', 'Notes'], ...fuelIn(st.from, st.to).sort(sortFuel).map(f => [f._d, mName(f.machineId), fuelTypeFromRecord(f), num(f.litres), rateForFuelLog(f)||'', rateForFuelLog(f)>0?fuelLogCost(f):'', num(f.ratePerLitre ?? f.fuelRate ?? f.unitPrice ?? f.pricePerLitre)>0?'Transaction rate':rateForFuelLog(f)>0?'Inventory Master rate':'Unpriced', f.notes || ''])]); },
   'export-ledger': () => { const st = R.ledger; downloadCSV(`fuel_ledger_${st.from}_to_${st.to}.csv`, [['Date', 'Machine', 'Fuel type', 'Litres', 'Rate / L', 'Modeled cost', 'Pricing source', 'Notes'], ...ledgerRows().map(f => [f._d, mName(f.machineId), fuelTypeFromRecord(f), num(f.litres), rateForFuelLog(f)||'', rateForFuelLog(f)>0?fuelLogCost(f):'', num(f.ratePerLitre ?? f.fuelRate ?? f.unitPrice ?? f.pricePerLitre)>0?'Transaction rate':rateForFuelLog(f)>0?'Inventory Master rate':'Unpriced', f.notes || ''])]); },
   'export-shifts': () => { const st = R.shifts; downloadCSV(`shifts_${st.from}_to_${st.to}.csv`, [['Date', 'Operator', 'Machine', 'Distance km', 'Engine hours'], ...shiftRows().map(s => [s._d, s.operatorName || '', mName(s.machineId), num(s.distanceKm), num(s.engineHoursLogged)])]); },
