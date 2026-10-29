@@ -1220,7 +1220,8 @@ const OA_VIEWS = {
   fuel:[['daily','Daily fuel'],['machine','By machine'],['machine-day','Machine × day'],['transactions','Fuel ledger']],
   turf:[['daily','Daily turf'],['category','By category'],['area','By area'],['item','By item'],['variance','Planned vs actual'],['unplanned','Unplanned issues'],['transactions','Application ledger']]
 };
-function openOpsAnalytics(domain) {
+function openOpsAnalytics(domain, machineId = '') {
+  OA.machineFilter = machineId || '';
   OA.domain=['overview','fuel','turf'].includes(domain)?domain:'overview';
   OA.view=OA.machineFilter?'transactions':'daily'; OA.from=addDays(today(),-29); OA.to=today(); OA.drill={kind:'',key:''};
   curModalRender=renderOpsAnalytics;
@@ -2760,7 +2761,7 @@ const H = {
   'nav-group': d => { if (d.group === 'turfops') setTurfSection('workboard'); openNavGroup(d.group); },
   'group-tab': d => switchView(d.v),
   'map-mode': d => switchView(d.mode),
-  'drawer-route': d => drawerRoute(d.id), 'view-path': d => showShiftPathMap(d.sid, d.mname), 'drawer-fuel': d => { const m=mx().get(d.id); if(!m)return; OA.machineFilter=m.id; openOpsAnalytics('fuel'); OA.view='transactions'; renderOpsAnalytics(); },
+  'drawer-route': d => drawerRoute(d.id), 'view-path': d => showShiftPathMap(d.sid, d.mname), 'drawer-fuel': d => { const m=mx().get(d.id); if(!m)return; openOpsAnalytics('fuel',m.id); OA.view='transactions'; renderOpsAnalytics(); },
   'export-fuel': () => { const st = R.fuel; downloadCSV(`fuel_${st.from}_to_${st.to}.csv`, [['Date', 'Machine', 'Fuel type', 'Litres', 'Rate / L', 'Modeled cost', 'Pricing source', 'Notes'], ...fuelIn(st.from, st.to).sort(sortFuel).map(f => [f._d, mName(f.machineId), fuelTypeFromRecord(f), num(f.litres), rateForFuelLog(f)||'', rateForFuelLog(f)>0?fuelLogCost(f):'', num(f.ratePerLitre ?? f.fuelRate ?? f.unitPrice ?? f.pricePerLitre)>0?'Transaction rate':rateForFuelLog(f)>0?'Inventory Master rate':'Unpriced', f.notes || ''])]); },
   'export-ledger': () => { const st = R.ledger; downloadCSV(`fuel_ledger_${st.from}_to_${st.to}.csv`, [['Date', 'Machine', 'Fuel type', 'Litres', 'Rate / L', 'Modeled cost', 'Pricing source', 'Notes'], ...ledgerRows().map(f => [f._d, mName(f.machineId), fuelTypeFromRecord(f), num(f.litres), rateForFuelLog(f)||'', rateForFuelLog(f)>0?fuelLogCost(f):'', num(f.ratePerLitre ?? f.fuelRate ?? f.unitPrice ?? f.pricePerLitre)>0?'Transaction rate':rateForFuelLog(f)>0?'Inventory Master rate':'Unpriced', f.notes || ''])]); },
   'export-shifts': () => { const st = R.shifts; downloadCSV(`shifts_${st.from}_to_${st.to}.csv`, [['Date', 'Operator', 'Machine', 'Distance km', 'Engine hours'], ...shiftRows().map(s => [s._d, s.operatorName || '', mName(s.machineId), num(s.distanceKm), num(s.engineHoursLogged)])]); },
