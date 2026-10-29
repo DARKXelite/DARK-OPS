@@ -561,3 +561,90 @@ button.secondary, .btn-secondary,
   color: #FFFFFF !important;
   border-color: #829653 !important;
 }
+
+
+/* FOURTH PASS: hard override legacy pale surfaces in Fuel Ledger and remaining operational views. */
+#v-fuel #ledgerCard,
+#v-fuel #ledgerCard .card,
+#v-fuel #ledgerCard .panel,
+#v-fuel #ledgerCard .table-wrap,
+#v-fuel #ledgerCard .table-container,
+#v-fuel #ledgerCard .filter-bar,
+#v-fuel #ledgerCard .filters,
+#v-fuel #ledgerCard .empty,
+#v-fuel #ledgerCard .empty-state,
+#v-fuel #ledgerCard .ledger-filters,
+#v-fuel #ledgerCard .ledger-table-wrap {
+  background-color: #192116 !important;
+  color: #F3F4E8 !important;
+  border-color: #465338 !important;
+}
+#v-fuel #ledgerCard label,
+#v-fuel #ledgerCard p,
+#v-fuel #ledgerCard small,
+#v-fuel #ledgerCard .muted,
+#v-fuel #ledgerCard .empty,
+#v-fuel #ledgerCard .empty-state,
+#v-fuel #ledgerCard td,
+#v-fuel #ledgerCard th {
+  color: #E8ECD9 !important;
+}
+#v-fuel #ledgerCard table,
+#v-fuel #ledgerCard tbody,
+#v-fuel #ledgerCard tbody tr,
+#v-fuel #ledgerCard tbody tr:nth-child(even),
+#v-fuel #ledgerCard tbody td {
+  background-color: #192116 !important;
+  color: #E8ECD9 !important;
+  border-color: #39482D !important;
+}
+#v-fuel #ledgerCard thead,
+#v-fuel #ledgerCard thead tr,
+#v-fuel #ledgerCard th {
+  background-color: #26331D !important;
+  color: #F3F4E8 !important;
+}
+#v-fuel #ledgerCard tbody tr:hover,
+#v-fuel #ledgerCard tbody tr:hover td {
+  background-color: #29371F !important;
+}
+#v-fuel #ledgerCard input,
+#v-fuel #ledgerCard select,
+#v-fuel #ledgerCard textarea,
+#v-fuel #ledgerCard input[type="date"] {
+  color: #F3F4E8 !important;
+  background-color: #202B1B !important;
+  border-color: #536244 !important;
+  color-scheme: dark !important;
+}
+#v-fuel #ledgerCard button:not(.btn-primary):not(.active),
+#v-fuel #ledgerCard .chip,
+#v-fuel #ledgerCard .badge,
+#v-fuel #ledgerCard .pill {
+  color: #E8ECD9 !important;
+  background-color: #29351F !important;
+  border-color: #536244 !important;
+}
+#v-fuel #ledgerCard button.active,
+#v-fuel #ledgerCard button.btn-primary,
+#v-fuel #ledgerCard .btn-primary {
+  color: #FFFFFF !important;
+  background-color: #465A30 !important;
+  border-color: #829653 !important;
+}
+/* No cream/white panels in application views, including dynamically rendered descendants. */
+.view .card, .view .panel, .view .table-wrap, .view .table-container,
+.view .filter-bar, .view .filter-panel, .view .empty-state, .view .empty,
+.view .modal, .view .modal-content, .view .modal-body, .view .drawer,
+.view [class*="ledger"], .view [class*="filter"], .view [class*="summary-card"] {
+  border-color: #465338 !important;
+}
+.view .card, .view .panel, .view .table-wrap, .view .table-container,
+.view .filter-bar, .view .filter-panel, .view .empty-state, .view .empty,
+.view [class*="ledger"], .view [class*="filter"], .view [class*="summary-card"] {
+  background-color: #192116 !important;
+  color: #F3F4E8 !important;
+}
+.view .card *, .view .panel *, .view .table-wrap *, .view .table-container * {
+  text-shadow: none !important;
+}
