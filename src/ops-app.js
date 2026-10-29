@@ -83,7 +83,7 @@ function normDate(v, ts) {
   else if (typeof v === 'number') return ymd(new Date(v < 1e12 ? v * 1000 : v));
   const t = tsMs(ts); return t ? ymd(new Date(t)) : '';
 }
-function daysBetween(a, b) { const out = []; let d = a, n = 0; while (d <= b && n++ < 400) { out.push(d); d = addDays(d, 1); } return out; }
+function daysBetween(a, b) { const out = []; let d = a, n = 0; while (d <= b && n++ < 10000) { out.push(d); d = addDays(d, 1); } return out; }
 function setHTML(el, html) { if (el && el._h !== html) { el.innerHTML = html; el._h = html; } }
 
 /* ================= STATE ================= */
@@ -254,6 +254,93 @@ function confirmDelete(col, id, label) {
 }
 function openDrawer(title, sub, body) { $('#dTitle').textContent = title; $('#dSub').textContent = sub; $('#dBody').innerHTML = body; $('#drawerOv').classList.add('open'); }
 function closeDrawer() { $('#drawerOv').classList.remove('open'); }
+function workbookSheetRows(rows) {
+  return (rows || []).map(row => Object.fromEntries(Object.entries(row || {}).map(([k,v]) => [k, v == null ? '' : (typeof v === 'object' ? JSON.stringify(v) : v)])));
+}
+function downloadWorkbook(filename, sheets) {
+  if (!window.XLSX) { toast('Excel workbook library did not load. Try again after refreshing.', 'err'); return; }
+  const wb = XLSX.utils.book_new();
+  for (const [name, rows] of sheets) {
+    const safeRows = workbookSheetRows(rows);
+    const ws = XLSX.utils.json_to_sheet(safeRows.length ? safeRows : [{Info:'No records available'}]);
+    ws['!cols'] = Object.keys(safeRows[0] || {Info:''}).map(k => ({wch:Math.min(32,Math.max(12,k.length+2))}));
+    XLSX.utils.book_append_sheet(wb, ws, String(name).slice(0,31));
+  }
+  XLSX.writeFile(wb, filename);
+  toast('Excel workbook downloaded.');
+}
+function exportWorkflowWorkbook() {
+  if (!window.XLSX) { toast('Excel workbook library did not load. Refresh and try again.', 'err'); return; }
+  const generic = list => (list || []).map(x => ({...x}));
+  const flat = rows => (rows || []).map(row => Object.fromEntries(Object.entries(row || {}).map(([k,v]) => [k, v == null ? '' : (typeof v === 'object' ? JSON.stringify(v) : v)])));
+  const fuelRows = (S.fuel || []).map(f => {
+    const rate=rateForFuelLog(f), litres=Math.max(0,num(f.litres ?? f.quantity ?? f.qty));
+    return {...f,date:fuelRecordDate(f),time:timeOf(tsMs(f.timestamp ?? f.issuedAt ?? f.createdAt)),machine:f.machineName||mName(f.machineId),machineId:f.machineId||f.machineID||f.assetId||'',fuelType:fuelTypeFromRecord(f),litres,ratePerLitre:rate||'',modeledCost:rate>0?litres*rate:'',costStatus:rate>0?'Priced':'Unpriced',issuedBy:f.issuedBy||f.recordedBy||f.operatorName||'',reference:f.id||'',notes:f.notes||f.reason||''};
+  });
+  const fuelMachineRows = [...new Set(fuelRows.map(r=>String(r.machineId||r.machine||'Unassigned')))].map(id=>{
+    const rows=fuelRows.filter(r=>String(r.machineId||r.machine||'Unassigned')===id);
+    return {machine:rows[0]?.machine||id,machineId:rows[0]?.machineId||'',entries:rows.length,litres:rows.reduce((s,r)=>s+num(r.litres),0),dieselLitres:rows.filter(r=>r.fuelType==='Diesel').reduce((s,r)=>s+num(r.litres),0),petrolLitres:rows.filter(r=>r.fuelType==='Petrol').reduce((s,r)=>s+num(r.litres),0),pricedCost:rows.reduce((s,r)=>s+num(r.modeledCost),0),pricedEntries:rows.filter(r=>r.costStatus==='Priced').length,unpricedEntries:rows.filter(r=>r.costStatus==='Unpriced').length,unpricedLitres:rows.filter(r=>r.costStatus==='Unpriced').reduce((s,r)=>s+num(r.litres),0)};
+  });
+  const turfRaw = typeof allTurfPlanRecords==='function' ? allTurfPlanRecords() : [...(S.plans||[]),...(S.dailyPlans||[])];
+  const turfRows = turfRaw.map(p=>({
+    ...p,
+    date:turfRecordDate(p),time:timeOf(tsMs(p.issuedAt??p.appliedAt??p.issueTimestamp??p.timestamp??p.createdAt)),
+    sourceCollection:p._sourceCollection||'',recordId:p.id||'',planId:p.planId||'',
+    category:turfPlanCategory(p),item:turfRecordProductName(p),itemId:p.partId||p.productId||p.productID||p.itemId||p.inventoryId||'',
+    quantity:turfRecordQuantity(p),unit:p.unit||p.stockUnit||p.uom||p.unitOfMeasure||'',
+    zone:p.targetZoneOrMachine||p.targetArea||p.area||p.location||'',status:turfRecordStatus(p),
+    issueType:p.issueType||'',isAdHoc:p.isAdHoc===true?'Yes':p.isAdHoc===false?'No':'',
+    issuedBy:p.issuedBy||p.performedBy||p.recordedBy||p.operatorName||'',
+    rate:p.unitCost!=null?num(p.unitCost):'',recordedCost:p.unitCost!=null?num(p.unitCost)*num(turfRecordQuantity(p)):'',
+    notes:p.notes||p.reason||''
+  }));
+  const itemLedger = turfRows.filter(r=>/chemical|fertiliz|pesticid|turf|enhanc/i.test(String(r.category+' '+r.item)));
+  const machineRows = (S.machines||[]).map(m=>({machineId:m.id||'',name:m.assetName||m.name||'',category:m.category||'',fuelType:m.fuelType||'',status:m.status||'',currentHours:m.currentHours??'',serialNumber:m.serialNumber||m.serialNo||'',commissionedDate:m.commissionedDate||m.startedDate||'',...m}));
+  const assets = window.__cloverAssetsExportData ? window.__cloverAssetsExportData() : null;
+  const savedRange={from:OA.from,to:OA.to,machineFilter:OA.machineFilter,drill:OA.drill};
+  const dated=[...fuelRows.map(r=>r.date),...turfRows.map(r=>r.date)].filter(d=>typeof d==='string'&&d.length===10&&d[4]==='-'&&d[7]==='-').sort();
+  OA.from=dated[0]||'2000-01-01'; OA.to=dated[dated.length-1]&&dated[dated.length-1]>today()?dated[dated.length-1]:today(); OA.machineFilter=''; OA.drill={kind:'',key:''};
+  const allFuelDaily=oaFuelDaily(), allMachineDays=oaFuelMachineDays(), allTurfDaily=oaTurfDaily(), allTurfItems=oaTurfGroups('item'), allTurfVariance=oaTurfVariance(), allUnplanned=oaUnplannedLines();
+  OA.from=savedRange.from; OA.to=savedRange.to; OA.machineFilter=savedRange.machineFilter; OA.drill=savedRange.drill;
+  const workbook = XLSX.utils.book_new();
+  const addSheet = (name, rows) => {
+    const safe=flat(rows);
+    const ws=XLSX.utils.json_to_sheet(safe.length?safe:[{Info:'No records available to this signed-in user'}]);
+    ws['!cols']=Object.keys(safe[0]||{Info:''}).map(k=>({wch:Math.min(40,Math.max(12,k.length+2))}));
+    XLSX.utils.book_append_sheet(workbook,ws,name.slice(0,31));
+  };
+  addSheet('Fuel Ledger',fuelRows);
+  addSheet('Fuel By Machine',fuelMachineRows);
+  addSheet('Fuel By Day',allFuelDaily.map(r=>({date:r.date,entries:r.entries,machines:r.machineCount,dieselLitres:r.diesel,petrolLitres:r.petrol,otherLitres:r.unknown,totalLitres:r.litres,runHours:r.hours,litresPerHour:r.lph??'',pricedCost:r.priced?r.cost:'',unpricedLitres:r.unpriced})));
+  addSheet('Machine Day Ledger',allMachineDays.map(r=>({date:r.date,machine:r.name,machineId:r.id,entries:r.entries,litres:r.litres,dieselLitres:r.diesel,petrolLitres:r.petrol,runHours:r.hours,litresPerHour:r.lph??'',distanceKm:r.km,pricedCost:r.priced?r.cost:'',unpricedLitres:r.unpriced})));
+  addSheet('Turf Application Ledger',turfRows);
+  addSheet('Chemical Item Ledger',itemLedger);
+  addSheet('Turf Daily Analytics',allTurfDaily.map(r=>({date:r.date,records:r.records,planned:r.planned,issued:r.issued,applied:r.applied,categories:r.categories.size,areas:r.areas.size,plannedQuantityByUnit:r.plannedUnits,actualQuantityByUnit:r.actualUnits,pricedCost:r.priced?r.cost:'',unpricedActuals:r.unpriced})));
+  addSheet('Turf Item Analytics',allTurfItems.map(r=>({item:r.name,categories:r.categoryLabel,areas:r.areaLabel,records:r.records,planned:r.planned,issued:r.issued,applied:r.applied,plannedQuantityByUnit:r.plannedUnits,actualQuantityByUnit:r.actualUnits,pricedValue:r.priced?r.cost:'',unpricedActuals:r.unpriced,lastActivity:r.lastDate})));
+  addSheet('Turf Variance',allTurfVariance.map(r=>({item:r.name,category:r.category,unit:r.unit,planned:r.planned,issuedApplied:r.issued,variance:r.issued-r.planned,plannedLines:r.plannedCount,actualLines:r.issuedCount,areas:[...r.areas].join(', '),lastActivity:r.lastDate})));
+  addSheet('Unplanned Issues',allUnplanned.map(r=>({date:r.date,time:r.time,recordId:r.record?.id||'',planId:r.planId,issueType:r.issueType,status:r.status,category:r.category,item:r.name,itemId:r.productId,quantity:r.qty,unit:r.unit,area:r.area,issuedBy:r.issuedBy,rate:r.rate||'',recordedCost:r.cost===null?'':r.cost,notes:r.notes,sourceCollection:r.sourceCollection})));
+  addSheet('Machine Register',machineRows);
+  addSheet('Inventory Stock',generic(S.inventory));
+  addSheet('Goods Inwards',generic(S.inwards));
+  addSheet('Maintenance Ledger',generic(S.maintenance));
+  addSheet('Assignments Ledger',generic(S.assignments));
+  addSheet('Shifts Ledger',generic(S.shifts));
+  addSheet('Local Expenses',generic(S.expenses));
+  addSheet('Operational Logs',generic(S.logs));
+  addSheet('Course Zones',generic(S.zones));
+  addSheet('Live Telemetry',generic(S.live));
+  addSheet('Users',generic(S.users));
+  addSheet('FNB Orders',generic(S.fnbOrders));
+  addSheet('FNB Receipts',generic(S.fnbReceipts));
+  if(assets){
+    addSheet('Asset Register',assets.records||[]);
+    addSheet('Asset Departments',assets.departments||[]);
+    addSheet('Asset Types Fields',assets.types||[]);
+  }
+  XLSX.writeFile(workbook,'clover_ops_complete_ledgers_'+today()+'.xlsx');
+  toast('Complete Excel workbook downloaded. Includes detailed ledgers and derived analytics for records currently loaded under your role.');
+}
+
 function downloadCSV(name, rows) {
   const csv = rows.map(r => r.map(c => `"${String(c ?? '').replace(/"/g, '""')}"`).join(',')).join('\n');
   const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8' })); a.download = name;
@@ -669,9 +756,10 @@ function renderOverview() {
     {key:'pesticide', label:'Pesticides', ids:['opsPesticideStats','opsPesticideTrend','opsPesticideRecent']},
     {key:'enhancer', label:'Turf Enhancers', ids:['opsEnhancerStats','opsEnhancerTrend','opsEnhancerRecent']}
   ];
-  const allPlans = allTurfPlanRecords().filter(p => { const d=turfRecordDate(p); return d && d <= t && categoryForPlan(p); });
+  const allPlans = allTurfPlanRecords().filter(p => { const d=turfRecordDate(p); return d && d <= t && categoryForPlan(p) && !isUnplannedMaterialIssue(p); });
   const weekPlans = allPlans.filter(p => turfRecordDate(p) >= weekStart);
-  const monthTurfRows = monthPlans.filter(p => categoryForPlan(p));
+  const monthScheduledPlans = monthPlans.filter(p => !isUnplannedMaterialIssue(p));
+  const monthTurfRows = monthScheduledPlans.filter(p => categoryForPlan(p));
   const appliedTurfRows = monthTurfRows.filter(p => ['Applied','Issued'].includes(turfRecordStatus(p))); 
   const overdueTurfRows = allPlans.filter(p => turfRecordStatus(p) === 'Planned' && turfRecordDate(p) < t);
   setHTML($('#opsFuelDomainStats'), [
@@ -686,22 +774,14 @@ function renderOverview() {
   ].map(k=>`<div class="ops-domain-kpi"><span>${esc(k.label)}</span><b>${esc(k.value)}</b><small>${esc(k.foot)}</small></div>`).join(''));
 
   // Planned-versus-issued reconciliation by product and scheduled date. Quantities remain grouped by unit.
-  const compareRows = monthPlans.filter(p => categoryForPlan(p) && turfRecordStatus(p) !== 'Cancelled' && turfRecordDate(p) === today());
+  const todayTurfRows = monthPlans.filter(p => categoryForPlan(p) && turfRecordStatus(p) !== 'Cancelled' && turfRecordDate(p) === today());
+  const compareRows = todayTurfRows.filter(p => !isUnplannedMaterialIssue(p));
   const hasPlannedQuantity = p => ['targetQty','plannedQty','requestedQty','plannedQuantity','targetQuantity'].some(k => p[k] !== undefined && p[k] !== null && p[k] !== '');
-  // Keep the planned amount visible even when the same plan record transitions to Issued/Applied.
+  // Keep the planned amount visible even when the same scheduled record transitions to Issued/Applied.
   const plannedRows = compareRows.filter(p => hasPlannedQuantity(p) || turfRecordStatus(p) === 'Planned');
   const issuedRows = compareRows.filter(p => ['Issued','Applied'].includes(turfRecordStatus(p)) || num(p.issuedQty ?? p.issuedQuantity ?? p.issueQty ?? p.issueQuantity ?? p.quantityIssued ?? p.qtyIssued ?? p.quantityOut ?? p.qtyOut) > 0);
   const unitLabel = p => String(p.unit ?? p.stockUnit ?? p.unitOfMeasure ?? (turfProductForPlan(p)||{}).unit ?? 'unit not set').trim();
-  const plannedKeys = new Set(plannedRows.map(p=>`${turfRecordDate(p)}|${turfRecordProductName(p).toLowerCase()}`));
-  const outsidePlan = issuedRows.filter(p => {
-    const linked = p.planId || p.plannedRecordId || p.plannedApplicationId || p.sourcePlanId;
-    if (linked) return false;
-    const key = `${turfRecordDate(p)}|${turfRecordProductName(p).toLowerCase()}`;
-    // Same record can be converted from Planned to Issued, so an explicit plan reference counts as planned.
-    const explicitUnplanned = p.wasPlanned === false || p.fromPlan === false || p.planned === false || p.unplanned === true || p.isUnplanned === true || /manual|unplanned|ad hoc/i.test(String(p.source || p.sourceType || p.issueSource || ''));
-    const separateIssueRecord = Boolean(p.issueId || p.transactionId || p.transactionType || p.movementType || p.issueStatus || p.issuedAt || p.issuedDate || p.issueDate);
-    return explicitUnplanned || (separateIssueRecord && !plannedKeys.has(key) && !(p.wasPlanned === true || p.fromPlan === true || p.planned === true));
-  });
+  const outsidePlan = todayTurfRows.filter(p => isUnplannedMaterialIssue(p) && ['Issued','Applied'].includes(turfRecordStatus(p)));
 
   // Compare quantities product-by-product so different stock units are never combined into a misleading total.
   const productCompare = new Map();
@@ -1194,17 +1274,19 @@ function drawerFuel(id) {
 /* ================= FUEL MODAL (KPI drill-down) ================= */
 
 /* UNIFIED OPERATIONAL ANALYTICS — read-only views over existing collections */
-const OA = { domain:'overview', view:'daily', from:addDays(today(),-29), to:today(), drill:{kind:'',key:''} };
+const OA = { domain:'overview', view:'daily', from:addDays(today(),-29), to:today(), drill:{kind:'',key:''}, machineFilter:'' };
 const OA_VIEWS = {
   overview:[['daily','Operations by day']],
   fuel:[['daily','Daily fuel'],['machine','By machine'],['machine-day','Machine × day'],['transactions','Fuel ledger']],
-  turf:[['daily','Daily turf'],['category','By category'],['area','By area'],['item','By item'],['variance','Planned vs actual'],['transactions','Application ledger']]
+  turf:[['daily','Daily turf'],['category','By category'],['area','By area'],['item','By item'],['variance','Planned vs actual'],['unplanned','Unplanned issues'],['transactions','Application ledger']],
+  inventory:[['daily','Stock register']], maintenance:[['daily','Maintenance ledger']], expenses:[['daily','Expense ledger']], shifts:[['daily','Shift ledger']], fnb:[['daily','Orders & receipts']], assets:[['daily','Asset register']]
 };
-function openOpsAnalytics(domain) {
+function openOpsAnalytics(domain, machineId = '') {
+  OA.machineFilter = machineId || '';
   OA.domain=['overview','fuel','turf'].includes(domain)?domain:'overview';
-  OA.view='daily'; OA.from=addDays(today(),-29); OA.to=today(); OA.drill={kind:'',key:''};
+  OA.view=OA.machineFilter?'transactions':'daily'; OA.from=addDays(today(),-29); OA.to=today(); OA.drill={kind:'',key:''};
   curModalRender=renderOpsAnalytics;
-  openModal({title:'Operational Analytics & Ledgers',sub:'Shared date filters · machine usage · turf treatments · item-level reconciliation',size:'ops-analytics-modal',body:'<div id="opsAnalyticsRoot"></div>',footer:'<button class="btn" data-act="export-ops-analytics"><span class="material-symbols-rounded">download</span>Export report</button><button class="btn btn-primary" data-act="close-modal">Close</button>'});
+  openModal({title:'Operational Analytics & Ledgers',sub:'Shared date filters · machine usage · turf treatments · item-level reconciliation',size:'ops-analytics-modal',body:'<div id="opsAnalyticsRoot"></div>',footer:'<button class="btn" data-act="export-ops-analytics"><span class="material-symbols-rounded">download</span>Export current report CSV</button><button class="btn btn-primary" data-act="export-workbook"><span class="material-symbols-rounded">table_view</span>Download all ledgers Excel</button><button class="btn" data-act="close-modal">Close</button>'});
   renderOpsAnalytics();
 }
 function oaSetRange(preset) {
@@ -1231,7 +1313,7 @@ function oaDates(){return daysBetween(OA.from,OA.to);}
 function oaFuelQty(f){return Math.max(0,num(f.litres??f.quantity??f.qty));}
 function oaFuelMachine(f){return f.machineId??f.machineID??f.machine??f.assetId??f.machineName??'';}
 function oaFuelTime(f){return timeOf(tsMs(f.timestamp??f.issuedAt??f.issueTimestamp??f.createdAt??f.createdTime??f.recordedAt))||'—';}
-function oaFuelRows(){return fuelIn(OA.from,OA.to).slice().sort((a,b)=>fuelRecordDate(b).localeCompare(fuelRecordDate(a))||tsMs(b.timestamp??b.issuedAt??b.createdAt)-tsMs(a.timestamp??a.issuedAt??a.createdAt));}
+function oaFuelRows(){return fuelIn(OA.from,OA.to).filter(f=>!OA.machineFilter||String(f.machineId||'')===String(OA.machineFilter)||String(f.machineName||'')===String(mx().get(OA.machineFilter)?.assetName||'')).slice().sort((a,b)=>fuelRecordDate(b).localeCompare(fuelRecordDate(a))||tsMs(b.timestamp??b.issuedAt??b.createdAt)-tsMs(a.timestamp??a.issuedAt??a.createdAt));}
 function oaShiftRows(){return shiftsIn(OA.from,OA.to);}
 function oaFuelDaily(){
   const map=new Map();
@@ -1278,21 +1360,22 @@ function oaFuelMachineDays(){
 function oaTurfLines(){
   return allTurfPlanRecords().filter(p=>{const d=turfRecordDate(p);return d&&d>=OA.from&&d<=OA.to&&isTurfCategory(turfPlanCategory(p))&&turfRecordStatus(p)!=='Cancelled';}).map(p=>{
     const line=turfCostLine(p),product=turfProductForPlan(p);
-    return {...line,record:p,area:String(p.targetZoneOrMachine||p.targetArea||p.area||p.location||'Unassigned').trim()||'Unassigned',productId:String(p.productId||p.productID||p.itemId||p.inventoryId||product&&product.id||''),unit:String(p.unit||p.stockUnit||p.uom||product&&product.unit||'Unit not set'),plannedQty:Math.max(0,num(p.targetQty??p.plannedQty??p.requestedQty??p.plannedQuantity??p.targetQuantity??(line.status==='Planned'?(p.quantity??p.qty):0))),notes:String(p.notes||p.reason||'').trim()};
+    return {...line,record:p,area:String(p.targetZoneOrMachine||p.targetArea||p.area||p.location||'Unassigned').trim()||'Unassigned',productId:String(p.productId||p.productID||p.itemId||p.inventoryId||product&&product.id||''),unit:String(p.unit||p.stockUnit||p.uom||product&&product.unit||'Unit not set'),plannedQty:Math.max(0,num(p.targetQty??p.plannedQty??p.requestedQty??p.plannedQuantity??p.targetQuantity??(line.status==='Planned'?(p.quantity??p.qty):0))),notes:String(p.notes||p.reason||'').trim(),isUnplanned:isUnplannedMaterialIssue(p),issueType:String(p.issueType||''),issuedBy:String(p.issuedBy||p.performedBy||p.recordedBy||''),issuedAt:tsMs(p.issuedAt??p.issueTimestamp??p.timestamp??p.createdAt)};
   }).sort((a,b)=>b.date.localeCompare(a.date)||(tsMs(b.record.issuedAt??b.record.appliedAt??b.record.timestamp??b.record.createdAt)-tsMs(a.record.issuedAt??a.record.appliedAt??a.record.timestamp??a.record.createdAt)));
 }
+function oaScheduledTurfLines(){ return oaTurfLines().filter(line=>!line.isUnplanned); }
 function oaUnitTotals(lines,selector){
   const totals=new Map();lines.forEach(line=>{const unit=String(line.unit||'Unit not set');totals.set(unit,(totals.get(unit)||0)+Math.max(0,num(selector(line))));});
   return [...totals.entries()].filter(([,v])=>Math.abs(v)>0.000001).sort((a,b)=>a[0].localeCompare(b[0])).map(([u,v])=>fmt(v,2)+' '+u).join(' · ')||'—';
 }
 function oaTurfDaily(){
   const map=new Map();oaDates().forEach(date=>map.set(date,{date,records:0,planned:0,issued:0,applied:0,areas:new Set(),categories:new Set(),items:new Set(),cost:0,priced:0,unpriced:0,planQty:[],actualQty:[]}));
-  oaTurfLines().forEach(line=>{const r=map.get(line.date);if(!r)return;r.records++;r.areas.add(line.area);r.categories.add(line.category);r.items.add(line.productId||line.name);if(line.plannedQty>0||line.status==='Planned'){r.planned++;r.planQty.push(line);}if(line.status==='Issued'||line.status==='Applied'){r.issued++;if(line.status==='Applied')r.applied++;r.actualQty.push(line);if(line.cost!==null&&Number.isFinite(line.cost)){r.cost+=line.cost;r.priced++;}else r.unpriced++;}});
+  oaScheduledTurfLines().forEach(line=>{const r=map.get(line.date);if(!r)return;r.records++;r.areas.add(line.area);r.categories.add(line.category);r.items.add(line.productId||line.name);if(line.plannedQty>0||line.status==='Planned'){r.planned++;r.planQty.push(line);}if(line.status==='Issued'||line.status==='Applied'){r.issued++;if(line.status==='Applied')r.applied++;r.actualQty.push(line);if(line.cost!==null&&Number.isFinite(line.cost)){r.cost+=line.cost;r.priced++;}else r.unpriced++;}});
   return [...map.values()].map(r=>({...r,plannedUnits:oaUnitTotals(r.planQty,x=>x.plannedQty),actualUnits:oaUnitTotals(r.actualQty,x=>x.qty)}));
 }
 function oaTurfGroups(kind){
   const map=new Map(),keyOf=line=>kind==='category'?line.category:kind==='area'?line.area:line.productId||line.name;
-  oaTurfLines().forEach(line=>{
+  oaScheduledTurfLines().forEach(line=>{
     const key=String(keyOf(line)||'Unassigned');
     if(!map.has(key))map.set(key,{key,name:kind==='item'?line.name:key,categorySet:new Set(),areaSet:new Set(),units:new Set(),records:0,planned:0,issued:0,applied:0,cost:0,priced:0,unpriced:0,plannedLines:[],actualLines:[],lastDate:''});
     const r=map.get(key);r.records++;r.categorySet.add(line.category);r.areaSet.add(line.area);r.units.add(line.unit);r.lastDate=r.lastDate>line.date?r.lastDate:line.date;
@@ -1303,7 +1386,7 @@ function oaTurfGroups(kind){
 }
 function oaTurfVariance(){
   const map=new Map();
-  oaTurfLines().forEach(line=>{
+  oaScheduledTurfLines().forEach(line=>{
     const key=(line.productId||line.name).toLowerCase()+'|'+line.unit.toLowerCase();
     if(!map.has(key))map.set(key,{key,name:line.name,category:line.category,unit:line.unit,planned:0,issued:0,plannedCount:0,issuedCount:0,areas:new Set(),lastDate:''});
     const r=map.get(key);r.areas.add(line.area);r.lastDate=r.lastDate>line.date?r.lastDate:line.date;
@@ -1354,7 +1437,7 @@ function oaRenderFuelTransactions(){
   return '<div class="oa-kpi-grid">'+oaKpi('Transactions',rows.length,'Selected period')+oaKpi('Fuel issued',fmt(rows.reduce((s,f)=>s+oaFuelQty(f),0),2)+' L','Volume')+oaKpi('Priced / modeled value',money(cost.cost),fmt(cost.coverage,0)+'% volume priced')+oaKpi('Unpriced entries',rows.filter(f=>rateForFuelLog(f)<=0).length,'No usable price')+'</div><section class="oa-panel"><div class="oa-panel-head"><div><small>SOURCE TRANSACTIONS</small><h3>Fuel issue ledger</h3><p>Recorded transaction details and price provenance.</p></div></div>'+oaTable(['Date','Time','Machine','Fuel type','Litres','Rate / L','Cost*','Issued by','Notes'],oaFuelTransactionRows(rows),'No fuel transactions.')+'</section>';
 }
 function oaRenderTurfDaily(){
-  const daily=oaTurfDaily(),lines=oaTurfLines(),actual=lines.filter(x=>x.status==='Issued'||x.status==='Applied'),priced=actual.filter(x=>x.cost!==null),value=priced.reduce((s,x)=>s+x.cost,0);
+  const daily=oaTurfDaily(),lines=oaScheduledTurfLines(),actual=lines.filter(x=>x.status==='Issued'||x.status==='Applied'),priced=actual.filter(x=>x.cost!==null),value=priced.reduce((s,x)=>s+x.cost,0);
   const body=daily.map(r=>'<tr><td><b>'+esc(r.date)+'</b></td><td class="num">'+r.records+'</td><td class="num">'+r.planned+'</td><td class="num">'+r.issued+' / '+r.applied+' applied</td><td class="num">'+r.categories.size+'</td><td class="num">'+r.areas.size+'</td><td>'+esc(oaUnitTotals(r.planQty,x=>x.plannedQty))+'</td><td>'+esc(oaUnitTotals(r.actualQty,x=>x.qty))+'</td><td class="num">'+(r.issued?(r.priced>0?money(r.cost):'₹—'):'—')+'</td><td class="num">'+(r.unpriced||'—')+'</td></tr>').join('');
   return '<div class="oa-kpi-grid">'+oaKpi('Turf records',lines.length,'Plans and actual records')+oaKpi('Issued / applied',actual.length,actual.filter(x=>x.status==='Applied').length+' marked Applied')+oaKpi('Priced value',priced.length?money(value):'₹—',(actual.length-priced.length)+' unpriced actuals')+oaKpi('Areas active',new Set(lines.map(x=>x.area)).size,'Selected period')+'</div><section class="oa-panel"><div class="oa-panel-head"><div><small>TURF OPERATIONS</small><h3>Day-wise treatment ledger</h3><p>Daily activity and quantities grouped by stock unit.</p></div></div>'+oaTable(['Date','Records','Planned','Issued / applied','Categories','Areas','Planned qty by unit','Actual qty by unit','Priced cost*','Unpriced actuals'],body,'No turf records in this period.')+'</section><p class="oa-note-text">Costs use issued/applied records with a linked inventory item, matching unit and usable unit cost. Quantities in unlike units are kept separate.</p>';
 }
@@ -1366,7 +1449,7 @@ function oaRenderTurfDimension(kind){
   const title=kind==='category'?'Category analysis':kind==='area'?'Course-area analytics':'Item-wise ledger';
   let detail='';
   if(OA.drill.kind===kind){
-    const selected=OA.drill.key,rows=oaTurfLines().filter(line=>(kind==='category'?line.category:kind==='area'?line.area:line.productId||line.name)===selected);
+    const selected=OA.drill.key,rows=oaScheduledTurfLines().filter(line=>(kind==='category'?line.category:kind==='area'?line.area:line.productId||line.name)===selected);
     detail='<section class="oa-panel"><div class="oa-panel-head"><div><small>DRILL-DOWN LEDGER</small><h3>'+esc(selected)+'</h3><p>'+rows.length+' source records</p></div><button type="button" class="btn btn-sm" data-act="oa-clear-drill">Clear</button></div>'+oaTable(['Date','Time','Category','Product','Area','Status','Quantity','Rate','Cost*','Notes'],oaTurfTransactionRows(rows),'No detail records.')+'</section>';
   } else detail='<p class="oa-note-text">Select a '+(kind==='category'?'category':kind==='area'?'course area':'product')+' to open its dated ledger.</p>';
   const chartRows=groups.filter(row=>row.priced>0).slice(0,kind==='item'?8:10).map(row=>({label:String(row.name).length>19?String(row.name).slice(0,18)+'…':row.name,value:row.cost}));
@@ -1377,28 +1460,131 @@ function oaRenderTurfVariance(){
   const rows=oaTurfVariance(),body=rows.map(r=>{const diff=r.issued-r.planned;return '<tr><td><b>'+esc(r.name)+'</b><div class="oa-dim">'+esc(r.category)+'</div></td><td>'+esc(r.unit)+'</td><td class="num">'+fmt(r.planned,2)+'</td><td class="num">'+fmt(r.issued,2)+'</td><td class="num '+(diff>0?'oa-over':diff<0?'oa-under':'')+'">'+(diff>0?'+':'')+fmt(diff,2)+'</td><td class="num">'+r.plannedCount+' / '+r.issuedCount+'</td><td>'+esc([...r.areas].join(', '))+'</td><td>'+esc(r.lastDate)+'</td></tr>';}).join('');
   return '<div class="oa-kpi-grid">'+oaKpi('Product / unit groups',rows.length,'Units remain separate')+oaKpi('Over-plan groups',rows.filter(r=>r.issued-r.planned>0.00001).length,'Review underlying records')+oaKpi('Under-plan groups',rows.filter(r=>r.issued-r.planned< -0.00001).length,'Review outstanding work')+oaKpi('Actual lines',rows.reduce((s,r)=>s+r.issuedCount,0),'Issued/applied status records')+'</div><section class="oa-panel"><div class="oa-panel-head"><div><small>CONTROL CHECK</small><h3>Planned vs issued / applied</h3><p>Quantity variance by product and stock unit.</p></div></div>'+oaTable(['Product','Unit','Planned','Issued / applied','Variance','Planned / actual lines','Areas','Last activity'],body,'No planned or actual records.')+'</section><p class="oa-note-text">Positive variance means recorded issue exceeded plan; negative variance means less was recorded. Inspect source records before drawing conclusions.</p>';
 }
+
+function oaUnplannedLines() {
+  return allTurfPlanRecords().filter(isUnplannedMaterialIssue).map(p => {
+    const date = turfRecordDate(p);
+    if (!date || date < OA.from || date > OA.to || turfRecordStatus(p) === 'Cancelled') return null;
+    const costLine = turfCostLine(p);
+    const product = turfProductForPlan(p);
+    return {
+      ...costLine,
+      record: p,
+      date,
+      time: timeOf(tsMs(p.issuedAt ?? p.issueTimestamp ?? p.timestamp ?? p.createdAt)),
+      category: turfPlanCategory(p),
+      name: turfRecordProductName(p) || (product ? itemName(product) : 'Unspecified material'),
+      productId: String(p.productId || p.productID || p.itemId || p.inventoryId || product?.id || ''),
+      area: String(p.targetZoneOrMachine || p.targetArea || p.area || p.location || 'Unassigned').trim() || 'Unassigned',
+      qty: Math.max(0, turfRecordQuantity(p)),
+      unit: String(p.unit || p.stockUnit || p.uom || p.unitOfMeasure || product?.unit || 'Unit not set'),
+      status: turfRecordStatus(p),
+      issueType: String(p.issueType || (p.isAdHoc === true ? 'UNPLANNED' : 'Legacy unplanned')),
+      planId: String(p.planId || p.id || ''),
+      issuedBy: String(p.issuedBy || p.performedBy || p.recordedBy || p.operatorName || '—'),
+      notes: String(p.notes || p.reason || '').trim(),
+      sourceCollection: String(p._sourceCollection || '')
+    };
+  }).filter(Boolean).sort((a,b) => b.date.localeCompare(a.date) ||
+    tsMs(b.record.issuedAt ?? b.record.timestamp ?? b.record.createdAt)-tsMs(a.record.issuedAt ?? a.record.timestamp ?? a.record.createdAt));
+}
+function oaRenderTurfUnplanned() {
+  const lines = oaUnplannedLines();
+  const issued = lines.filter(line => line.status === 'Issued' || line.status === 'Applied');
+  const priced = issued.filter(line => line.cost !== null && Number.isFinite(line.cost));
+  const materials = new Map();
+  const days = new Map();
+  lines.forEach(line => {
+    const key = (line.productId || line.name).toLowerCase() + '|' + line.unit.toLowerCase();
+    if (!materials.has(key)) materials.set(key, {name:line.name,category:line.category,unit:line.unit,records:0,qty:0,issued:0,applied:0,areas:new Set(),lastDate:''});
+    const material = materials.get(key);
+    material.records++; material.qty += line.qty; material.areas.add(line.area);
+    material.issued += line.status === 'Issued' ? 1 : 0;
+    material.applied += line.status === 'Applied' ? 1 : 0;
+    if (line.date > material.lastDate) material.lastDate = line.date;
+    if (!days.has(line.date)) days.set(line.date, {date:line.date,records:0,issued:0,applied:0,areas:new Set(),materials:new Set(),units:new Map(),priced:0,unpriced:0});
+    const day = days.get(line.date);
+    day.records++; day.issued += line.status === 'Issued' ? 1 : 0; day.applied += line.status === 'Applied' ? 1 : 0;
+    day.areas.add(line.area); day.materials.add(line.productId || line.name);
+    day.units.set(line.unit,(day.units.get(line.unit)||0)+line.qty);
+    if (line.status === 'Issued' || line.status === 'Applied') {
+      if (line.cost !== null && Number.isFinite(line.cost)) day.priced += line.cost;
+      else day.unpriced++;
+    }
+  });
+  const materialRows = [...materials.values()].sort((a,b)=>a.unit.localeCompare(b.unit)||b.qty-a.qty||a.name.localeCompare(b.name)).map(row =>
+    '<tr><td><b>'+esc(row.name)+'</b><div class="oa-dim">'+esc(row.category)+'</div></td><td>'+esc(row.unit)+'</td><td class="num">'+row.records+'</td><td class="num"><b>'+fmt(row.qty,2)+'</b></td><td class="num">'+row.issued+' / '+row.applied+'</td><td>'+esc([...row.areas].sort().join(', '))+'</td><td>'+esc(row.lastDate)+'</td></tr>'
+  ).join('');
+  const dayRows = [...days.values()].sort((a,b)=>b.date.localeCompare(a.date)).map(day => {
+    const qty = [...day.units.entries()].sort((a,b)=>a[0].localeCompare(b[0])).map(([unit,value])=>fmt(value,2)+' '+unit).join(' · ') || '—';
+    return '<tr><td><b>'+esc(day.date)+'</b></td><td class="num">'+day.records+'</td><td class="num">'+day.issued+'</td><td class="num">'+day.applied+'</td><td class="num">'+day.materials.size+'</td><td class="num">'+day.areas.size+'</td><td>'+esc(qty)+'</td><td class="num">'+(day.priced?money(day.priced):'—')+'</td><td class="num">'+(day.unpriced||'—')+'</td></tr>';
+  }).join('');
+  const detailRows = lines.map(line =>
+    '<tr><td>'+esc(line.date)+'</td><td>'+esc(line.time||'—')+'</td><td><code>'+esc(line.planId||'—')+'</code><div class="oa-dim">'+esc(line.issueType)+'</div></td><td>'+esc(line.category)+'</td><td><b>'+esc(line.name)+'</b><div class="oa-dim">'+esc(line.productId||'')+'</div></td><td>'+esc(line.area)+'</td><td><span class="oa-status">'+esc(line.status)+'</span></td><td class="num">'+fmt(line.qty,2)+' '+esc(line.unit)+'</td><td>'+esc(line.issuedBy)+'</td><td class="num">'+(line.cost!==null&&Number.isFinite(line.cost)?money(line.cost):'—')+'</td><td>'+esc(line.notes||'—')+'</td><td>'+esc(line.sourceCollection||'—')+'</td></tr>'
+  ).join('');
+  const chartRows = [...days.values()].sort((a,b)=>a.date.localeCompare(b.date)).slice(-28).map(day=>({label:dShort(day.date),value:day.records}));
+  return '<div class="oa-kpi-grid">'+
+    oaKpi('Unplanned issue records',lines.length,'Explicit ad-hoc/unplanned markers and supported legacy flags')+
+    oaKpi('Issued / applied',issued.length,issued.filter(line=>line.status==='Applied').length+' marked Applied')+
+    oaKpi('Distinct material / unit groups',materials.size,'Different units remain separate')+
+    oaKpi('Priced recorded value',priced.length?money(priced.reduce((sum,line)=>sum+line.cost,0)):'₹—',(issued.length-priced.length)+' unpriced issued/applied records')+
+    '</div><section class="oa-panel"><div class="oa-panel-head"><div><small>ISSUE ACTIVITY</small><h3>Unplanned issues by day</h3><p>Record counts by date. Quantities are shown by unit and never combined across unlike units.</p></div><span class="oa-panel-meta">'+lines.length+' records</span></div>'+
+    (chartRows.length?'<div class="oa-chart-wrap">'+barChart(chartRows,{unit:'records',h:155})+'</div>':'')+
+    oaTable(['Date','Records','Issued','Applied','Materials','Areas','Quantity by unit','Priced value*','Unpriced actuals'],dayRows,'No unplanned issues in this date range.')+
+    '</section><section class="oa-panel"><div class="oa-panel-head"><div><small>MATERIAL ROLL-UP</small><h3>By material and stock unit</h3><p>Sorted by recorded quantity within each unit group.</p></div></div>'+
+    oaTable(['Material','Unit','Records','Total quantity','Issued / applied','Areas','Last issue'],materialRows,'No unplanned material groups.')+
+    '</section><section class="oa-panel"><div class="oa-panel-head"><div><small>AUDIT REGISTER</small><h3>Unplanned material issue detail</h3><p>Issuer, reference, status, notes and source collection retained for traceability.</p></div></div>'+
+    oaTable(['Date','Time','Issue reference','Category','Material','Area / destination','Status','Quantity','Issued by','Recorded value*','Notes','Source collection'],detailRows,'No unplanned issue records in this date range.')+
+    '</section><p class="oa-note-text">Unplanned classification uses the explicit <code>issueType: UNPLANNED</code> or <code>isAdHoc: true</code> fields first, plus known legacy unplanned flags. “Issued” and “Applied” are recorded statuses, not independent proof of physical use. Recorded value appears only when an inventory item, matching unit and usable unit cost exist.</p>';
+}
+
 function renderOpsAnalytics(){
   const root=$('#opsAnalyticsRoot');if(!root)return;
-  const domains=[['overview','Overall Ops','query_stats'],['fuel','Fuel Ops','local_gas_station'],['turf','Turf Ops','grass']];
+  const domains=[['overview','Overall Ops','query_stats'],['fuel','Fuel Ops','local_gas_station'],['turf','Turf Ops','grass'],['inventory','Inventory','inventory_2'],['maintenance','Maintenance','build'],['expenses','Expenses','receipt_long'],['shifts','Shifts','schedule'],['fnb','F&B','restaurant'],['assets','Assets','domain']];
   const domainTabs=domains.map(d=>'<button type="button" class="oa-domain-tab '+(OA.domain===d[0]?'active':'')+'" data-act="oa-domain" data-domain="'+d[0]+'"><span class="material-symbols-rounded">'+d[2]+'</span>'+d[1]+'</button>').join('');
   const views=(OA_VIEWS[OA.domain]||OA_VIEWS.overview),viewTabs=views.map(v=>'<button type="button" class="oa-view-tab '+(OA.view===v[0]?'active':'')+'" data-act="oa-view" data-view="'+v[0]+'">'+v[1]+'</button>').join('');
   const presetDefs=[['today','Today'],['yesterday','Yesterday'],['7d','7 days'],['30d','30 days'],['mtd','Month to date'],['last-month','Last month']];
   const presets=presetDefs.map(p=>'<button type="button" class="oa-preset" data-act="oa-preset" data-range="'+p[0]+'">'+p[1]+'</button>').join('');
-  const required=OA.domain==='overview'?['fuel','machines','shifts','inventory','plans','maintenance']:OA.domain==='fuel'?['fuel','machines','shifts']:['plans','inventory'];
+  const requiredMap={overview:['fuel','machines','shifts','inventory','plans','dailyPlans','maintenance','expenses','inwards','fnbOrders','fnbReceipts'],fuel:['fuel','machines','shifts'],turf:['plans','dailyPlans','inventory'],inventory:['inventory','inwards'],maintenance:['maintenance'],expenses:['expenses'],shifts:['shifts'],fnb:['fnbOrders','fnbReceipts'],assets:['machines']};
+  const required=requiredMap[OA.domain]||[];
   const denied=required.filter(k=>!RBAC.can(permissionForCollection(CONFIG.COL[k],false)));
   const loading=required.filter(k=>!LOADED[k]&&RBAC.can(permissionForCollection(CONFIG.COL[k],false)));
   let report='';
   if(loading.length)report='<div class="oa-loading"><span class="material-symbols-rounded">sync</span>Loading '+esc(loading.map(k=>CONFIG.COL[k]).join(', '))+'…</div>';
   else if(OA.domain==='overview')report=oaRenderOverview();
   else if(OA.domain==='fuel')report=OA.view==='daily'?oaRenderFuelDaily():OA.view==='machine'?oaRenderFuelMachine():OA.view==='machine-day'?oaRenderFuelMachineDay():oaRenderFuelTransactions();
-  else if(OA.view==='daily')report=oaRenderTurfDaily();
+  else if(OA.domain==='turf'&&OA.view==='daily')report=oaRenderTurfDaily();
   else if(OA.view==='category')report=oaRenderTurfDimension('category');
   else if(OA.view==='area')report=oaRenderTurfDimension('area');
   else if(OA.view==='item')report=oaRenderTurfDimension('item');
   else if(OA.view==='variance')report=oaRenderTurfVariance();
-  else {const lines=oaTurfLines(),actual=lines.filter(x=>x.status==='Issued'||x.status==='Applied'),priced=actual.filter(x=>x.cost!==null);report='<div class="oa-kpi-grid">'+oaKpi('Application records',lines.length,'Selected period')+oaKpi('Issued / applied',actual.length,'Existing status records')+oaKpi('Priced actuals',priced.length,'Records with usable price')+oaKpi('Unpriced actuals',actual.length-priced.length,'Missing rate, product or unit match')+'</div><section class="oa-panel"><div class="oa-panel-head"><div><small>SOURCE TRANSACTIONS</small><h3>Application ledger</h3><p>All non-cancelled treatment records for the date range.</p></div></div>'+oaTable(['Date','Time','Category','Product','Area','Status','Quantity','Rate','Cost*','Notes'],oaTurfTransactionRows(lines),'No turf records.')+'</section>';}
+  else if(OA.domain==='turf'&&OA.view==='unplanned')report=oaRenderTurfUnplanned();
+  else if(OA.domain==='turf'){const lines=oaScheduledTurfLines(),actual=lines.filter(x=>x.status==='Issued'||x.status==='Applied'),priced=actual.filter(x=>x.cost!==null);report='<div class="oa-kpi-grid">'+oaKpi('Application records',lines.length,'Selected period')+oaKpi('Issued / applied',actual.length,'Existing status records')+oaKpi('Priced actuals',priced.length,'Records with usable price')+oaKpi('Unpriced actuals',actual.length-priced.length,'Missing rate, product or unit match')+'</div><section class="oa-panel"><div class="oa-panel-head"><div><small>SOURCE TRANSACTIONS</small><h3>Application ledger</h3><p>All non-cancelled treatment records for the date range.</p></div></div>'+oaTable(['Date','Time','Category','Product','Area','Status','Quantity','Rate','Cost*','Notes'],oaTurfTransactionRows(lines),'No turf records.')+'</section>';}
+  else report=oaRenderGenericLedger(OA.domain);
   root.innerHTML='<div class="oa-toolbar"><div class="oa-date-controls"><label>From<input type="date" value="'+esc(OA.from)+'" data-chg="oa-from"></label><label>To<input type="date" value="'+esc(OA.to)+'" data-chg="oa-to"></label></div><div class="oa-presets">'+presets+'</div></div><div class="oa-domain-tabs">'+domainTabs+'</div><div class="oa-view-tabs">'+viewTabs+'</div>'+(denied.length?'<p class="oa-access-note"><span class="material-symbols-rounded">lock</span>Some source records are hidden by your current role, so totals may be partial.</p>':'')+'<div class="oa-report">'+report+'</div>';
 }
+function oaGenericLedgerRows(domain) {
+  const assetData=window.__cloverAssetsExportData?window.__cloverAssetsExportData():null;
+  const source={
+    inventory:(S.inventory||[]).map(x=>({...x,_date:'',_kind:'Stock item',_label:itemName(x),_ref:x.id,_qty:x.stockQuantity,_amount:num(x.stockQuantity)*num(x.unitCost)})),
+    maintenance:(S.maintenance||[]).map(x=>({...x,_date:normDate(x.date||x.serviceDate||x.createdAt,x.timestamp||x.createdAt),_kind:'Maintenance',_label:x.machineName||mName(x.machineId)||x.title||x.description||'Maintenance record',_ref:x.id||x.workOrderId||'',_qty:x.engineHours??x.hours??'',_amount:x.cost??x.totalCost??''})),
+    expenses:(S.expenses||[]).map(x=>({...x,_date:normDate(x.date||x.expenseDate||x.billDate||x.createdAt,x.timestamp||x.createdAt),_kind:'Local expense',_label:x.description||x.vendor||x.category||'Expense',_ref:x.invoiceNumber||x.reference||x.id||'',_qty:x.quantity??'',_amount:x.amount??x.total??x.totalAmount??''})),
+    shifts:(S.shifts||[]).map(x=>({...x,_date:normDate(x.date||x.shiftDate||x.createdAt,x.timestamp||x.createdAt),_kind:'Shift',_label:x.machineName||mName(x.machineId)||x.operatorName||x.operatorId||'Shift',_ref:x.id||'',_qty:x.engineHoursLogged??x.distanceKm??'',_amount:''})),
+    fnb:[...(S.fnbOrders||[]).map(x=>({...x,_kind:'F&B order',_date:normDate(x.date||x.orderDate||x.createdAt,x.timestamp||x.createdAt),_label:x.orderName||x.customerName||x.tableName||x.id,_ref:x.orderNumber||x.id||'',_qty:x.quantity??'',_amount:x.total??x.totalAmount??x.amount??''})),...(S.fnbReceipts||[]).map(x=>({...x,_kind:'F&B receipt',_date:normDate(x.date||x.receiptDate||x.createdAt,x.timestamp||x.createdAt),_label:x.supplier||x.itemName||x.id,_ref:x.invoiceNumber||x.orderId||x.id||'',_qty:x.quantity??'',_amount:x.total??x.totalAmount??x.amount??''}))],
+    assets:[...(assetData?.records||[]).map(x=>({...x,_kind:'Asset record',_date:normDate(x.startedDate||x.commissionedDate||x.purchaseDate||x.createdAt,x.timestamp||x.createdAt),_label:x.name||x.assetName||x.title||x.id,_ref:x.serialNumber||x.serialNo||x.id||'',_qty:'',_amount:x.purchaseCost??x.value??''})),...(S.machines||[]).map(x=>({...x,_kind:'Fleet-linked asset',_date:normDate(x.startedDate||x.commissionedDate||x.createdAt,x.timestamp||x.createdAt),_label:x.assetName||x.name||x.id,_ref:x.serialNumber||x.serialNo||x.id||'',_qty:x.currentHours??'',_amount:x.purchaseCost??''}))]
+  };
+  const rows=source[domain]||[];
+  return rows.filter(r=>!r._date||(r._date>=OA.from&&r._date<=OA.to)).sort((a,b)=>String(b._date||'').localeCompare(String(a._date||'')));
+}
+function oaRenderGenericLedger(domain) {
+  const rows=oaGenericLedgerRows(domain);
+  const amount=rows.reduce((sum,r)=>sum+Math.max(0,num(r._amount)),0);
+  const qty=rows.reduce((sum,r)=>sum+Math.max(0,num(r._qty)),0);
+  const title={inventory:'Inventory stock register',maintenance:'Maintenance ledger',expenses:'Local expense ledger',shifts:'Shift and machine-hours ledger',fnb:'F&B orders and receipts',assets:'Asset register'}[domain]||'Operational ledger';
+  const body=rows.map(r=>'<tr><td>'+esc(r._date||'Master record')+'</td><td><b>'+esc(r._label||'—')+'</b><div class="oa-dim">'+esc(r._kind||'Record')+'</div></td><td>'+esc(r._ref||r.id||'—')+'</td><td>'+esc(r.status||r.state||'—')+'</td><td class="num">'+(r._qty!==''&&r._qty!=null?esc(fmt(num(r._qty),2)):'—')+'</td><td class="num">'+(r._amount!==''&&r._amount!=null?money(num(r._amount),2):'—')+'</td></tr>').join('');
+  return '<div class="oa-kpi-grid">'+oaKpi('Records',rows.length,'Loaded records in the selected date range')+oaKpi('Quantity / hours total',fmt(qty,2),'Mixed units may apply; inspect detail rows')+oaKpi('Recorded amounts',money(amount,2),'Only fields with recognized amount names')+oaKpi('Export coverage','Full rows','Use Download all ledgers Excel for every source field')+'</div><section class="oa-panel"><div class="oa-panel-head"><div><small>RECORD REGISTER</small><h3>'+esc(title)+'</h3><p>Use the date range for dated records. Master records without a date remain visible.</p></div><span class="oa-panel-meta">'+rows.length+' records</span></div>'+oaTable(['Date','Record','Reference','Status','Quantity / hours','Recorded amount'],body,'No records in this date range.')+'</section>';
+}
+
 function exportOpsAnalytics(){
   const range=OA.from+'_to_'+OA.to;
   if(OA.domain==='overview'){
@@ -1410,6 +1596,11 @@ function exportOpsAnalytics(){
     });
     return downloadCSV('ops_daily_overview_'+range+'.csv',[['Date','Fuel entries','Fuel litres','Priced fuel cost','Turf records','Issued/applied lines','Priced turf cost','Maintenance rows','Recorded maintenance cost','Combined priced/recorded cost','Unpriced fuel entries','Unpriced turf actuals'],...rows]);
   }
+  if(['inventory','maintenance','expenses','shifts','fnb','assets'].includes(OA.domain)){
+    const rows=oaGenericLedgerRows(OA.domain);
+    const fields=[...new Set(rows.flatMap(r=>Object.keys(r)))];
+    return downloadCSV('ops_'+OA.domain+'_ledger_'+range+'.csv',[fields,...rows.map(r=>fields.map(k=>r[k]&&typeof r[k]==='object'?JSON.stringify(r[k]):r[k]??''))]);
+  }
   if(OA.domain==='fuel'){
     if(OA.view==='daily')return downloadCSV('fuel_daily_'+range+'.csv',[['Date','Entries','Machines','Diesel L','Petrol L','Other L','Litres','Run hours','L/hr','Priced cost','Unpriced litres'],...oaFuelDaily().map(r=>[r.date,r.entries,r.machineCount,r.diesel,r.petrol,r.unknown,r.litres,r.hours,r.lph??'',r.priced>0?r.cost:'',r.unpriced])]);
     if(OA.view==='machine')return downloadCSV('fuel_machine_'+range+'.csv',[['Machine','Category','Fuel type','Entries','Active days','Litres','Run hours','L/hr','Distance km','L/100km','Priced cost','Unpriced L','Cost/hr'],...oaFuelMachines().map(r=>[r.name,r.category,r.fuelType,r.entries,r.days.size,r.litres,r.hours,r.lph??'',r.km,r.l100??'',r.priced?r.cost:'',r.unpriced,r.cph??''])]);
@@ -1419,13 +1610,14 @@ function exportOpsAnalytics(){
   if(OA.view==='daily')return downloadCSV('turf_daily_'+range+'.csv',[['Date','Records','Planned','Issued','Applied','Categories','Areas','Planned quantities','Actual quantities','Priced cost','Unpriced actuals'],...oaTurfDaily().map(r=>[r.date,r.records,r.planned,r.issued,r.applied,r.categories.size,r.areas.size,oaUnitTotals(r.planQty,x=>x.plannedQty),oaUnitTotals(r.actualQty,x=>x.qty),r.priced>0?r.cost:'',r.unpriced])]);
   if(OA.view==='category'||OA.view==='area'||OA.view==='item'){
     if(OA.drill.kind===OA.view){
-      const key=OA.drill.key,kind=OA.view,detail=oaTurfLines().filter(line=>(kind==='category'?line.category:kind==='area'?line.area:line.productId||line.name)===key);
+      const key=OA.drill.key,kind=OA.view,detail=oaScheduledTurfLines().filter(line=>(kind==='category'?line.category:kind==='area'?line.area:line.productId||line.name)===key);
       return downloadCSV('turf_'+kind+'_detail_'+range+'.csv',[['Date','Time','Category','Product','Area','Status','Quantity','Unit','Rate','Cost','Cost source','Notes'],...detail.map(line=>[line.date,line.time,line.category,line.name,line.area,line.status,line.qty,line.unit,line.rate||'',line.cost===null?'':line.cost,line.source,line.notes])]);
     }
     return downloadCSV('turf_'+OA.view+'_analytics_'+range+'.csv',[['Name','Categories','Areas','Records','Planned','Issued','Applied','Planned quantity by unit','Actual quantity by unit','Priced value','Priced lines','Unpriced actuals','Last activity'],...oaTurfGroups(OA.view).map(r=>[r.name,r.categoryLabel,r.areaLabel,r.records,r.planned,r.issued,r.applied,r.plannedUnits,r.actualUnits,r.priced?r.cost:'',r.priced,r.unpriced,r.lastDate])]);
   }
   if(OA.view==='variance')return downloadCSV('turf_variance_'+range+'.csv',[['Product','Category','Unit','Planned','Issued/applied','Variance','Plan lines','Actual lines','Areas','Last activity'],...oaTurfVariance().map(r=>[r.name,r.category,r.unit,r.planned,r.issued,r.issued-r.planned,r.plannedCount,r.issuedCount,[...r.areas].join(', '),r.lastDate])]);
-  return downloadCSV('turf_application_ledger_'+range+'.csv',[['Date','Time','Category','Product','Area','Status','Quantity','Unit','Rate','Cost','Source','Notes'],...oaTurfLines().map(x=>[x.date,x.time,x.category,x.name,x.area,x.status,x.qty,x.unit,x.rate||'',x.cost===null?'':x.cost,x.source,x.notes])]);
+  if(OA.view==='unplanned')return downloadCSV('unplanned_material_issues_'+range+'.csv',[['Date','Time','Plan ID','Issue type','Status','Category','Material','Product ID','Quantity','Unit','Area / destination','Issued by','Rate','Recorded value','Cost basis','Notes','Source collection'],...oaUnplannedLines().map(line=>[line.date,line.time,line.planId,line.issueType,line.status,line.category,line.name,line.productId,line.qty,line.unit,line.area,line.issuedBy,line.rate||'',line.cost===null?'':line.cost,line.source,line.notes,line.sourceCollection])]);
+  return downloadCSV('turf_application_ledger_'+range+'.csv',[['Date','Time','Category','Product','Area','Status','Quantity','Unit','Rate','Cost','Source','Notes'],...oaScheduledTurfLines().map(x=>[x.date,x.time,x.category,x.name,x.area,x.status,x.qty,x.unit,x.rate||'',x.cost===null?'':x.cost,x.source,x.notes])]);
 }
 
 function openFuelModal() {
@@ -1874,31 +2066,49 @@ function openStoreRecordsEditor() {
   renderStoreRecordsEditor();
 }
 const RESET_GROUPS = [
-  {key:'users', label:'Users & access', col:'users', note:'User profiles and role records'},
-  {key:'machines', label:'Machines / fleet', col:'machines', note:'Machine master records'},
-  {key:'plans', label:'Turf plans & issues', col:'plans', note:'Planned tasks and recorded issue/application lines'},
-  {key:'inventory', label:'Inventory master & stock', col:'inventory', note:'Item masters and current stock balances'},
-  {key:'inwards', label:'Goods receipts', col:'inwards', note:'GRN / inward receipt records'},
-  {key:'fuel', label:'Fuel issues', col:'fuel', note:'Fuel issue logs'},
-  {key:'shifts', label:'Shifts & attendance', col:'shifts', note:'Shift records'},
-  {key:'maintenance', label:'Maintenance records', col:'maintenance', note:'Service and repair history'},
-  {key:'assignments', label:'Assignments', col:'assignments', note:'Operator / machine assignment history'},
-  {key:'logs', label:'Operational logs', col:'logs', note:'General operational and issue logs'},
-  {key:'zones', label:'Course zones', col:'zones', note:'Geofence / area configuration'},
-  {key:'live', label:'Live telemetry', col:'live', note:'Latest live machine telemetry'},
+  {key:'users', label:'Users & profiles', cols:['users'], note:'User profiles only. Does not delete Firebase Authentication accounts or app_roles access policies.'},
+  {key:'roles', label:'Access role policies (danger)', collections:['app_roles'], note:'Deleting these may remove authorization mappings and lock users out. Do not select unless rebuilding access policies intentionally.'},
+  {key:'machines', label:'Machines / fleet', cols:['machines'], note:'Machine master records.'},
+  {key:'plans', label:'Turf plans', cols:['plans'], note:'Records in turf_plans.'},
+  {key:'dailyPlans', label:'Daily application plans & issues', cols:['dailyPlans'], note:'Records in daily_application_plans, including application/issue records stored there.'},
+  {key:'inventory', label:'Inventory master & stock', cols:['inventory'], note:'Item masters and current stock balances.'},
+  {key:'inwards', label:'Goods receipts', cols:['inwards'], note:'store_inwards receipts. Does not automatically reverse stock balances.'},
+  {key:'fuel', label:'Fuel issues & ledger', cols:['fuel'], note:'Fuel issue transactions.'},
+  {key:'shifts', label:'Shifts & attendance', cols:['shifts'], note:'Shift, engine-hour and distance records.'},
+  {key:'maintenance', label:'Maintenance records', cols:['maintenance'], note:'Service and repair history.'},
+  {key:'assignments', label:'Assignments', cols:['assignments'], note:'Operator / machine assignment history.'},
+  {key:'logs', label:'Operational logs', cols:['logs'], note:'General operational and issue logs.'},
+  {key:'zones', label:'Course zones', cols:['zones'], note:'Geofence / area configuration.'},
+  {key:'live', label:'Live telemetry', cols:['live'], note:'Latest live machine telemetry.'},
+  {key:'expenses', label:'Local expenses', cols:['expenses'], note:'Local expense and bill records.'},
+  {key:'fnbOrders', label:'F&B orders', cols:['fnbOrders'], note:'F&B order records. Review linked receipts before reset.'},
+  {key:'fnbReceipts', label:'F&B receipts', cols:['fnbReceipts'], note:'F&B receipt records.'},
+  {key:'assetDepartments', label:'Asset departments', collections:['asset_departments'], note:'Assets module department masters.'},
+  {key:'assetTypes', label:'Asset types & custom fields', collections:['asset_types'], note:'Assets module type and field definitions.'},
+  {key:'assetRecords', label:'Asset records', collections:['asset_records'], note:'Standalone asset records. Fleet-linked machine records are in Machines / fleet.'}
 ];
 function openDataReset() {
+  if (!RBAC.can("access.manage")) { toast("Only an administrator can reset operational data.", "err"); return; }
   const choices = RESET_GROUPS.map(g=>`<label class="reset-data-option"><input type="checkbox" name="resetGroup" value="${g.key}"><span><b>${esc(g.label)}</b><small>${esc(g.note)}</small></span></label>`).join('');
-  openForm({title:'Reset selected data',submit:'Permanently reset selected',danger:true,html:`<div class="alert-box" style="margin-bottom:12px"><b>Destructive action.</b> Selected records will be permanently deleted from Firebase. This cannot be undone. Export or back up data first.</div><div style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap"><button type="button" class="btn btn-sm" id="resetSelectAll">Select all</button><button type="button" class="btn btn-sm" id="resetSelectNone">Clear selection</button></div><div class="reset-data-list">${choices}</div><div class="field" style="margin-top:14px"><label class="f">Type RESET to confirm</label><input id="resetConfirmText" autocomplete="off" placeholder="Type RESET"></div><p class="muted sm">Inventory and goods receipts are separate selections. Resetting one does not automatically reset the other. Turf plans & issues share the turf_plans collection.</p>`,onSubmit:async()=>{
+  openForm({title:'Reset selected data',submit:'Permanently reset selected',danger:true,html:`<div class="alert-box" style="margin-bottom:12px"><b>Destructive action.</b> Selected records will be permanently deleted from Firebase. This cannot be undone. Export or back up data first.</div><div style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap"><button type="button" class="btn btn-sm" id="resetSelectAll">Select all</button><button type="button" class="btn btn-sm" id="resetSelectNone">Clear selection</button></div><div class="reset-data-list">${choices}</div><div class="field" style="margin-top:14px"><label class="f">Type RESET to confirm</label><input id="resetConfirmText" autocomplete="off" placeholder="Type RESET"></div><p class="muted sm">Each selected collection is deleted independently. Stock balances are not automatically recalculated when receipts or issue history are reset. Firebase Authentication accounts and app_roles access policies are intentionally excluded to prevent accidental lockout.</p>`,onSubmit:async()=>{
     const selected=$$('#mBody input[name="resetGroup"]:checked').map(el=>RESET_GROUPS.find(g=>g.key===el.value)).filter(Boolean);
     if(!selected.length){toast('Select at least one data group','err');return false;}
     if($('#resetConfirmText')?.value.trim()!=='RESET'){toast('Type RESET exactly to confirm','err');return false;}
     const summary=[];
     for(const group of selected){
-      const snap=await getDocs(collection(db,CONFIG.COL[group.col]));
-      let deleted=0; const docs=snap.docs;
-      for(let i=0;i<docs.length;i+=400){const batch=writeBatch(db);docs.slice(i,i+400).forEach(d=>batch.delete(d.ref));await batch.commit();deleted+=Math.min(400,docs.length-i);}
-      summary.push(`${group.label}: ${deleted}`);
+      const names = group.collections || (group.cols || []).map(key => CONFIG.COL[key]).filter(Boolean);
+      let groupDeleted=0;
+      for(const name of names){
+        const snap=await getDocs(collection(db,name));
+        const docs=snap.docs;
+        for(let i=0;i<docs.length;i+=400){
+          const batch=writeBatch(db);
+          docs.slice(i,i+400).forEach(d=>batch.delete(d.ref));
+          await batch.commit();
+          groupDeleted+=Math.min(400,docs.length-i);
+        }
+      }
+      summary.push(`${group.label}: ${groupDeleted}`);
     }
     toast(`Reset complete · ${summary.join(' · ')}`);
     scheduleRender();
@@ -2530,12 +2740,13 @@ const inventoryImporter = createInventoryImporter({ db, collection, doc, writeBa
 const H = {
   'cost-model': () => openCostModel(),
   'open-ops-analytics': d => openOpsAnalytics(d.domain || 'overview'),
-  'oa-domain': d => { OA.domain = ['overview','fuel','turf'].includes(d.domain) ? d.domain : 'overview'; OA.view = 'daily'; renderOpsAnalytics(); },
+  'oa-domain': d => { OA.domain = ['overview','fuel','turf'].includes(d.domain) ? d.domain : 'overview'; OA.view = OA.domain==='fuel'&&OA.machineFilter?'transactions':'daily'; renderOpsAnalytics(); },
   'oa-view': d => { OA.view = (OA_VIEWS[OA.domain] || OA_VIEWS.overview).some(v => v[0] === d.view) ? d.view : 'daily'; renderOpsAnalytics(); },
   'oa-preset': d => oaSetRange(d.range || '30d'),
   'oa-drill': d => { OA.drill = { kind:d.kind || '', key:d.key || '' }; renderOpsAnalytics(); },
   'oa-clear-drill': () => { OA.drill = { kind:'', key:'' }; renderOpsAnalytics(); },
   'export-ops-analytics': () => exportOpsAnalytics(),
+  'export-workbook': () => exportWorkflowWorkbook(),
   'open-day-cost': d => d.domain === 'turf' ? openTurfCostAnalytics() : openDayCostLedger(d.domain),
   'export-day-cost': d => exportDayCostLedger(d.domain),
   'turf-cost-apply': () => renderTurfCostAnalytics($('#turfCostFrom')?.value, $('#turfCostTo')?.value),
@@ -2564,7 +2775,8 @@ const H = {
   'turf-delete-plan': d => deleteTurfPlan(d.id, d.source),
   'turf-save-plan-edit': () => saveTurfPlanEdit(),
   'turf-category-products': d => { turfProductCategory = d.category || 'All categories'; setTurfSection('products'); },
-  'export-turf-applications': () => { const rows=allTurfPlanRecords().filter(p=>isTurfCategory(turfPlanCategory(p))).sort((a,b)=>turfRecordDate(a).localeCompare(turfRecordDate(b))); downloadCSV('turf-application-records.csv', [['Date','Category','Product','Quantity','Unit','Treated area','Status','Notes','Created at'], ...rows.map(p=>[turfRecordDate(p),turfPlanCategory(p),turfRecordProductName(p),turfRecordQuantity(p),p.unit||p.stockUnit||p.uom||'',p.targetArea||p.area||p.location||'',turfRecordStatus(p),p.notes||p.reason||'',p.createdAt ? new Date(tsMs(p.createdAt)).toISOString() : ''])]); },
+  'export-turf-applications': () => { const rows=allTurfPlanRecords().filter(p=>isTurfCategory(turfPlanCategory(p))&&!isUnplannedMaterialIssue(p)).sort((a,b)=>turfRecordDate(a).localeCompare(turfRecordDate(b))); downloadCSV('turf-application-records.csv', [['Date','Category','Product','Quantity','Unit','Treated area','Status','Notes','Created at'], ...rows.map(p=>[turfRecordDate(p),turfPlanCategory(p),turfRecordProductName(p),turfRecordQuantity(p),p.unit||p.stockUnit||p.uom||'',p.targetArea||p.area||p.location||'',turfRecordStatus(p),p.notes||p.reason||'',p.createdAt ? new Date(tsMs(p.createdAt)).toISOString() : ''])]); },
+  'export-unplanned-issues': () => { const rows=allTurfPlanRecords().filter(isUnplannedMaterialIssue).sort((a,b)=>turfRecordDate(a).localeCompare(turfRecordDate(b))); downloadCSV('unplanned-material-issues.csv', [['Date','Plan ID','Issue type','Ad hoc','Status','Category','Material','Product ID','Quantity','Unit','Area','Issued by','Issued at','Notes','Source collection'], ...rows.map(p=>[turfRecordDate(p),p.planId||p.id||'',p.issueType||'',p.isAdHoc===true?'Yes':p.isAdHoc===false?'No':'',turfRecordStatus(p),turfPlanCategory(p),turfRecordProductName(p),p.productId||p.itemId||p.inventoryId||'',turfRecordQuantity(p),p.unit||p.stockUnit||p.uom||'',p.targetZoneOrMachine||p.targetArea||p.area||p.location||'',p.issuedBy||p.performedBy||p.recordedBy||'',p.issuedAt?new Date(tsMs(p.issuedAt)).toISOString():'',p.notes||p.reason||'',p._sourceCollection||''])]); },
   'rec-tab': d => { recordsTab = d.tab; renderRecords(); },
   'export-records': () => {
     if (recordsTab === 'maintenance') downloadCSV('maintenance.csv', [['Date','Type','Machine','Hours','Parts','By','Notes'], ...(S.maintenance||[]).map(r => [r.date, r.type, r.machineName||r.machineId, r.hoursAtEvent, JSON.stringify(r.partsUsed||[]), r.performedBy, r.notes])]);
@@ -2657,7 +2869,7 @@ const H = {
   'nav-group': d => { if (d.group === 'turfops') setTurfSection('workboard'); openNavGroup(d.group); },
   'group-tab': d => switchView(d.v),
   'map-mode': d => switchView(d.mode),
-  'drawer-route': d => drawerRoute(d.id), 'view-path': d => showShiftPathMap(d.sid, d.mname), 'drawer-fuel': d => drawerFuel(d.id),
+  'drawer-route': d => drawerRoute(d.id), 'view-path': d => showShiftPathMap(d.sid, d.mname), 'drawer-fuel': d => { const m=mx().get(d.id); if(!m)return; openOpsAnalytics('fuel',m.id); OA.view='transactions'; renderOpsAnalytics(); },
   'export-fuel': () => { const st = R.fuel; downloadCSV(`fuel_${st.from}_to_${st.to}.csv`, [['Date', 'Machine', 'Fuel type', 'Litres', 'Rate / L', 'Modeled cost', 'Pricing source', 'Notes'], ...fuelIn(st.from, st.to).sort(sortFuel).map(f => [f._d, mName(f.machineId), fuelTypeFromRecord(f), num(f.litres), rateForFuelLog(f)||'', rateForFuelLog(f)>0?fuelLogCost(f):'', num(f.ratePerLitre ?? f.fuelRate ?? f.unitPrice ?? f.pricePerLitre)>0?'Transaction rate':rateForFuelLog(f)>0?'Inventory Master rate':'Unpriced', f.notes || ''])]); },
   'export-ledger': () => { const st = R.ledger; downloadCSV(`fuel_ledger_${st.from}_to_${st.to}.csv`, [['Date', 'Machine', 'Fuel type', 'Litres', 'Rate / L', 'Modeled cost', 'Pricing source', 'Notes'], ...ledgerRows().map(f => [f._d, mName(f.machineId), fuelTypeFromRecord(f), num(f.litres), rateForFuelLog(f)||'', rateForFuelLog(f)>0?fuelLogCost(f):'', num(f.ratePerLitre ?? f.fuelRate ?? f.unitPrice ?? f.pricePerLitre)>0?'Transaction rate':rateForFuelLog(f)>0?'Inventory Master rate':'Unpriced', f.notes || ''])]); },
   'export-shifts': () => { const st = R.shifts; downloadCSV(`shifts_${st.from}_to_${st.to}.csv`, [['Date', 'Operator', 'Machine', 'Distance km', 'Engine hours'], ...shiftRows().map(s => [s._d, s.operatorName || '', mName(s.machineId), num(s.distanceKm), num(s.engineHoursLogged)])]); },
@@ -2742,6 +2954,8 @@ const C = {
   'turf-week': v => { if(v) { currentTurfWeekStart = getSunday(v); renderTurfCare(); } },
   'turf-app-category': v => { turfAppCategory = v; renderTurfApplications(); },
   'turf-app-status': v => { turfAppStatus = v; renderTurfApplications(); },
+  'unplanned-issue-category': v => { unplannedIssueCategory = v; renderTurfUnplannedIssues(); },
+  'unplanned-issue-status': v => { unplannedIssueStatus = v; renderTurfUnplannedIssues(); },
   'turf-product-category': v => { turfProductCategory = v; renderTurfCare(); },
   'spray-product': v => { const product = S.inventory.find(i => i.id === v && isTurfCategory(i.category)); const unit = $('#spUnit'); if (unit) unit.value = turfProductUnit(product) || 'Unit not set'; },
   'tp-product': (v, d) => { const product = S.inventory.find(i => i.id === v && isTurfCategory(i.category)); const unit = $('#tpUnit_' + d.day); if (unit) unit.value = turfProductUnit(product) || 'Unit not set'; calcTot(d.day); },
@@ -2784,7 +2998,7 @@ document.addEventListener('input', e => {
     box.innerHTML = m ? `<span class="exp-ok">In inventory: ${esc(itemName(m))} · stock ${fmt(num(m.stockQuantity), 2)} ${esc(m.unit || '')}</span><label class="expense-stock-option"><input class="exi-stock" type="checkbox"> Add qty to stock</label>` : '<span>New item — will ask to add to master</span>';
   }
 });
-document.addEventListener('input', e => { const el = e.target.closest('[data-inp]'); if (el && ['inQty','inRate','inCustomGst'].includes(el.id)) { previewInward(); } else if (el && el.dataset.inp === 'fleetq') { F.q = el.value; renderFleet(); } else if (el && el.dataset.inp === 'tp-qty') { calcTot(el.dataset.day); } else if (el && el.dataset.inp === 'turf-log-search') { turfAppSearch = el.value; renderTurfApplications(); } });
+document.addEventListener('input', e => { const el = e.target.closest('[data-inp]'); if (el && ['inQty','inRate','inCustomGst'].includes(el.id)) { previewInward(); } else if (el && el.dataset.inp === 'fleetq') { F.q = el.value; renderFleet(); } else if (el && el.dataset.inp === 'tp-qty') { calcTot(el.dataset.day); } else if (el && el.dataset.inp === 'turf-log-search') { turfAppSearch = el.value; renderTurfApplications(); } else if (el && el.dataset.inp === 'unplanned-issue-search') { unplannedIssueSearch = el.value; renderTurfUnplannedIssues(); } });
 $('#overlay').addEventListener('mousedown', e => { if (e.target.id === 'overlay') closeModal(); });
 $('#drawerOv').addEventListener('mousedown', e => { if (e.target.id === 'drawerOv') closeDrawer(); });
 document.addEventListener('keydown', e => { if (e.key === 'Escape') { closeModal(); closeDrawer(); } });
@@ -2794,6 +3008,9 @@ let turfSection = 'workboard';
 let turfAppCategory = 'All categories';
 let turfAppStatus = 'All statuses';
 let turfAppSearch = '';
+let unplannedIssueSearch = '';
+let unplannedIssueCategory = 'All categories';
+let unplannedIssueStatus = 'All statuses';
 let turfProductCategory = 'All categories';
 
 /* ================= AUTH + RBAC BOOT ================= */
@@ -3004,6 +3221,14 @@ function turfRecordStatus(plan) {
   if (/\b(cancelled|canceled|void|rejected)\b/.test(raw)) return 'Cancelled';
   return 'Planned';
 }
+function isUnplannedMaterialIssue(record) {
+  if (!record) return false;
+  const issueType = String(record.issueType || '').trim().toUpperCase().replace(/[\s-]+/g, '_');
+  if (issueType === 'UNPLANNED' || record.isAdHoc === true) return true;
+  if (issueType === 'PLANNED' || record.isAdHoc === false) return false;
+  if (record.unplanned === true || record.isUnplanned === true || record.wasPlanned === false || record.fromPlan === false || record.planned === false) return true;
+  return /manual|unplanned|ad[\s-]?hoc|out[\s-]?of[\s-]?plan/i.test(String(record.source || record.sourceType || record.issueSource || record.issueCategory || ''));
+}
 function turfProductForPlan(plan) {
   if (!plan) return null;
   const productId = plan.partId ?? plan.productId ?? plan.productID ?? plan.itemId ?? plan.inventoryId ?? plan.inventoryItemId ?? plan.inventoryItemDocId ?? plan.productDocId ?? plan.stockItemId ?? plan.skuId ?? (plan.product && typeof plan.product === 'object' ? (plan.product.id ?? plan.product.partId ?? plan.product.productId ?? plan.product.itemId) : null);
@@ -3129,7 +3354,7 @@ function turfCategoryClass(category) {
   return 'fertilizer';
 }
 function setTurfSection(section) {
-  turfSection = ['workboard','applications','products'].includes(section) ? section : 'workboard';
+  turfSection = ['workboard','applications','unplanned','products'].includes(section) ? section : 'workboard';
   renderTurfCare();
 }
 function renderTurfCategoryCards(targetId, products) {
@@ -3149,7 +3374,7 @@ function renderTurfCategoryCards(targetId, products) {
 function renderTurfApplications() {
   const target = $('#turfApplicationsTbl');
   if (!target) return;
-  const all = allTurfPlanRecords().filter(p => isTurfCategory(turfPlanCategory(p)));
+  const all = allTurfPlanRecords().filter(p => isTurfCategory(turfPlanCategory(p)) && !isUnplannedMaterialIssue(p));
   const q = turfAppSearch.trim().toLowerCase();
   const rows = all.filter(p => {
     const category = turfPlanCategory(p);
@@ -3166,13 +3391,61 @@ function renderTurfApplications() {
   }).join('') : '<tr><td colspan="7" class="empty">No application records match these filters.</td></tr>'}</tbody></table>`);
 }
 
+
+function renderTurfUnplannedIssues() {
+  const target = $('#turfUnplannedIssuesTbl');
+  if (!target) return;
+  const all = allTurfPlanRecords().filter(isUnplannedMaterialIssue);
+  const q = unplannedIssueSearch.trim().toLowerCase();
+  const rows = all.filter(p => {
+    const category = turfPlanCategory(p);
+    const status = turfRecordStatus(p);
+    const searchText = [
+      turfRecordProductName(p), p.targetArea, p.area, p.location, p.notes, p.reason,
+      p.planId, p.id, p.productId, p.issuedBy, p.issueType, p.status, category,
+      p._sourceCollection
+    ].join(' ').toLowerCase();
+    return (unplannedIssueCategory === 'All categories' || category === unplannedIssueCategory) &&
+      (unplannedIssueStatus === 'All statuses' || status === unplannedIssueStatus) &&
+      (!q || searchText.includes(q));
+  }).sort((a,b) => turfRecordDate(b).localeCompare(turfRecordDate(a)) ||
+    tsMs(b.issuedAt ?? b.timestamp ?? b.createdAt)-tsMs(a.issuedAt ?? a.timestamp ?? a.createdAt));
+  const count = $('#unplannedIssueCount');
+  if (count) count.textContent = rows.length + ' issue' + (rows.length===1?'':'s');
+  const categories = ['All categories','Fertilizers','Pesticides','Turf Enhancements','Other'];
+  const categoryFilter = $('#unplannedIssueCategoryFilter');
+  if (categoryFilter && categoryFilter.options.length !== categories.length) {
+    categoryFilter.innerHTML = categories.map(value => '<option>'+esc(value)+'</option>').join('');
+    categoryFilter.value = unplannedIssueCategory;
+  }
+  const body = !turfPlanSourcesLoaded()
+    ? '<tr><td colspan="9">Loading material issue records…</td></tr>'
+    : rows.length ? rows.map(p => {
+      const category = turfPlanCategory(p), status = turfRecordStatus(p);
+      const unit = p.unit || p.stockUnit || p.uom || p.unitOfMeasure || turfProductForPlan(p)?.unit || '';
+      const reference = p.planId || p.id || '—';
+      const timestamp = tsMs(p.issuedAt ?? p.issueTimestamp ?? p.timestamp ?? p.createdAt);
+      const issuer = p.issuedBy || p.performedBy || p.recordedBy || p.operatorName || '—';
+      const notes = p.notes || p.reason || '—';
+      return '<tr><td>'+esc(turfRecordDate(p) || '—')+(timestamp?'<div class="muted sm">'+esc(timeOf(timestamp))+'</div>':'')+
+        '</td><td><code>'+esc(reference)+'</code><div class="muted sm">'+esc(p.issueType || (p.isAdHoc===true?'UNPLANNED':'Legacy unplanned'))+'</div></td>'+
+        '<td><span class="badge '+turfCategoryClass(category)+'">'+esc(category)+'</span></td>'+
+        '<td><b>'+esc(turfRecordProductName(p) || 'Unspecified material')+'</b><div class="muted sm">'+esc(p.productId || p.itemId || p.inventoryId || '')+'</div></td>'+
+        '<td class="num"><b>'+fmt(turfRecordQuantity(p),2)+'</b> '+esc(unit)+'</td>'+
+        '<td>'+esc(p.targetZoneOrMachine || p.targetArea || p.area || p.location || 'Unassigned')+'</td>'+
+        '<td>'+esc(issuer)+'</td><td><span class="badge '+(status==='Issued'?'gold':status==='Applied'?'ok':'mute')+'">'+esc(status)+'</span></td>'+
+        '<td class="muted">'+esc(notes)+'</td></tr>';
+    }).join('') : '<tr><td colspan="9" class="empty">No unplanned material issues match these filters.</td></tr>';
+  setHTML(target, '<table><thead><tr><th>Issue date</th><th>Issue reference</th><th>Category</th><th>Material</th><th class="num">Issued qty</th><th>Area / destination</th><th>Issued by</th><th>Status</th><th>Notes</th></tr></thead><tbody>'+body+'</tbody></table>');
+}
+
 function turfEditablePlanRecord(plan) {
   return !!plan && turfRecordStatus(plan) === 'Planned' &&
     ['turf_plans','daily_application_plans'].includes(plan._sourceCollection) &&
     !!String(plan.id || plan.planId || '').trim();
 }
 function openTurfPlansManager() {
-  const records = allTurfPlanRecords().filter(p => isTurfCategory(turfPlanCategory(p)))
+  const records = allTurfPlanRecords().filter(p => isTurfCategory(turfPlanCategory(p)) && !isUnplannedMaterialIssue(p))
     .sort((a,b) => turfRecordDate(b).localeCompare(turfRecordDate(a)) || tsMs(b.createdAt)-tsMs(a.createdAt));
   curModalRender = renderTurfPlansManager;
   openModal({title:'Turf treatment plans',sub:'Expand a date to inspect its plan records. Only planned, not-yet-issued records can be edited or deleted.',size:'turf-plans-manager-modal',body:'<div id="turfPlansManagerRoot"></div>',footer:'<button class="btn" data-act="close-modal">Close</button>'});
@@ -3180,7 +3453,7 @@ function openTurfPlansManager() {
 }
 function renderTurfPlansManager() {
   const root=$('#turfPlansManagerRoot'); if(!root)return;
-  const records=allTurfPlanRecords().filter(p=>isTurfCategory(turfPlanCategory(p)))
+  const records=allTurfPlanRecords().filter(p=>isTurfCategory(turfPlanCategory(p))&&!isUnplannedMaterialIssue(p))
     .sort((a,b)=>turfRecordDate(b).localeCompare(turfRecordDate(a))||tsMs(b.createdAt)-tsMs(a.createdAt));
   const groups=new Map();
   records.forEach(p=>{const date=turfRecordDate(p)||'Undated';if(!groups.has(date))groups.set(date,[]);groups.get(date).push(p);});
@@ -3225,7 +3498,7 @@ function renderTurfCare() {
   if (weekStartEl && weekStartEl.value !== currentTurfWeekStart) weekStartEl.value = currentTurfWeekStart;
 
   // Keep the three workspaces focused. All panels still use the same live Firestore data.
-  ['workboard','applications','products'].forEach(name => {
+  ['workboard','applications','unplanned','products'].forEach(name => {
     const pane = $('#turf'+name.charAt(0).toUpperCase()+name.slice(1)+'Pane');
     if (pane) pane.hidden = turfSection !== name;
   });
@@ -3237,12 +3510,15 @@ function renderTurfCare() {
   if ($('#turfLogSearch') && $('#turfLogSearch').value !== turfAppSearch) $('#turfLogSearch').value = turfAppSearch;
   if ($('#turfAppCategoryFilter')) $('#turfAppCategoryFilter').value = turfAppCategory;
   if ($('#turfAppStatusFilter')) $('#turfAppStatusFilter').value = turfAppStatus;
+  if ($('#unplannedIssueSearch')) $('#unplannedIssueSearch').value = unplannedIssueSearch;
+  if ($('#unplannedIssueCategoryFilter')) $('#unplannedIssueCategoryFilter').value = unplannedIssueCategory;
+  if ($('#unplannedIssueStatusFilter')) $('#unplannedIssueStatusFilter').value = unplannedIssueStatus;
   if ($('#turfProductCategoryFilter')) $('#turfProductCategoryFilter').value = turfProductCategory;
 
   const turfItems = S.inventory.filter(i => isTurfCategory(i.category));
   const lowStock = turfItems.filter(i => num(i.stockQuantity) <= effectiveReorderLevel(i));
   const todayStr = today();
-  const allPlans = allTurfPlanRecords().filter(p => isTurfCategory(turfPlanCategory(p)));
+  const allPlans = allTurfPlanRecords().filter(p => isTurfCategory(turfPlanCategory(p)) && !isUnplannedMaterialIssue(p));
   const plannedThisWeek = allPlans.filter(p => turfRecordDate(p) >= currentTurfWeekStart && turfRecordDate(p) <= addDays(currentTurfWeekStart,6) && turfRecordStatus(p) === 'Planned');
   const monthStartStr = monthStart(todayStr);
   const issuedAppliedMTD = allPlans.filter(p => turfRecordDate(p) >= monthStartStr && turfRecordDate(p) <= todayStr && turfRecordStatus(p)==='Issued').length;
@@ -3326,6 +3602,7 @@ function renderTurfCare() {
     return `<tr><td><b>${esc(itemName(i))}</b></td><td><span class="badge ${turfCategoryClass(i.category)}">${esc(turfCategoryLabel(i.category))}</span></td><td>${esc(i.unit || 'Nos')}</td><td class="num"><b>${fmt(stock,3)}</b></td><td class="num"><b>${fmt(effectiveReorderLevel(i),3)}</b><div class="muted sm">${autoReorderDetails(i).reliable?'Trend-based':'Provisional'}</div></td><td class="num">${num(i.unitCost)>0?money(i.unitCost,2):'—'}</td><td><span class="badge ${low?'warn':'ok'}">${low?'Reorder':'In stock'}</span></td><td class="right nowrap"><button class="btn btn-sm" data-act="edit-part" data-id="${esc(i.id)}" title="Edit product"><span class="material-symbols-rounded">edit</span></button></td></tr>`;
   }).join(''):'<tr><td colspan="8" class="empty">No turf products in this category. Add a product in the item master first.</td></tr>'}</tbody></table>`);
   renderTurfApplications();
+  renderTurfUnplannedIssues();
   renderTurfAreaPlanDashboard();
 }
 
@@ -3379,7 +3656,7 @@ function renderTurfAreaPlanDashboard(){
   const todayStr=today();
   const areaName=p=>String(p.targetArea||p.area||p.location||'').trim();
   const plannedQty=p=>num(p.targetQty??p.plannedQty??p.requestedQty??p.plannedQuantity??p.targetQuantity??(turfRecordStatus(p)==='Planned'?(p.quantity??p.qty):0));
-  const plans=allTurfPlanRecords().filter(p=>isTurfCategory(turfPlanCategory(p))&&turfRecordDate(p)===todayStr&&turfRecordStatus(p)!=='Cancelled')
+  const plans=allTurfPlanRecords().filter(p=>isTurfCategory(turfPlanCategory(p))&&!isUnplannedMaterialIssue(p)&&turfRecordDate(p)===todayStr&&turfRecordStatus(p)!=='Cancelled')
     .sort((a,b)=>areaName(a).localeCompare(areaName(b))||turfRecordProductName(a).localeCompare(turfRecordProductName(b)));
   const areas=['Greens','Fairway','Nursery','Driving Range','Short Game Area','Roughs'];
   const grouped=areas.map(area=>({area,rows:plans.filter(p=>areaName(p).toLowerCase()===area.toLowerCase())})).filter(g=>g.rows.length);
