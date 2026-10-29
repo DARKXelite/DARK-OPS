@@ -648,3 +648,81 @@ button.secondary, .btn-secondary,
 .view .card *, .view .panel *, .view .table-wrap *, .view .table-container * {
   text-shadow: none !important;
 }
+
+
+/* INVENTORY CATEGORY CARD REPAIR: neutralize legacy pale surfaces in grouped stock rows. */
+#v-registry .inv-category,
+#v-registry details.inv-category,
+#v-registry .inv-category > summary,
+#v-registry .inv-category[open] > summary,
+#v-registry .inv-category-body,
+#v-registry .inv-category-placeholder,
+#v-registry .inv-category-table {
+  background: #192116 !important;
+  background-color: #192116 !important;
+  color: #F3F4E8 !important;
+  border-color: #465338 !important;
+}
+#v-registry .inv-category > summary {
+  min-height: 82px;
+}
+#v-registry .inv-category > summary:hover,
+#v-registry .inv-category[open] > summary {
+  background: #202B1B !important;
+}
+#v-registry .inv-cat-main,
+#v-registry .inv-cat-main b,
+#v-registry .inv-cat-main strong,
+#v-registry .inv-cat-main small,
+#v-registry .inv-cat-chevron {
+  color: #F3F4E8 !important;
+  opacity: 1 !important;
+}
+#v-registry .inv-cat-main small {
+  color: #C1C8AE !important;
+}
+#v-registry .inv-cat-icon {
+  background: #29371F !important;
+  background-color: #29371F !important;
+  color: #A8BD78 !important;
+  border-color: #465338 !important;
+}
+#v-registry .inv-cat-alert {
+  color: #E8ECD9 !important;
+  background: #29351F !important;
+  background-color: #29351F !important;
+  border-color: #536244 !important;
+}
+#v-registry .inv-cat-alert.warn {
+  color: #F2C879 !important;
+  background: #3A2F18 !important;
+  background-color: #3A2F18 !important;
+  border-color: #8A6B32 !important;
+}
+#v-registry .inv-category-body,
+#v-registry .inv-category-table,
+#v-registry .inv-category-table table,
+#v-registry .inv-category-table thead,
+#v-registry .inv-category-table tbody,
+#v-registry .inv-category-table tr,
+#v-registry .inv-category-table th,
+#v-registry .inv-category-table td {
+  background-color: #192116 !important;
+  color: #E8ECD9 !important;
+  border-color: #39482D !important;
+}
+#v-registry .inv-category-table th {
+  background-color: #26331D !important;
+  color: #F3F4E8 !important;
+}
+#v-registry .inv-category-table tbody tr:hover,
+#v-registry .inv-category-table tbody tr:hover td {
+  background-color: #29371F !important;
+}
+#v-registry .inv-category-table button,
+#v-registry .inv-category-table input,
+#v-registry .inv-category-table select {
+  color: #F3F4E8 !important;
+  background-color: #202B1B !important;
+  border-color: #536244 !important;
+}
