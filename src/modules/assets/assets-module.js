@@ -433,5 +433,10 @@ function installAuthObserver() {
     });
   }).catch(e=>console.error("Assets auth observer failed",e));
 }
+window.__cloverAssetsExportData = () => ({
+  records: (state.records || []).map(r => ({...r, department:departmentFor(r)})),
+  departments: (state.departments || []).map(d => ({...d})),
+  types: (state.types || []).map(t => ({...t, fields: Array.isArray(t.fields) ? JSON.stringify(t.fields) : t.fields}))
+});
 function boot() { addStyles(); attachNav(); installAuthObserver(); }
 if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",boot,{once:true});else boot();
