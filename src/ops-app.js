@@ -297,6 +297,11 @@ function exportWorkflowWorkbook() {
   const itemLedger = turfRows.filter(r=>/chemical|fertiliz|pesticid|turf|enhanc/i.test(String(r.category+' '+r.item)));
   const machineRows = (S.machines||[]).map(m=>({machineId:m.id||'',name:m.assetName||m.name||'',category:m.category||'',fuelType:m.fuelType||'',status:m.status||'',currentHours:m.currentHours??'',serialNumber:m.serialNumber||m.serialNo||'',commissionedDate:m.commissionedDate||m.startedDate||'',...m}));
   const assets = window.__cloverAssetsExportData ? window.__cloverAssetsExportData() : null;
+  const savedRange={from:OA.from,to:OA.to,machineFilter:OA.machineFilter,drill:OA.drill};
+  const dated=[...fuelRows.map(r=>r.date),...turfRows.map(r=>r.date)].filter(d=>/^\\d{4}-\\d{2}-\\d{2}$/.test(String(d||''))).sort();
+  OA.from=dated[0]||'2000-01-01'; OA.to=dated[dated.length-1]&&dated[dated.length-1]>today()?dated[dated.length-1]:today(); OA.machineFilter=''; OA.drill={kind:'',key:''};
+  const allFuelDaily=oaFuelDaily(), allMachineDays=oaFuelMachineDays(), allTurfDaily=oaTurfDaily(), allTurfItems=oaTurfGroups('item'), allTurfVariance=oaTurfVariance(), allUnplanned=oaUnplannedLines();
+  OA.from=savedRange.from; OA.to=savedRange.to; OA.machineFilter=savedRange.machineFilter; OA.drill=savedRange.drill;
   const workbook = XLSX.utils.book_new();
   const addSheet = (name, rows) => {
     const safe=flat(rows);
@@ -306,14 +311,14 @@ function exportWorkflowWorkbook() {
   };
   addSheet('Fuel Ledger',fuelRows);
   addSheet('Fuel By Machine',fuelMachineRows);
-  addSheet('Fuel By Day',oaFuelDaily().map(r=>({date:r.date,entries:r.entries,machines:r.machineCount,dieselLitres:r.diesel,petrolLitres:r.petrol,otherLitres:r.unknown,totalLitres:r.litres,runHours:r.hours,litresPerHour:r.lph??'',pricedCost:r.priced?r.cost:'',unpricedLitres:r.unpriced})));
-  addSheet('Machine Day Ledger',oaFuelMachineDays().map(r=>({date:r.date,machine:r.name,machineId:r.id,entries:r.entries,litres:r.litres,dieselLitres:r.diesel,petrolLitres:r.petrol,runHours:r.hours,litresPerHour:r.lph??'',distanceKm:r.km,pricedCost:r.priced?r.cost:'',unpricedLitres:r.unpriced})));
+  addSheet('Fuel By Day',allFuelDaily.map(r=>({date:r.date,entries:r.entries,machines:r.machineCount,dieselLitres:r.diesel,petrolLitres:r.petrol,otherLitres:r.unknown,totalLitres:r.litres,runHours:r.hours,litresPerHour:r.lph??'',pricedCost:r.priced?r.cost:'',unpricedLitres:r.unpriced})));
+  addSheet('Machine Day Ledger',allMachineDays.map(r=>({date:r.date,machine:r.name,machineId:r.id,entries:r.entries,litres:r.litres,dieselLitres:r.diesel,petrolLitres:r.petrol,runHours:r.hours,litresPerHour:r.lph??'',distanceKm:r.km,pricedCost:r.priced?r.cost:'',unpricedLitres:r.unpriced})));
   addSheet('Turf Application Ledger',turfRows);
   addSheet('Chemical Item Ledger',itemLedger);
-  addSheet('Turf Daily Analytics',oaTurfDaily().map(r=>({date:r.date,records:r.records,planned:r.planned,issued:r.issued,applied:r.applied,categories:r.categories.size,areas:r.areas.size,plannedQuantityByUnit:r.plannedUnits,actualQuantityByUnit:r.actualUnits,pricedCost:r.priced?r.cost:'',unpricedActuals:r.unpriced})));
-  addSheet('Turf Item Analytics',oaTurfGroups('item').map(r=>({item:r.name,categories:r.categoryLabel,areas:r.areaLabel,records:r.records,planned:r.planned,issued:r.issued,applied:r.applied,plannedQuantityByUnit:r.plannedUnits,actualQuantityByUnit:r.actualUnits,pricedValue:r.priced?r.cost:'',unpricedActuals:r.unpriced,lastActivity:r.lastDate})));
-  addSheet('Turf Variance',oaTurfVariance().map(r=>({item:r.name,category:r.category,unit:r.unit,planned:r.planned,issuedApplied:r.issued,variance:r.issued-r.planned,plannedLines:r.plannedCount,actualLines:r.issuedCount,areas:[...r.areas].join(', '),lastActivity:r.lastDate})));
-  addSheet('Unplanned Issues',oaUnplannedLines().map(r=>({date:r.date,time:r.time,recordId:r.record?.id||'',planId:r.planId,issueType:r.issueType,status:r.status,category:r.category,item:r.name,itemId:r.productId,quantity:r.qty,unit:r.unit,area:r.area,issuedBy:r.issuedBy,rate:r.rate||'',recordedCost:r.cost===null?'':r.cost,notes:r.notes,sourceCollection:r.sourceCollection})));
+  addSheet('Turf Daily Analytics',allTurfDaily.map(r=>({date:r.date,records:r.records,planned:r.planned,issued:r.issued,applied:r.applied,categories:r.categories.size,areas:r.areas.size,plannedQuantityByUnit:r.plannedUnits,actualQuantityByUnit:r.actualUnits,pricedCost:r.priced?r.cost:'',unpricedActuals:r.unpriced})));
+  addSheet('Turf Item Analytics',allTurfItems.map(r=>({item:r.name,categories:r.categoryLabel,areas:r.areaLabel,records:r.records,planned:r.planned,issued:r.issued,applied:r.applied,plannedQuantityByUnit:r.plannedUnits,actualQuantityByUnit:r.actualUnits,pricedValue:r.priced?r.cost:'',unpricedActuals:r.unpriced,lastActivity:r.lastDate})));
+  addSheet('Turf Variance',allTurfVariance.map(r=>({item:r.name,category:r.category,unit:r.unit,planned:r.planned,issuedApplied:r.issued,variance:r.issued-r.planned,plannedLines:r.plannedCount,actualLines:r.issuedCount,areas:[...r.areas].join(', '),lastActivity:r.lastDate})));
+  addSheet('Unplanned Issues',allUnplanned.map(r=>({date:r.date,time:r.time,recordId:r.record?.id||'',planId:r.planId,issueType:r.issueType,status:r.status,category:r.category,item:r.name,itemId:r.productId,quantity:r.qty,unit:r.unit,area:r.area,issuedBy:r.issuedBy,rate:r.rate||'',recordedCost:r.cost===null?'':r.cost,notes:r.notes,sourceCollection:r.sourceCollection})));
   addSheet('Machine Register',machineRows);
   addSheet('Inventory Stock',generic(S.inventory));
   addSheet('Goods Inwards',generic(S.inwards));
