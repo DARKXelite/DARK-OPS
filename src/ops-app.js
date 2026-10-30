@@ -54,6 +54,8 @@ const $ = (s, r=document) => r.querySelector(s);
 const $$ = (s, r=document) => [...r.querySelectorAll(s)];
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const num = v => { const n = parseFloat(v); return isFinite(n) ? n : 0; };
+// Normalize every supported fuel issue quantity field so all ledgers reconcile to the same source transactions.
+const fuelQuantity = f => Math.max(0, num(f && (f.litres ?? f.quantity ?? f.qty ?? f.fuelLitres ?? f.fuelQuantity)));
 const fmt = (n, d=1) => Number(n || 0).toLocaleString('en-IN', { maximumFractionDigits: d });
 const money = (n, d=0) => '₹' + Number(n || 0).toLocaleString('en-IN', { minimumFractionDigits: d, maximumFractionDigits: d === 0 ? 0 : 2 });
 const pad = n => String(n).padStart(2, '0');
@@ -101,10 +103,10 @@ function rateForFuelLog(f) {
   // Do not invent a fallback price: use the matching Fuel Inventory Master rate or leave it unpriced.
   return fuelMasterRate(fuelTypeForCost(f)).rate;
 }
-function fuelLogCost(f) { return Math.max(0, num(f.litres ?? f.quantity ?? f.qty)) * rateForFuelLog(f); }
+function fuelLogCost(f) { return fuelQuantity(f) * rateForFuelLog(f); }
 function fuelCostSummary(rows) {
   let litres = 0, pricedLitres = 0, cost = 0;
-  rows.forEach(f => { const L = Math.max(0, num(f.litres)), rate = rateForFuelLog(f); litres += L; if (rate > 0) { pricedLitres += L; cost += L * rate; } });
+  rows.forEach(f => { const L = fuelQuantity(f), rate = rateForFuelLog(f); litres += L; if (rate > 0) { pricedLitres += L; cost += L * rate; } });
   return { litres, pricedLitres, unpricedLitres: Math.max(0, litres - pricedLitres), cost, coverage: litres > 0 ? pricedLitres / litres * 100 : 100 };
 }
 function inventoryCostSummary(items=S.inventory) {
@@ -193,15 +195,15 @@ function inventoryOnHand(item) {
   const fuelType = canonicalFuelType(item && (item.partName ?? item.itemName ?? item.name ?? item.productName));
   if (!fuelType) return raw;
   const issued = (S.fuel || []).reduce((total, f) => fuelTypeFromRecord(f) === fuelType
-    ? total + Math.max(0, num(f.litres ?? f.quantity ?? f.qty ?? f.fuelLitres ?? f.fuelQuantity))
+    ? total + Math.max(0, fuelQuantity(f))
     : total, 0);
   return Math.max(0, raw - issued);
 }
 const fuelIn = (a, b) => S.fuel.filter(f => { const d = fuelRecordDate(f); return d && d >= a && d <= b; });
 const shiftsIn = (a, b) => S.shifts.filter(s => s._d && s._d >= a && s._d <= b);
-const litresFor = (m, a, b) => S.fuel.reduce((t, f) => { const d=fuelRecordDate(f); return (d >= a && d <= b && (f.machineId === m.id || f.machineId === m.assetName)) ? t + num(f.litres ?? f.quantity ?? f.qty) : t; }, 0);
+const litresFor = (m, a, b) => S.fuel.reduce((t, f) => { const d=fuelRecordDate(f); return (d >= a && d <= b && (f.machineId === m.id || f.machineId === m.assetName)) ? t + fuelQuantity(f) : t; }, 0);
 const hoursFor = (m, a, b) => S.shifts.reduce((t, s) => (s._d >= a && s._d <= b && (s.machineId === m.id || s.machineId === m.assetName)) ? t + num(s.engineHoursLogged) : t, 0);
-function splitFuel(ent) { const o = { Diesel: 0, Petrol: 0, Unspecified: 0 }; ent.forEach(f => { const t = fuelTypeFromRecord(f); o[t] = (o[t] || 0) + num(f.litres ?? f.quantity ?? f.qty); }); return o; }
+function splitFuel(ent) { const o = { Diesel: 0, Petrol: 0, Unspecified: 0 }; ent.forEach(f => { const t = fuelTypeFromRecord(f); o[t] = (o[t] || 0) + fuelQuantity(f); }); return o; }
 
 function svc(m) {
   const cur = num(m.currentHours), INT = CONFIG.SERVICE_INTERVAL;
@@ -274,7 +276,7 @@ function exportWorkflowWorkbook() {
   const generic = list => (list || []).map(x => ({...x}));
   const flat = rows => (rows || []).map(row => Object.fromEntries(Object.entries(row || {}).map(([k,v]) => [k, v == null ? '' : (typeof v === 'object' ? JSON.stringify(v) : v)])));
   const fuelRows = (S.fuel || []).map(f => {
-    const rate=rateForFuelLog(f), litres=Math.max(0,num(f.litres ?? f.quantity ?? f.qty));
+    const rate=rateForFuelLog(f), litres=Math.max(0,fuelQuantity(f));
     return {...f,date:fuelRecordDate(f),time:timeOf(tsMs(f.timestamp ?? f.issuedAt ?? f.createdAt)),machine:f.machineName||mName(f.machineId),machineId:f.machineId||f.machineID||f.assetId||'',fuelType:fuelTypeFromRecord(f),litres,ratePerLitre:rate||'',modeledCost:rate>0?litres*rate:'',costStatus:rate>0?'Priced':'Unpriced',issuedBy:f.issuedBy||f.recordedBy||f.operatorName||'',reference:f.id||'',notes:f.notes||f.reason||''};
   });
   const fuelMachineRows = [...new Set(fuelRows.map(r=>String(r.machineId||r.machine||'Unassigned')))].map(id=>{
@@ -588,7 +590,7 @@ function buildReorderUsageIndex() {
   (S.fuel||[]).forEach(f=>{
     const date=fuelRecordDate(f), type=fuelTypeFromRecord(f), name=type==='Unspecified'?'':type;
     const item=resolveInventoryItem(null,name,'Fuel');
-    const qty=Math.max(0,num(f.litres ?? f.quantity ?? f.qty ?? f.fuelLitres ?? f.fuelQuantity));
+    const qty=Math.max(0,fuelQuantity(f));
     if(item) push(item,date,qty,{machine:f.machineName||mName(f.machineId)||'Unknown machine',source:'fuel'});
   });
   // Turf usage counts issued/applied entries, never still-planned work.
@@ -646,7 +648,7 @@ function renderOperationalIntelligence(t=today()) {
   (S.shifts||[]).forEach(shift=>{const d=shift._d||normDate(shift.shiftDate,shift.timestamp??shift.startTime??shift.endTime);if(!d||d<days[0]||d>t)return;const key=mKey(shift.machineId||shift.machineName||shift.assetName);const dk=key+'|'+d;hoursByMachineDay.set(dk,(hoursByMachineDay.get(dk)||0)+Math.max(0,num(shift.engineHoursLogged??shift.engineHours??shift.hoursWorked)));});
   (S.fuel||[]).forEach(f=>{
     const d=fuelRecordDate(f); if(!d || d<days[0] || d>t) return;
-    const liters=Math.max(0,num(f.litres ?? f.quantity ?? f.qty ?? f.fuelLitres ?? f.fuelQuantity));
+    const liters=Math.max(0,fuelQuantity(f));
     const name=f.machineName || mName(f.machineId) || 'Unassigned machine';
     const key=mKey(f.machineId||f.machineName||name);
     const dk=key+'|'+d, cur=perMachineDay.get(dk)||{key,name,date:d,litres:0,records:0}; cur.litres+=liters; cur.records++; perMachineDay.set(dk,cur);
@@ -721,25 +723,25 @@ function renderOverview() {
   const weekFuel = fuelIn(weekStart, t);
   const turfDate = p => turfRecordDate(p);
   const monthPlans = allTurfPlanRecords().filter(p => { const d=turfDate(p); return d && d >= month && d <= t; });
-  const fuelLitres = rows => rows.reduce((a, f) => a + Math.max(0, num(f.litres ?? f.quantity ?? f.qty)), 0);
+  const fuelLitres = rows => rows.reduce((a, f) => a + Math.max(0, fuelQuantity(f)), 0);
   const machineTotals = new Map();
   monthFuel.forEach(f => {
     const name = f.machineName || mName(f.machineId) || 'Unassigned machine';
     const key = String(name);
     const item = machineTotals.get(key) || { name:key, litres:0, records:0 };
-    item.litres += Math.max(0, num(f.litres ?? f.quantity ?? f.qty)); item.records++;
+    item.litres += Math.max(0, fuelQuantity(f)); item.records++;
     machineTotals.set(key, item);
   });
   const topMachines = [...machineTotals.values()].sort((a,b)=>b.litres-a.litres).slice(0,5);
   const recentFuel = monthFuel.slice(0,5);
   const days = daysBetween(weekStart, t);
   const litresByDay = {};
-  weekFuel.forEach(f => { const d=fuelRecordDate(f); litresByDay[d] = (litresByDay[d] || 0) + Math.max(0, num(f.litres ?? f.quantity ?? f.qty)); });
+  weekFuel.forEach(f => { const d=fuelRecordDate(f); litresByDay[d] = (litresByDay[d] || 0) + Math.max(0, fuelQuantity(f)); });
   const fuelUnits = fuelLitres(monthFuel);
   const fuelIssuedMTD = { Diesel: 0, Petrol: 0 };
-  monthFuel.forEach(f => { const type = fuelTypeFromRecord(f); if (type in fuelIssuedMTD) fuelIssuedMTD[type] += Math.max(0, num(f.litres ?? f.quantity ?? f.qty)); });
+  monthFuel.forEach(f => { const type = fuelTypeFromRecord(f); if (type in fuelIssuedMTD) fuelIssuedMTD[type] += Math.max(0, fuelQuantity(f)); });
   const fuelIssuedToday = { Diesel: 0, Petrol: 0 };
-  todayFuel.forEach(f => { const type = fuelTypeFromRecord(f); if (type in fuelIssuedToday) fuelIssuedToday[type] += Math.max(0, num(f.litres ?? f.quantity ?? f.qty)); });
+  todayFuel.forEach(f => { const type = fuelTypeFromRecord(f); if (type in fuelIssuedToday) fuelIssuedToday[type] += Math.max(0, fuelQuantity(f)); });
   $('#opsPeriod').textContent = `${MON[+t.slice(5,7)-1].toUpperCase()} ${t.slice(0,4)} · MONTH TO DATE`;
   updateDayCostCards(t);
 
@@ -838,7 +840,7 @@ function renderOverview() {
   }).join('');
   setHTML($('#opsFuelInventory'), fuelMasterMarkup);
   setHTML($('#opsFuelMachines'), topMachines.length ? topMachines.map(m=>`<div class="ops-list-row"><div class="ops-list-main"><div class="ops-list-title">${esc(m.name)}</div><div class="ops-list-meta">${m.records} issue record(s)</div></div><div class="ops-list-value">${fmt(m.litres,1)} L</div></div>`).join('') : '<div class="ops-empty">No fuel issue records for this month.</div>');
-  setHTML($('#opsRecentFuel'), recentFuel.length ? recentFuel.map(f=>`<div class="ops-list-row"><div class="ops-list-main"><div class="ops-list-title">${esc(f.machineName || mName(f.machineId) || 'Unassigned machine')}</div><div class="ops-list-meta">${dShort(f._d)}${timeOf(tsMs(f.timestamp))?' · '+timeOf(tsMs(f.timestamp)):''} · ${esc(fuelTypeFromRecord(f))}${f.issuedBy?' · '+esc(f.issuedBy):''}</div></div><div class="ops-list-value">${fmt(num(f.litres ?? f.quantity ?? f.qty),1)} L</div></div>`).join('') : '<div class="ops-empty">No fuel issue records yet.</div>');
+  setHTML($('#opsRecentFuel'), recentFuel.length ? recentFuel.map(f=>`<div class="ops-list-row"><div class="ops-list-main"><div class="ops-list-title">${esc(f.machineName || mName(f.machineId) || 'Unassigned machine')}</div><div class="ops-list-meta">${dShort(f._d)}${timeOf(tsMs(f.timestamp))?' · '+timeOf(tsMs(f.timestamp)):''} · ${esc(fuelTypeFromRecord(f))}${f.issuedBy?' · '+esc(f.issuedBy):''}</div></div><div class="ops-list-value">${fmt(fuelQuantity(f),1)} L</div></div>`).join('') : '<div class="ops-empty">No fuel issue records yet.</div>');
 
   categories.forEach(cat => {
     const rows = monthPlans.filter(p => categoryForPlan(p) === cat.key);
@@ -879,7 +881,7 @@ function fuelMasterRate(type) {
   return rate > 0 ? { rate, source: 'Inventory Master' } : { rate: 0, source: 'Fuel unit cost not set' };
 }
 function fuelCostLine(f) {
-  const qty = Math.max(0, num(f.litres ?? f.quantity ?? f.qty));
+  const qty = fuelQuantity(f);
   const transactionRate = num(f.ratePerLitre ?? f.fuelRate ?? f.unitPrice ?? f.pricePerLitre);
   const fallback = transactionRate > 0 ? null : fuelMasterRate(fuelTypeForCost(f));
   const rate = transactionRate > 0 ? transactionRate : (fallback ? fallback.rate : 0);
@@ -1262,12 +1264,12 @@ async function showShiftPathMap(shiftId, machineName) {
 function drawerFuel(id) {
   const m = mx().get(id); if (!m) return;
   const rows = S.fuel.filter(f => f.machineId === m.id || f.machineId === m.assetName).sort(sortFuel);
-  const tot = sum(rows, 'litres'), rateCost = fuelCostSummary(rows), t = today(), days = daysBetween(addDays(t, -29), t), by = {}; rows.forEach(f => by[f._d] = (by[f._d] || 0) + num(f.litres));
+  const tot = rows.reduce((total, f) => total + fuelQuantity(f), 0), rateCost = fuelCostSummary(rows), t = today(), days = daysBetween(addDays(t, -29), t), by = {}; rows.forEach(f => by[f._d] = (by[f._d] || 0) + fuelQuantity(f));
   const l30 = days.reduce((a, d) => a + (by[d] || 0), 0), activeDays = new Set(rows.map(f => f._d)).size;
   let body = `<div class="stat-row" style="grid-template-columns:repeat(auto-fit,minmax(140px,1fr))"><div class="stat"><div class="k">All-time</div><div class="v">${fmt(tot)} <small>L</small></div></div><div class="stat"><div class="k">Last 30 days</div><div class="v">${fmt(l30)} <small>L</small></div></div><div class="stat"><div class="k">Avg / fuel day</div><div class="v">${fmt(activeDays ? tot / activeDays : 0)} <small>L</small></div></div><div class="stat"><div class="k">Modeled all-time cost</div><div class="v">${money(rateCost.cost)}</div><div class="t">${fmt(rateCost.coverage,0)}% volume priced</div></div></div>
     <div class="muted sm" style="margin-bottom:4px">Daily litres · last 30 days</div>${sparkline(days.map(d => by[d] || 0))}`;
   if (!rows.length) body += '<div class="empty">No fuel logs yet.</div>';
-  let last = ''; rows.forEach(f => { if (f._d !== last) { last = f._d; body += `<div class="day-h">${dLong(f._d)} · ${fmt(by[f._d])} L</div>`; } body += `<div class="list-row"><div><b>${fmt(num(f.litres))} L</b><div class="muted sm">${esc(f.notes || 'App fuel log')}${timeOf(tsMs(f.timestamp)) ? ' · ' + timeOf(tsMs(f.timestamp)) : ''}</div></div></div>`; });
+  let last = ''; rows.forEach(f => { if (f._d !== last) { last = f._d; body += `<div class="day-h">${dLong(f._d)} · ${fmt(by[f._d])} L</div>`; } body += `<div class="list-row"><div><b>${fmt(fuelQuantity(f))} L</b><div class="muted sm">${esc(f.notes || 'App fuel log')}${timeOf(tsMs(f.timestamp)) ? ' · ' + timeOf(tsMs(f.timestamp)) : ''}</div></div></div>`; });
   openDrawer(m.assetName, `Fuel issue log · ${m.fuelType || 'fuel type not set'}`, body);
 }
 
@@ -1438,8 +1440,8 @@ function oaRenderFuelTransactions(){
 }
 function oaRenderTurfDaily(){
   const daily=oaTurfDaily(),lines=oaScheduledTurfLines(),actual=lines.filter(x=>x.status==='Issued'||x.status==='Applied'),priced=actual.filter(x=>x.cost!==null),value=priced.reduce((s,x)=>s+x.cost,0);
-  const body=daily.map(r=>'<tr><td><b>'+esc(r.date)+'</b></td><td class="num">'+r.records+'</td><td class="num">'+r.planned+'</td><td class="num">'+r.issued+' / '+r.applied+' applied</td><td class="num">'+r.categories.size+'</td><td class="num">'+r.areas.size+'</td><td>'+esc(oaUnitTotals(r.planQty,x=>x.plannedQty))+'</td><td>'+esc(oaUnitTotals(r.actualQty,x=>x.qty))+'</td><td class="num">'+(r.issued?(r.priced>0?money(r.cost):'₹—'):'—')+'</td><td class="num">'+(r.unpriced||'—')+'</td></tr>').join('');
-  return '<div class="oa-kpi-grid">'+oaKpi('Turf records',lines.length,'Plans and actual records')+oaKpi('Issued / applied',actual.length,actual.filter(x=>x.status==='Applied').length+' marked Applied')+oaKpi('Priced value',priced.length?money(value):'₹—',(actual.length-priced.length)+' unpriced actuals')+oaKpi('Areas active',new Set(lines.map(x=>x.area)).size,'Selected period')+'</div><section class="oa-panel"><div class="oa-panel-head"><div><small>TURF OPERATIONS</small><h3>Day-wise treatment ledger</h3><p>Daily activity and quantities grouped by stock unit.</p></div></div>'+oaTable(['Date','Records','Planned','Issued / applied','Categories','Areas','Planned qty by unit','Actual qty by unit','Priced cost*','Unpriced actuals'],body,'No turf records in this period.')+'</section><p class="oa-note-text">Costs use issued/applied records with a linked inventory item, matching unit and usable unit cost. Quantities in unlike units are kept separate.</p>';
+  const body=daily.filter(r=>r.records>0).map(r=>'<tr><td><b>'+esc(r.date)+'</b></td><td class="num">'+r.records+'</td><td class="num">'+r.planned+'</td><td class="num">'+r.issued+' / '+r.applied+' applied</td><td class="num">'+r.categories.size+'</td><td class="num">'+r.areas.size+'</td><td>'+esc(oaUnitTotals(r.planQty,x=>x.plannedQty))+'</td><td>'+esc(oaUnitTotals(r.actualQty,x=>x.qty))+'</td><td class="num">'+(r.issued?(r.priced>0?money(r.cost):'₹—'):'—')+'</td><td class="num">'+(r.unpriced||'—')+'</td></tr>').join('');
+  return '<div class="oa-kpi-grid">'+oaKpi('Turf records',lines.length,'Plans and actual records')+oaKpi('Issued / applied',actual.length,actual.filter(x=>x.status==='Applied').length+' marked Applied')+oaKpi('Priced value',priced.length?money(value):'₹—',(actual.length-priced.length)+' unpriced actuals')+oaKpi('Areas active',new Set(lines.map(x=>x.area)).size,'Selected period')+'</div><section class="oa-panel"><div class="oa-panel-head"><div><small>TURF OPERATIONS</small><h3>Day-wise treatment ledger</h3><p>Daily activity and quantities grouped by stock unit.</p></div></div>'+oaTable(['Date','Records','Planned','Issued / applied','Categories','Areas','Planned qty by unit','Actual qty by unit','Priced cost*','Unpriced actuals'],body,'No treatment records found in the selected date range. Check the date filters and source records.')+'</section><p class="oa-note-text">Costs use issued/applied records with a linked inventory item, matching unit and usable unit cost. Quantities in unlike units are kept separate.</p>';
 }
 function oaRenderTurfDimension(kind){
   const groups=oaTurfGroups(kind);
@@ -1626,11 +1628,11 @@ function openFuelModal() {
   renderFuelModal();
 }
 function renderFuelModal() {
-  const st = R.fuel, t = today(), ent = fuelIn(st.from, st.to), tot = sum(ent, 'litres'), sp = splitFuel(ent), days = daysBetween(st.from, st.to);
-  const quick = [['Today', t, t], ['Yesterday', addDays(t, -1), addDays(t, -1)], ['This month', monthStart(t), t], ['Last month', monthStart(addDays(monthStart(t), -1)), addDays(monthStart(t), -1)]].map(([l, a, b]) => { const e = fuelIn(a, b), s = splitFuel(e), c = fuelCostSummary(e); return `<div class="stat ${l === 'This month' ? 'hl' : ''}"><div class="k">${l}</div><div class="v">${fmt(sum(e, 'litres'))} <small>L</small></div><div class="t">${money(c.cost)} modeled · Diesel ${fmt(s.Diesel)} L · Petrol ${fmt(s.Petrol)} L</div></div>`; }).join('');
-  const byDay = {}; ent.forEach(f => byDay[f._d] = (byDay[f._d] || 0) + num(f.litres));
+  const st = R.fuel, t = today(), ent = fuelIn(st.from, st.to), tot = ent.reduce((total, f) => total + fuelQuantity(f), 0), sp = splitFuel(ent), days = daysBetween(st.from, st.to);
+  const quick = [['Today', t, t], ['Yesterday', addDays(t, -1), addDays(t, -1)], ['This month', monthStart(t), t], ['Last month', monthStart(addDays(monthStart(t), -1)), addDays(monthStart(t), -1)]].map(([l, a, b]) => { const e = fuelIn(a, b), s = splitFuel(e), c = fuelCostSummary(e); return `<div class="stat ${l === 'This month' ? 'hl' : ''}"><div class="k">${l}</div><div class="v">${fmt(e.reduce((total, f) => total + fuelQuantity(f), 0))} <small>L</small></div><div class="t">${money(c.cost)} modeled · Diesel ${fmt(s.Diesel)} L · Petrol ${fmt(s.Petrol)} L</div></div>`; }).join('');
+  const byDay = {}; ent.forEach(f => byDay[f._d] = (byDay[f._d] || 0) + fuelQuantity(f));
   const dayShow = days.length > 120 ? days.slice(-120) : days;
-  const mm = {}; ent.forEach(f => { const k = mKey(f.machineId); (mm[k] = mm[k] || { name: mName(f.machineId), type: fuelTypeFromRecord(f), L: 0, n: 0, H: 0, cost: 0, unpricedL: 0 }); mm[k].L += num(f.litres); mm[k].n++; const r=rateForFuelLog(f); if(r>0) mm[k].cost+=fuelLogCost(f); else mm[k].unpricedL+=num(f.litres); });
+  const mm = {}; ent.forEach(f => { const k = mKey(f.machineId); (mm[k] = mm[k] || { name: mName(f.machineId), type: fuelTypeFromRecord(f), L: 0, n: 0, H: 0, cost: 0, unpricedL: 0 }); mm[k].L += fuelQuantity(f); mm[k].n++; const r=rateForFuelLog(f); if(r>0) mm[k].cost+=fuelLogCost(f); else mm[k].unpricedL+=fuelQuantity(f); });
   shiftsIn(st.from, st.to).forEach(s => { const k = mKey(s.machineId); if (mm[k]) mm[k].H += num(s.engineHoursLogged); });
   const rows = Object.values(mm).sort((a, b) => b.L - a.L);
   const html = `<div class="stat-row">${quick}</div>${rangeBar('fuel')}
@@ -1657,7 +1659,7 @@ function runData() {
   const ensure = (id) => { const k = mKey(id), m = mx().get(id); return g[k] = g[k] || { name: mName(id), cat: m?.category || '—', ops: new Set(), n: 0, H: 0, km: 0, L: 0, live: m ? (lk.has(m.assetName) || lk.has(m.id)) : lk.has(id) }; };
   S.machines.forEach(m => ensure(m.id));
   sh.forEach(s => { const r = ensure(s.machineId); r.n++; r.H += num(s.engineHoursLogged); r.km += num(s.distanceKm); if (s.operatorName) r.ops.add(s.operatorName); });
-  fu.forEach(f => { const k = mKey(f.machineId); if (g[k]) g[k].L += num(f.litres); });
+  fu.forEach(f => { const k = mKey(f.machineId); if (g[k]) g[k].L += fuelQuantity(f); });
   const rows = Object.values(g).sort((a, b) => b.H - a.H || a.name.localeCompare(b.name));
   return { st, sh, rows };
 }
@@ -1782,9 +1784,9 @@ function openNewItemPopup({ name, qty, rate, expId, items, idx, next, pos, total
 function ledgerRows() { const st = R.ledger; return fuelIn(st.from, st.to).filter(f => (!st.machine || mKey(f.machineId) === st.machine) && (!st.type || fuelTypeFromRecord(f) === st.type)).sort(sortFuel); }
 function renderLedger(force) {
   const st = R.ledger; if (!LOADED.fuel) { setHTML($('#ledgerCard'), '<div class="skeleton" style="height:300px"></div>'); return; }
-  const rows = ledgerRows(), tot = sum(rows, 'litres'), sp = splitFuel(rows), cost = fuelCostSummary(rows);
+  const rows = ledgerRows(), tot = rows.reduce((total, f) => total + fuelQuantity(f), 0), sp = splitFuel(rows), cost = fuelCostSummary(rows);
   const html = `${rangeBar('ledger')}<div class="toolbar"><div style="width:220px"><select data-chg="lmachine" data-k="ledger">${machineOptions(st.machine)}</select></div><div style="width:160px"><select data-chg="ltype" data-k="ledger"><option value="">All fuels</option><option ${st.type === 'Diesel' ? 'selected' : ''}>Diesel</option><option ${st.type === 'Petrol' ? 'selected' : ''}>Petrol</option></select></div><div class="grow"></div><span class="badge mute">${rows.length} entries</span><span class="badge gold">${fmt(tot)} L total</span><span class="badge gold">${money(cost.cost)} modeled cost</span><span class="badge mute">${fmt(cost.coverage,0)}% priced volume</span><span class="badge mute">Diesel ${fmt(sp.Diesel)} L</span><span class="badge mute">Petrol ${fmt(sp.Petrol)} L</span></div>
-    <div class="table-wrap"><table><thead><tr><th>Date</th><th>Time</th><th>Machine</th><th>Fuel</th><th class="num">Litres</th><th class="num">Rate / L</th><th class="num">Modeled cost</th><th>Issued by</th><th>Notes</th></tr></thead><tbody>${rows.length ? rows.map(f => `<tr><td>${dLong(f._d)}</td><td class="muted">${timeOf(tsMs(f.timestamp)) || '—'}</td><td><b>${esc(f.machineName || mName(f.machineId))}</b></td><td><span class="badge ${fuelTypeFromRecord(f) === 'Petrol' ? 'warn' : 'mute'}">${esc(fuelTypeFromRecord(f))}</span></td><td class="num"><b>${fmt(num(f.litres), 2)}</b></td><td class="num">${rateForFuelLog(f)>0?money(rateForFuelLog(f),2):'—'}</td><td class="num"><b>${rateForFuelLog(f)>0?money(fuelLogCost(f)):'Unpriced'}</b></td><td class="muted">${esc(f.issuedBy || '—')}</td><td class="muted">${esc(f.notes || f.reason || '')}</td></tr>`).join('') : '<tr><td colspan="9" class="empty">No fuel issued for these filters.</td></tr>'}</tbody>${rows.length ? `<tfoot><tr><td colspan="4">Total</td><td class="num">${fmt(tot, 2)}</td><td></td><td class="num">${money(cost.cost)}</td><td colspan="2"></td></tr></tfoot>` : ''}</table></div><div class="roi-chart-note">Recorded cost uses the transaction rate when saved, otherwise the matching Fuel Inventory Master unit cost. Missing or duplicate master prices remain unpriced and are excluded from rupee totals; local assumptions are not applied.</div>`;
+    <div class="table-wrap"><table><thead><tr><th>Date</th><th>Time</th><th>Machine</th><th>Fuel</th><th class="num">Litres</th><th class="num">Rate / L</th><th class="num">Modeled cost</th><th>Issued by</th><th>Notes</th></tr></thead><tbody>${rows.length ? rows.map(f => `<tr><td>${dLong(f._d)}</td><td class="muted">${timeOf(tsMs(f.timestamp)) || '—'}</td><td><b>${esc(f.machineName || mName(f.machineId))}</b></td><td><span class="badge ${fuelTypeFromRecord(f) === 'Petrol' ? 'warn' : 'mute'}">${esc(fuelTypeFromRecord(f))}</span></td><td class="num"><b>${fmt(fuelQuantity(f), 2)}</b></td><td class="num">${rateForFuelLog(f)>0?money(rateForFuelLog(f),2):'—'}</td><td class="num"><b>${rateForFuelLog(f)>0?money(fuelLogCost(f)):'Unpriced'}</b></td><td class="muted">${esc(f.issuedBy || '—')}</td><td class="muted">${esc(f.notes || f.reason || '')}</td></tr>`).join('') : '<tr><td colspan="9" class="empty">No fuel issued for these filters.</td></tr>'}</tbody>${rows.length ? `<tfoot><tr><td colspan="4">Total</td><td class="num">${fmt(tot, 2)}</td><td></td><td class="num">${money(cost.cost)}</td><td colspan="2"></td></tr></tfoot>` : ''}</table></div><div class="roi-chart-note">Recorded cost uses the transaction rate when saved, otherwise the matching Fuel Inventory Master unit cost. Missing or duplicate master prices remain unpriced and are excluded from rupee totals; local assumptions are not applied.</div>`;
   if (force) $('#ledgerCard')._h = null; setHTML($('#ledgerCard'), html);
 }
 
@@ -2870,8 +2872,8 @@ const H = {
   'group-tab': d => switchView(d.v),
   'map-mode': d => switchView(d.mode),
   'drawer-route': d => drawerRoute(d.id), 'view-path': d => showShiftPathMap(d.sid, d.mname), 'drawer-fuel': d => { const m=mx().get(d.id); if(!m)return; openOpsAnalytics('fuel',m.id); OA.view='transactions'; renderOpsAnalytics(); },
-  'export-fuel': () => { const st = R.fuel; downloadCSV(`fuel_${st.from}_to_${st.to}.csv`, [['Date', 'Machine', 'Fuel type', 'Litres', 'Rate / L', 'Modeled cost', 'Pricing source', 'Notes'], ...fuelIn(st.from, st.to).sort(sortFuel).map(f => [f._d, mName(f.machineId), fuelTypeFromRecord(f), num(f.litres), rateForFuelLog(f)||'', rateForFuelLog(f)>0?fuelLogCost(f):'', num(f.ratePerLitre ?? f.fuelRate ?? f.unitPrice ?? f.pricePerLitre)>0?'Transaction rate':rateForFuelLog(f)>0?'Inventory Master rate':'Unpriced', f.notes || ''])]); },
-  'export-ledger': () => { const st = R.ledger; downloadCSV(`fuel_ledger_${st.from}_to_${st.to}.csv`, [['Date', 'Machine', 'Fuel type', 'Litres', 'Rate / L', 'Modeled cost', 'Pricing source', 'Notes'], ...ledgerRows().map(f => [f._d, mName(f.machineId), fuelTypeFromRecord(f), num(f.litres), rateForFuelLog(f)||'', rateForFuelLog(f)>0?fuelLogCost(f):'', num(f.ratePerLitre ?? f.fuelRate ?? f.unitPrice ?? f.pricePerLitre)>0?'Transaction rate':rateForFuelLog(f)>0?'Inventory Master rate':'Unpriced', f.notes || ''])]); },
+  'export-fuel': () => { const st = R.fuel; downloadCSV(`fuel_${st.from}_to_${st.to}.csv`, [['Date', 'Machine', 'Fuel type', 'Litres', 'Rate / L', 'Modeled cost', 'Pricing source', 'Notes'], ...fuelIn(st.from, st.to).sort(sortFuel).map(f => [f._d, mName(f.machineId), fuelTypeFromRecord(f), fuelQuantity(f), rateForFuelLog(f)||'', rateForFuelLog(f)>0?fuelLogCost(f):'', num(f.ratePerLitre ?? f.fuelRate ?? f.unitPrice ?? f.pricePerLitre)>0?'Transaction rate':rateForFuelLog(f)>0?'Inventory Master rate':'Unpriced', f.notes || ''])]); },
+  'export-ledger': () => { const st = R.ledger; downloadCSV(`fuel_ledger_${st.from}_to_${st.to}.csv`, [['Date', 'Machine', 'Fuel type', 'Litres', 'Rate / L', 'Modeled cost', 'Pricing source', 'Notes'], ...ledgerRows().map(f => [f._d, mName(f.machineId), fuelTypeFromRecord(f), fuelQuantity(f), rateForFuelLog(f)||'', rateForFuelLog(f)>0?fuelLogCost(f):'', num(f.ratePerLitre ?? f.fuelRate ?? f.unitPrice ?? f.pricePerLitre)>0?'Transaction rate':rateForFuelLog(f)>0?'Inventory Master rate':'Unpriced', f.notes || ''])]); },
   'export-shifts': () => { const st = R.shifts; downloadCSV(`shifts_${st.from}_to_${st.to}.csv`, [['Date', 'Operator', 'Machine', 'Distance km', 'Engine hours'], ...shiftRows().map(s => [s._d, s.operatorName || '', mName(s.machineId), num(s.distanceKm), num(s.engineHoursLogged)])]); },
   'export-run': () => { const { st, rows } = runData(); downloadCSV(`running_hours_${st.from}_to_${st.to}.csv`, [['Machine', 'Category', 'Operators', 'Shifts', 'Run hours', 'Distance km', 'Fuel L', 'L/hr'], ...rows.map(r => [r.name, r.cat, [...r.ops].join('; '), r.n, +r.H.toFixed(2), +r.km.toFixed(2), +r.L.toFixed(2), r.H && r.L ? +(r.L / r.H).toFixed(2) : ''])]); },
   'add-inward': () => openInward(),
