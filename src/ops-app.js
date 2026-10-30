@@ -1166,26 +1166,35 @@ function batchMasterRow(type, i) {
 function batchMasterAllowed(type){openBatchMaster(type);}
 function openBatchMaster(type) {
   const cfg = {
-    machines:{title:'Batch add machines',desc:'Existing machines are shown for reference. Add new machines in the blank rows below.',heads:['Asset name','Category','Fuel','Current hours','Last serviced hrs']},
-    inventory:{title:'Batch add inventory masters',desc:'Existing SKUs are shown for reference. Opening stock is the initial master quantity, not a goods receipt.',heads:['Part / product','Category','Unit','Opening stock','Unit cost ₹']},
-    users:{title:'Batch add workforce',desc:'Existing profiles are shown for reference. This creates Firestore workforce profiles only, not Firebase Authentication accounts.',heads:['Full name','Mobile','Role']}
+    machines:{heads:['Asset name','Category','Fuel','Current hours','Last serviced hrs']},
+    inventory:{heads:['Part / product','Category','Unit','Opening stock','Unit cost ₹']},
+    users:{heads:['Full name','Mobile','Role']}
   }[type];
   const existing = type==='machines' ? S.machines : type==='inventory' ? S.inventory : S.users;
   const existingRows = existing.map(x=> type==='machines' ? [x.assetName,x.category,x.fuelType,x.currentHours] : type==='inventory' ? [itemName(x),x.category,x.unit,x.stockQuantity,x.unitCost] : [x.fullName||x.username,x.mobileNumber,x.role]).map(row=>'<tr>'+row.map(v=>'<td>'+esc(v??'')+'</td>').join('')+'</tr>').join('');
-  const grid = '<div class="table-wrap" style="max-height:32vh;overflow:auto"><table><thead><tr>'+cfg.heads.map(h=>'<th>'+h+'</th>').join('')+'</tr></thead><tbody>'+(existingRows||'<tr><td colspan="'+cfg.heads.length+'" class="muted">No existing records</td></tr>')+'</tbody></table></div><div style="display:flex;justify-content:space-between;align-items:center;margin:14px 0 6px"><b>New rows</b><button type="button" class="btn btn-sm" id="bmAddRow">+ Add 5 rows</button></div><div class="table-wrap"><table><thead><tr>'+cfg.heads.map(h=>'<th>'+h+'</th>').join('')+'</tr></thead><tbody id="bmRows">'+Array.from({length:5},(_,i)=>batchMasterRow(type,i)).join('')+'</tbody></table></div>'+(type==='inventory'?'<datalist id="bm-units"><option>Nos</option><option>Kg</option><option>Litre</option><option>Gram</option><option>ML</option><option>Bag</option><option>Pack</option></datalist>':'')+'<p class="muted sm">Blank rows are ignored. Only completed rows are saved.</p>';
-  openForm({title:cfg.title,submit:'Save all new rows',size:'xl',html:'<p class="muted sm">'+cfg.desc+'</p>'+grid,onSubmit:async()=>{
-    const rows=$('#bmRows [data-bm-row]'), parsed=[]; let invalid=false;
-    rows.forEach((r,idx)=>{
-      const val=c=>r.querySelector('.bm-'+c)?.value?.trim()||'';
+  const target = type==='machines' ? $('#v-fleet .toolbar') : type==='inventory' ? $('#v-registry .toolbar') : $('#usersTbl');
+  if(!target)return;
+  const old=$('#batchMasterInline'); if(old)old.remove();
+  const panel=document.createElement('section'); panel.id='batchMasterInline'; panel.style.cssText='width:100%;max-width:none;margin:0;padding:0;box-sizing:border-box;overflow:hidden;';
+  const existingBlock='<details style="margin:0 0 6px"><summary class="muted sm" style="cursor:pointer;padding:3px 0">Existing records · '+existing.length+'</summary><div class="table-wrap" style="max-height:22vh;overflow:auto"><table><thead><tr>'+cfg.heads.map(h=>'<th>'+h+'</th>').join('')+'</tr></thead><tbody>'+(existingRows||'<tr><td colspan="'+cfg.heads.length+'" class="muted">No existing records</td></tr>')+'</tbody></table></div></details>';
+  const grid='<div class="table-wrap" style="width:100%;max-height:62vh;overflow:auto;margin:0"><table style="width:100%;table-layout:fixed;margin:0"><thead><tr>'+cfg.heads.map(h=>'<th style="padding:6px 8px">'+h+'</th>').join('')+'</tr></thead><tbody id="bmRows">'+Array.from({length:5},(_,i)=>batchMasterRow(type,i)).join('')+'</tbody></table></div>'+(type==='inventory'?'<datalist id="bm-units"><option>Nos</option><option>Kg</option><option>Litre</option><option>Gram</option><option>ML</option><option>Bag</option><option>Pack</option></datalist>':'');
+  panel.innerHTML=existingBlock+grid+'<div style="display:flex;align-items:center;justify-content:flex-end;gap:8px;margin:6px 0 0;padding:0"><button type="button" class="btn btn-sm" id="bmAddRow">+5 rows</button><button type="button" class="btn btn-sm" id="bmCancel">Cancel</button><button type="button" class="btn btn-primary btn-sm" id="bmSave">Save rows</button></div>';
+  if(type==='users')target.prepend(panel); else target.insertAdjacentElement('afterend',panel);
+  panel.querySelectorAll('input,select').forEach(el=>{el.style.minWidth='0';el.style.width='100%';el.style.boxSizing='border-box';});
+  const save=async()=>{
+    const rows=panel.querySelectorAll('#bmRows [data-bm-row]'), parsed=[]; let invalid=false;
+    rows.forEach(r=>{
+      const val=k=>r.querySelector('.bm-'+k)?.value?.trim()||'';
       const name=val('name'); if(!name)return;
       if(type==='machines') parsed.push({name,category:val('category'),fuel:val('fuel'),hours:num(val('hours')),last:val('last')});
       else if(type==='inventory') {const unit=val('unit');if(!unit){invalid=true;return;}parsed.push({name,category:val('category'),unit,stock:num(val('stock')),cost:num(val('cost'))});}
-      else {const mobile=normMobile(val('mobile'));if(!/^\+\d{10,14}$/.test(mobile)){invalid=true;return;}parsed.push({name,mobile,role:val('role')});}
+      else {const mobile=normMobile(val('mobile'));if(!/^\\+\\d{10,14}$/.test(mobile)){invalid=true;return;}parsed.push({name,mobile,role:val('role')});}
     });
-    if(invalid){toast(type==='users'?'Check mobile numbers. Use a valid country code or 10-digit number.':'Every inventory row needs a unit of measure.','err');return false;}
-    if(!parsed.length){toast('Enter at least one complete row.','warn');return false;}
+    if(invalid){toast(type==='users'?'Check mobile numbers. Use a valid country code or 10-digit number.':'Every inventory row needs a unit of measure.','err');return;}
+    if(!parsed.length){toast('Enter at least one complete row.','warn');return;}
     const seen=new Set(), existingKeys=new Set(type==='machines'?S.machines.map(x=>String(x.assetName||'').toLowerCase()):type==='inventory'?S.inventory.map(x=>String(itemName(x)).toLowerCase()):S.users.map(x=>String(x.mobileNumber||'')));
-    for(const x of parsed){const key=type==='machines'||type==='inventory'?x.name.toLowerCase():x.mobile;if(seen.has(key)||existingKeys.has(key)){toast('Duplicate '+(type==='users'?'mobile number':'name')+': '+key,'err');return false;}seen.add(key);}
+    for(const x of parsed){const key=type==='machines'||type==='inventory'?x.name.toLowerCase():x.mobile;if(seen.has(key)||existingKeys.has(key)){toast('Duplicate '+(type==='users'?'mobile number':'name')+': '+key,'err');return;}seen.add(key);}
+    if(parsed.length>450){toast('Save up to 450 rows at a time.','err');return;}
     const batch=writeBatch(db);
     parsed.forEach(x=>{
       const ref=doc(collection(db,CONFIG.COL[type]));
@@ -1193,11 +1202,15 @@ function openBatchMaster(type) {
       else if(type==='inventory') batch.set(ref,{partName:x.name,category:x.category,unit:x.unit,stockQuantity:Math.max(0,x.stock),reorderLevel:0,unitCost:Math.max(0,x.cost)});
       else batch.set(ref,{fullName:x.name,username:x.name,mobileNumber:x.mobile,role:x.role});
     });
-    await batch.commit();toast(parsed.length+' '+(type==='machines'?'machines':type==='inventory'?'inventory masters':'workforce profiles')+' added.');
-  }});
-  $('#bmAddRow')?.addEventListener('click',()=>$('#bmRows').insertAdjacentHTML('beforeend',Array.from({length:5},(_,i)=>batchMasterRow(type,$('#bmRows [data-bm-row]').length+i)).join('')));
+    const btn=panel.querySelector('#bmSave');btn.disabled=true;
+    try{await batch.commit();toast(parsed.length+' '+(type==='machines'?'machines':type==='inventory'?'inventory masters':'workforce profiles')+' added.');panel.remove();}
+    finally{if(btn.isConnected)btn.disabled=false;}
+  };
+  panel.querySelector('#bmSave').addEventListener('click',save);
+  panel.querySelector('#bmCancel').addEventListener('click',()=>panel.remove());
+  panel.querySelector('#bmAddRow').addEventListener('click',()=>{const body=panel.querySelector('#bmRows');body.insertAdjacentHTML('beforeend',Array.from({length:5},(_,i)=>batchMasterRow(type,body.querySelectorAll('[data-bm-row]').length+i)).join(''));panel.querySelectorAll('input,select').forEach(el=>{el.style.minWidth='0';el.style.width='100%';el.style.boxSizing='border-box';});});
+  panel.scrollIntoView({block:'nearest',behavior:'smooth'});
 }
-
 function machineForm(m) {
   const edit = !!m, cats = MACHINE_CATEGORIES;
   openForm({
