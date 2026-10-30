@@ -72,6 +72,21 @@ function fuelRecordDate(f) {
   const dateValue = f && (f.issueDate ?? f.issuedDate ?? f.date ?? f.transactionDate ?? f.createdDate);
   return normDate(dateValue, f && (f.issuedAt ?? f.issueTimestamp ?? f.timestamp ?? f.createdAt ?? f.createdOn ?? f.updatedAt ?? f.recordedAt));
 }
+/**
+ * Fuel inventory is maintained as opening stock + goods receipts in stockQuantity.
+ * Fuel issue documents are the consumption ledger. Derive available stock from both
+ * sources in one place; do not decrement stockQuantity again when a fuel log is written.
+ */
+const fuelIssueQuantity = f => Math.max(0, num(f && (f.litres ?? f.quantity ?? f.qty ?? f.fuelLitres ?? f.fuelQuantity)));
+function inventoryOnHand(item) {
+  const baseline = Math.max(0, num(item && item.stockQuantity));
+  if (String(item && item.category || '').trim().toLowerCase() !== 'fuel') return baseline;
+  const type = canonicalFuelType(itemName(item));
+  if (!type) return baseline;
+  const issued = (S.fuel || []).reduce((sum, record) =>
+    fuelTypeFromRecord(record) === type ? sum + fuelIssueQuantity(record) : sum, 0);
+  return Math.max(0, baseline - issued);
+}
 const fuelIn = (a, b) => S.fuel.filter(f => { const d = fuelRecordDate(f); return d && d >= a && d <= b; });
 const shiftsIn = (a, b) => S.shifts.filter(s => s._d && s._d >= a && s._d <= b);
 const litresFor = (m, a, b) => S.fuel.reduce((t, f) => { const d=fuelRecordDate(f); return (d >= a && d <= b && (f.machineId === m.id || f.machineId === m.assetName)) ? t + num(f.litres ?? f.quantity ?? f.qty) : t; }, 0);
@@ -574,7 +589,7 @@ function renderOverview() {
   if (outside) outside.innerHTML = !LOADED.plans ? 'Waiting for turf records' : outsidePlan.length ? outsidePlan.slice(0,5).map(p=>`<div class="ops-unplanned-row"><b>${esc(turfRecordProductName(p)||'Unnamed product')}</b><span>${esc(turfRecordDate(p)||'Date missing')} · ${fmt(turfRecordQuantity(p),2)} ${esc(unitLabel(p))}</span></div>`).join('') + (outsidePlan.length>5?`<small>+${outsidePlan.length-5} more</small>`:'') : '<span class="ops-no-unplanned">No unplanned issues detected in the current month.</span>';
 
   setHTML($('#opsFuelTrend'), barChart(days.map(d=>({label:dShort(d),value:litresByDay[d]||0})), {unit:'L'}));
-  const fuelMasterMatches = type => S.inventory.filter(i => itemName(i).trim().toLowerCase() === type.toLowerCase());
+  const fuelMasterMatches = type => S.inventory.filter(i => String(i.category || '').trim().toLowerCase() === 'fuel' && canonicalFuelType(itemName(i)) === type);
   const fuelMasterMarkup = ['Diesel','Petrol'].map(type => {
     const matches = fuelMasterMatches(type);
     const issued = fuelIssuedMTD[type] || 0;
@@ -1141,14 +1156,14 @@ const itemName = i => i.partName || i.itemName || 'Unnamed item';
 const inventoryCategoryOpen = new Set();
 function inventoryRowsMarkup(items) {
   return `<div class="table-wrap inv-category-table"><table><thead><tr><th>Item name</th><th>Unit</th><th class="num">On hand</th><th class="num">Auto reorder at</th><th class="num">Last unit rate</th><th class="num">Stock value</th><th>Status</th><th></th></tr></thead><tbody>${items.length ? items.map(i=>{
-    const qty=num(i.stockQuantity), reorder=effectiveReorderLevel(i), policy=autoReorderDetails(i), low=qty<=reorder;
+    const qty=inventoryOnHand(i), reorder=effectiveReorderLevel(i), policy=autoReorderDetails(i), low=qty<=reorder;
     return `<tr><td><b>${esc(itemName(i))}</b></td><td>${esc(i.unit||'Unit not set')}</td><td class="num"><b>${fmt(qty,3)}</b></td><td class="num"><b>${fmt(reorder,3)}</b><div class="muted sm">${policy.reliable?'Trend-based':'Provisional floor'}</div></td><td class="num">${num(i.unitCost)?money(i.unitCost,2):'—'}</td><td class="num">${money(qty*num(i.unitCost),2)}</td><td><span class="badge ${low?'warn':'ok'}">${low?'Reorder':'In stock'}</span></td><td><button class="btn btn-sm" data-act="edit-part" data-id="${esc(i.id)}">Edit</button></td></tr>`;
   }).join(''):'<tr><td colspan="8" class="empty">No items in this category.</td></tr>'}</tbody></table></div>`;
 }
 function renderRegistry() {
   const items=S.inventory.slice();
-  const low=items.filter(i=>num(i.stockQuantity)<=effectiveReorderLevel(i)).length;
-  const total=items.reduce((v,i)=>v+Math.max(0,num(i.stockQuantity))*Math.max(0,num(i.unitCost)),0);
+  const low=items.filter(i=>inventoryOnHand(i)<=effectiveReorderLevel(i)).length;
+  const total=items.reduce((v,i)=>v+inventoryOnHand(i)*Math.max(0,num(i.unitCost)),0);
   setHTML($('#storeKpis'), `<div class="kpi"><div class="kpi-label">SKUs</div><div class="kpi-value">${items.length}</div></div><div class="kpi"><div class="kpi-label">Low stock</div><div class="kpi-value">${low}</div></div><div class="kpi"><div class="kpi-label">Stock value (recorded rates)</div><div class="kpi-value">${money(total)}</div></div><div class="kpi"><div class="kpi-label">Goods receipts</div><div class="kpi-value">${S.inwards.length}</div></div>`);
 
   if (!LOADED.inventory) {
@@ -1166,8 +1181,8 @@ function renderRegistry() {
       return ra-rb || a.localeCompare(b);
     });
     const markup = cats.map(cat=>{
-      const rows=groups.get(cat), lowRows=rows.filter(i=>num(i.stockQuantity)<=effectiveReorderLevel(i));
-      const value=rows.reduce((v,i)=>v+Math.max(0,num(i.stockQuantity))*Math.max(0,num(i.unitCost)),0);
+      const rows=groups.get(cat), lowRows=rows.filter(i=>inventoryOnHand(i)<=effectiveReorderLevel(i));
+      const value=rows.reduce((v,i)=>v+inventoryOnHand(i)*Math.max(0,num(i.unitCost)),0);
       const isOpen=inventoryCategoryOpen.has(cat);
       return `<details class="inv-category" data-inv-category="${esc(cat)}" ${isOpen?'open':''}><summary><span class="inv-cat-icon material-symbols-rounded">${cat==='Fuel'?'local_gas_station':cat==='Fertilizers'?'spa':cat==='Pesticides'?'pest_control':cat==='Turf Enhancements'?'eco':cat==='Spare Parts'?'build':cat==='Tools'?'handyman':'inventory_2'}</span><span class="inv-cat-main"><b>${esc(cat)}</b><small>${rows.length} item${rows.length===1?'':'s'} · ${money(value)} recorded stock value</small></span><span class="inv-cat-alert ${lowRows.length?'warn':''}">${lowRows.length?`${lowRows.length} reorder`:'Stock OK'}</span><span class="inv-cat-chevron material-symbols-rounded">expand_more</span></summary><div class="inv-category-body">${isOpen?inventoryRowsMarkup(rows):'<div class="inv-category-placeholder">Expand to view items in this category</div>'}</div></details>`;
     }).join('');
