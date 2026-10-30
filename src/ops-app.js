@@ -895,7 +895,7 @@ function turfCostLine(p) {
   const unit = String(p.unit ?? p.stockUnit ?? p.uom ?? p.unitOfMeasure ?? stockUnit ?? '').trim();
   const unitMatches = !!(unit && stockUnit && unit.toLowerCase() === stockUnit.toLowerCase());
   const rate = product ? Math.max(0, num(product.unitCost ?? product.unitRate ?? product.costPerUnit ?? product.rate)) : 0;
-  const qty = Math.max(0, turfRecordQuantity(p));
+  const qty = status === 'Planned' ? Math.max(0, turfRecordQuantity(p)) : turfActualIssueQuantity(p);
   const rateUsable = !!(product && rate > 0 && unitMatches);
   const cost = ['Applied','Issued'].includes(status) && rateUsable ? qty * rate : null;
   let source = !product ? 'Product not linked to Inventory Master' : !unitMatches ? 'Unit missing or mismatch' : rate <= 0 ? 'Product unit cost not set' : 'Inventory Master';
@@ -3215,6 +3215,25 @@ function turfRecordProductName(plan) {
 function turfRecordQuantity(plan) {
   return num(plan && (plan.actualQty ?? plan.appliedQty ?? plan.applicationQty ?? plan.issuedQty ?? plan.issuedQuantity ?? plan.issueQty ?? plan.issueQuantity ?? plan.quantityIssued ?? plan.qtyIssued ?? plan.quantityOut ?? plan.qtyOut ?? plan.quantityUsed ?? plan.usedQuantity ?? plan.qtyUsed ?? plan.dispensedQty ?? plan.quantity ?? plan.qty ?? plan.targetQty ?? plan.plannedQty ?? plan.requestedQty));
 }
+// Actual consumption is deliberately separate from plan quantity. A scheduled targetQty
+// must never appear as stock issued unless an actual issue/application status exists.
+function turfActualIssueQuantity(record) {
+  if (!record || !['Issued','Applied'].includes(turfRecordStatus(record))) return 0;
+  const keys = ['issuedQty','issuedQuantity','issueQty','issueQuantity','quantityIssued','qtyIssued','quantityOut','qtyOut','actualQty','appliedQty','applicationQty','quantityUsed','usedQuantity','qtyUsed','dispensedQty'];
+  for (const key of keys) {
+    const value = record[key];
+    if (value !== undefined && value !== null && value !== '' && Number.isFinite(Number(value))) return Math.max(0, Number(value));
+  }
+  // Compatibility for older completed records that only retained targetQty/plannedQty.
+  for (const key of ['targetQty','plannedQty','requestedQty','quantity','qty']) {
+    const value = record[key];
+    if (value !== undefined && value !== null && value !== '' && Number.isFinite(Number(value))) return Math.max(0, Number(value));
+  }
+  return 0;
+}
+function turfDisplayQuantity(record) {
+  return turfRecordStatus(record) === 'Planned' ? turfRecordQuantity(record) : turfActualIssueQuantity(record);
+}
 function turfRecordStatus(plan) {
   const raw = String(plan && (plan.status ?? plan.applicationStatus ?? plan.issueStatus ?? plan.transactionType ?? plan.movementType ?? plan.recordType ?? plan.entryType ?? plan.logType ?? plan.actionType ?? plan.state ?? plan.action) || 'Planned').trim().toLowerCase().replace(/[_-]+/g, ' ');
   if (/\bnot applied\b|\bpending\b|\bplanned\b|\bscheduled\b/.test(raw)) return 'Planned';
@@ -3225,11 +3244,15 @@ function turfRecordStatus(plan) {
 }
 function isUnplannedMaterialIssue(record) {
   if (!record) return false;
+  const source = String(record.issueSource || '').trim().toLowerCase().replace(/[\s-]+/g, '_');
   const issueType = String(record.issueType || '').trim().toUpperCase().replace(/[\s-]+/g, '_');
-  if (issueType === 'UNPLANNED' || record.isAdHoc === true) return true;
-  if (issueType === 'PLANNED' || record.isAdHoc === false) return false;
+  const id = String(record.issueId || record.id || '').trim();
+  // Canonical Android contract takes precedence over historical heuristics.
+  if (source === 'unplanned' || issueType === 'UNPLANNED' || record.isAdHoc === true || /^ADHOC_/i.test(id)) return true;
+  if (source === 'planned' || issueType === 'PLANNED' || record.isAdHoc === false) return false;
   if (record.unplanned === true || record.isUnplanned === true || record.wasPlanned === false || record.fromPlan === false || record.planned === false) return true;
-  return /manual|unplanned|ad[\s-]?hoc|out[\s-]?of[\s-]?plan/i.test(String(record.source || record.sourceType || record.issueSource || record.issueCategory || ''));
+  if (record.planId != null && String(record.planId).trim()) return false;
+  return /manual|unplanned|ad[\s-]?hoc|out[\s-]?of[\s-]?plan/i.test(String(record.source || record.sourceType || record.issueCategory || ''));
 }
 function turfProductForPlan(plan) {
   if (!plan) return null;
@@ -3264,13 +3287,15 @@ function turfRecordTimestamp(record) {
   return tsMs(record && (record.issuedAt ?? record.issueTimestamp ?? record.appliedAt ?? record.completedAt ?? record.timestamp ?? record.createdAt ?? record.createdTime));
 }
 function turfRecordIdentity(record) {
-  const id = String(record && (record.planId ?? record.id) || '').trim();
-  return id ? 'plan:' + id : [
+  const id = String(record && (record.issueId ?? record.planId ?? record.id) || '').trim();
+  if (id) return 'record:' + id;
+  return [
     turfRecordDate(record),
     String(record && (record.partId ?? record.productId ?? record.itemId) || '').trim(),
     normItemName(turfRecordProductName(record)),
-    String(turfRecordQuantity(record)),
-    String(record && (record.targetZoneOrMachine ?? record.targetArea ?? record.area) || '').trim().toLowerCase()
+    String(turfDisplayQuantity(record)),
+    String(record && (record.targetZoneOrMachine ?? record.targetArea ?? record.area) || '').trim().toLowerCase(),
+    isUnplannedMaterialIssue(record) ? 'unplanned' : 'planned'
   ].join('|');
 }
 function turfPlanSourcesLoaded() {
@@ -3373,6 +3398,44 @@ function renderTurfCategoryCards(targetId, products) {
     return `<button class="turf-stock-category ${cat.cls}" data-act="turf-category-products" data-category="${esc(cat.label)}"><span class="turf-stock-cat-icon"><span class="material-symbols-rounded">${cat.icon}</span></span><span class="turf-stock-cat-main"><b>${esc(cat.label === 'Turf Enhancements' ? 'Turf enhancers' : cat.label)}</b><span>${items.length} product${items.length===1?'':'s'}</span></span><span class="turf-stock-cat-alert ${low.length?'warn':''}">${low.length} low</span></button>`;
   }).join(''));
 }
+function renderTurfAreaConsumption() {
+  const target = $('#turfAreaConsumptionTbl');
+  if (!target) return;
+  const areas = ['Greens','Fairways','Roughs','Nursery','Driving Range','Tees','Clubhouse','Other / Unassigned'];
+  const canonicalArea = value => {
+    const raw = String(value || '').trim();
+    const key = raw.toLowerCase().replace(/\s+/g,' ');
+    const aliases = { 'fairway':'Fairways','fairways':'Fairways','green':'Greens','greens':'Greens','rough':'Roughs','roughs':'Roughs','driving range':'Driving Range','nursery':'Nursery','tees':'Tees','clubhouse':'Clubhouse' };
+    return aliases[key] || (raw ? raw : 'Other / Unassigned');
+  };
+  const totals = new Map();
+  const records = allTurfPlanRecords().filter(p => isTurfCategory(turfPlanCategory(p)) &&
+    ['Issued','Applied'].includes(turfRecordStatus(p)) && turfActualIssueQuantity(p) > 0);
+  records.forEach(record => {
+    const area = canonicalArea(record.area || record.targetArea || record.targetZoneOrMachine || record.location);
+    const unit = String(record.unit || record.stockUnit || record.uom || record.unitOfMeasure || turfProductForPlan(record)?.unit || 'Unit not set').trim();
+    const key = area + '|' + unit.toLowerCase();
+    if (!totals.has(key)) totals.set(key,{area,unit,planned:0,unplanned:0,plannedCount:0,unplannedCount:0});
+    const row = totals.get(key), qty = turfActualIssueQuantity(record);
+    if (isUnplannedMaterialIssue(record)) { row.unplanned += qty; row.unplannedCount++; }
+    else { row.planned += qty; row.plannedCount++; }
+  });
+  const sorted = [...totals.values()].sort((a,b) => {
+    const ai=areas.indexOf(a.area),bi=areas.indexOf(b.area);
+    return (ai<0?areas.length:ai)-(bi<0?areas.length:bi) || a.area.localeCompare(b.area) || a.unit.localeCompare(b.unit);
+  });
+  const totalsByArea = new Map();
+  sorted.forEach(row => {
+    if (!totalsByArea.has(row.area)) totalsByArea.set(row.area,{planned:0,unplanned:0,plannedCount:0,unplannedCount:0,units:new Set()});
+    const t=totalsByArea.get(row.area); t.planned+=row.planned; t.unplanned+=row.unplanned;
+    t.plannedCount+=row.plannedCount; t.unplannedCount+=row.unplannedCount; t.units.add(row.unit);
+  });
+  const totalRecords = records.length;
+  const body = sorted.length ? sorted.map(row => `<tr><td><b>${esc(row.area)}</b></td><td>${esc(row.unit)}</td><td class="num">${fmt(row.planned,2)} <span class="muted sm">(${row.plannedCount})</span></td><td class="num">${fmt(row.unplanned,2)} <span class="muted sm">(${row.unplannedCount})</span></td><td class="num"><b>${fmt(row.planned+row.unplanned,2)}</b></td></tr>`).join('') : '<tr><td colspan="5" class="empty">No actual chemical or fertilizer issues recorded yet.</td></tr>';
+  const summary = [...totalsByArea.entries()].map(([area,t]) => `<span class="turf-count-pill">${esc(area)} · ${fmt(t.planned+t.unplanned,2)} across ${t.units.size} unit(s)</span>`).join('');
+  target.innerHTML = `<div class="turf-area-summary">${summary}</div><div class="muted sm" style="margin:8px 0 12px">Actual issued/applied quantities only · ${totalRecords} records · planned and unplanned shown separately · quantities stay split by unit.</div><div class="table-wrap"><table><thead><tr><th>Course area</th><th>Unit</th><th class="num">Planned issues</th><th class="num">Unplanned issues</th><th class="num">Total actual</th></tr></thead><tbody>${body}</tbody></table></div>`;
+}
+
 function renderTurfApplications() {
   const target = $('#turfApplicationsTbl');
   if (!target) return;
@@ -3387,9 +3450,10 @@ function renderTurfApplications() {
   }).sort((a,b) => turfRecordDate(b).localeCompare(turfRecordDate(a)) || tsMs(b.createdAt ?? b.timestamp)-tsMs(a.createdAt ?? a.timestamp));
   const count = $('#turfApplicationCount');
   if (count) count.textContent = `${rows.length} record${rows.length===1?'':'s'}`;
-  setHTML(target, `<table><thead><tr><th>Date</th><th>Category</th><th>Product</th><th class="num">Quantity</th><th>Treated area</th><th>Status</th><th>Notes</th></tr></thead><tbody>${!LOADED.plans ? '<tr><td colspan="7">Loading application records…</td></tr>' : rows.length ? rows.map(p => {
+  setHTML(target, `<table><thead><tr><th>Date</th><th>Category</th><th>Product</th><th class="num">Quantity</th><th>Treated area</th><th>Status</th><th>Notes</th></tr></thead><tbody>${!turfPlanSourcesLoaded() ? '<tr><td colspan="7">Loading application records…</td></tr>' : rows.length ? rows.map(p => {
     const category = turfPlanCategory(p), status = turfRecordStatus(p);
-    return `<tr><td>${esc(turfRecordDate(p) || '—')}<div class="muted sm">${p.createdAt ? 'Entered '+esc(dShort(normDate(null,p.createdAt))) : ''}</div></td><td><span class="badge ${turfCategoryClass(category)}">${esc(category)}</span></td><td><b>${esc(turfRecordProductName(p) || 'Unspecified product')}</b></td><td class="num">${fmt(turfRecordQuantity(p),2)} ${esc(p.unit || p.stockUnit || '')}</td><td>${esc(p.targetArea || p.area || p.location || 'Course')}</td><td><span class="badge ${status==='Applied'?'ok':status==='Issued'?'gold':'warn'}">${status}</span></td><td class="muted">${esc(p.notes || p.reason || '—')}</td></tr>`;
+    const quantity = turfDisplayQuantity(p);
+    return `<tr><td>${esc(turfRecordDate(p) || '—')}<div class="muted sm">${p.createdAt ? 'Entered '+esc(dShort(normDate(null,p.createdAt))) : ''}</div></td><td><span class="badge ${turfCategoryClass(category)}">${esc(category)}</span></td><td><b>${esc(turfRecordProductName(p) || 'Unspecified product')}</b></td><td class="num">${fmt(quantity,2)} ${esc(p.unit || p.stockUnit || '')}</td><td>${esc(p.targetArea || p.area || p.location || 'Course')}</td><td><span class="badge ${status==='Applied'?'ok':status==='Issued'?'gold':'warn'}">${status}</span></td><td class="muted">${esc(p.notes || p.reason || '—')}</td></tr>`;
   }).join('') : '<tr><td colspan="7" class="empty">No application records match these filters.</td></tr>'}</tbody></table>`);
 }
 
@@ -3433,7 +3497,7 @@ function renderTurfUnplannedIssues() {
         '</td><td><code>'+esc(reference)+'</code><div class="muted sm">'+esc(p.issueType || (p.isAdHoc===true?'UNPLANNED':'Legacy unplanned'))+'</div></td>'+
         '<td><span class="badge '+turfCategoryClass(category)+'">'+esc(category)+'</span></td>'+
         '<td><b>'+esc(turfRecordProductName(p) || 'Unspecified material')+'</b><div class="muted sm">'+esc(p.productId || p.itemId || p.inventoryId || '')+'</div></td>'+
-        '<td class="num"><b>'+fmt(turfRecordQuantity(p),2)+'</b> '+esc(unit)+'</td>'+
+        '<td class="num"><b>'+fmt(turfActualIssueQuantity(p),2)+'</b> '+esc(unit)+'</td>'+
         '<td>'+esc(p.targetZoneOrMachine || p.targetArea || p.area || p.location || 'Unassigned')+'</td>'+
         '<td>'+esc(issuer)+'</td><td><span class="badge '+(status==='Issued'?'gold':status==='Applied'?'ok':'mute')+'">'+esc(status)+'</span></td>'+
         '<td class="muted">'+esc(notes)+'</td></tr>';
@@ -3588,6 +3652,7 @@ function renderTurfCare() {
     return `<div class="turf-attention-row"><span class="turf-attention-indicator ${overdue?'late':turfCategoryClass(cat)}"></span><div class="turf-attention-main"><b>${esc(turfRecordProductName(p) || 'Unspecified product')}</b><span>${esc(cat)} · ${esc(p.targetArea || p.area || p.location || 'Course')}</span><small>${esc(turfRecordDate(p))} · ${fmt(turfRecordQuantity(p),2)} ${esc(p.unit || p.stockUnit || 'units')}</small></div><span class="badge ${overdue?'bad':'warn'}">${overdue?'Overdue':'Planned'}</span></div>`;
   }).join('') : '<div class="turf-empty-state"><span class="material-symbols-rounded">task_alt</span><b>Nothing overdue</b><span>No uncompleted plans need attention.</span></div>');
 
+  renderTurfAreaConsumption();
   renderTurfCategoryCards('#turfStockCategoryCards', turfItems);
   renderTurfCategoryCards('#turfStockCategoryCardsExpanded', turfItems);
 
