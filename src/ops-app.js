@@ -1163,7 +1163,7 @@ function batchMasterRow(type, i) {
   if(type==='inventory') return '<tr data-bm-row>'+cell('name','Part / product name')+'<td><select class="bm-category">'+STORE_CATS.map(x=>'<option>'+esc(x)+'</option>').join('')+'</select></td>'+cell('unit','Unit','list="bm-units"')+cell('stock','Opening stock','type="number" min="0" step="any" value="0"')+cell('cost','Unit cost ₹','type="number" min="0" step="0.01" value="0"')+'</tr>';
   return '<tr data-bm-row>'+cell('name','Full name')+cell('mobile','Mobile number','inputmode="tel"')+'<td><select class="bm-role"><option value="operator">Operator</option><option value="incharge">Incharge</option><option value="storekeeper">Storekeeper (Fuel Ledger)</option><option value="storekeeper_fertilizer">Storekeeper (Fertilizers & Pesticides)</option></select></td></tr>';
 }
-function batchMasterAllowed(type){if(type==='users'&&!RBAC.can('access.manage')){toast('You do not have permission to add workforce profiles.','err');return;}if(type==='inventory'&&!RBAC.can('inventory.manage')){toast('You do not have permission to manage inventory.','err');return;}openBatchMaster(type);}
+function batchMasterAllowed(type){openBatchMaster(type);}
 function openBatchMaster(type) {
   const cfg = {
     machines:{title:'Batch add machines',desc:'Existing machines are shown for reference. Add new machines in the blank rows below.',heads:['Asset name','Category','Fuel','Current hours','Last serviced hrs']},
