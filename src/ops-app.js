@@ -1153,7 +1153,7 @@ function machineCard(m, s, isLive) {
     </div></div>`;
 }
 function machineForm(m) {
-  const edit = !!m, cats = ['Greens Mower', 'Fairway Mower', 'Rough Mower', 'Utility Vehicle', 'Tractor', 'Sprayer', 'Buggy'];
+  const edit = !!m, cats = ['Greens Mower', 'Fairway Mower', 'Rough Mower', 'Utility Vehicle', 'Tractor', 'Sprayer', 'Buggy', 'Top Dresser', 'Aerator', 'Chainsaw', 'Brush Cutter', 'Leaf Blower'];
   openForm({
     title: edit ? 'Edit machine' : 'Register machine',
     html: fld('Asset name', `<input id="fName" value="${esc(m?.assetName || '')}" placeholder="e.g. Toro Greensmaster 3150">`) +
