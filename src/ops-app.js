@@ -1120,6 +1120,8 @@ function editInventoryCost(id) {
 
 /* ================= FLEET ================= */
 function renderFleet() {
+  const fleetToolbar=$('#v-fleet .toolbar');
+  if(fleetToolbar&&!$('#batchMachineButton'))fleetToolbar.insertAdjacentHTML('beforeend','<button id="batchMachineButton" class="btn" data-act="batch-machines">Batch add</button>');
   const cats = ['All', ...new Set(S.machines.map(m => m.category).filter(Boolean))];
   setHTML($('#catChips'), cats.map(c => `<button class="chip ${F.cat === c ? 'on' : ''}" data-act="fcat" data-v="${esc(c)}">${esc(c)}</button>`).join(''));
   setHTML($('#fuelChips'), ['All', 'Diesel', 'Petrol'].map(c => `<button class="chip ${F.fuel === c ? 'on' : ''}" data-act="ffuel" data-v="${c}">${c === 'All' ? 'All fuels' : c}</button>`).join(''));
@@ -1152,8 +1154,52 @@ function machineCard(m, s, isLive) {
       <div class="kmenu"><button data-act="edit-machine" data-id="${esc(m.id)}"><span class="material-symbols-rounded">edit</span>Edit details</button><button data-act="svc-done" data-id="${esc(m.id)}"><span class="material-symbols-rounded">build_circle</span>Mark serviced</button><button class="danger" data-act="del" data-col="machines" data-id="${esc(m.id)}" data-label="${esc(m.assetName)}"><span class="material-symbols-rounded">delete</span>Delete</button></div></div>
     </div></div>`;
 }
+
+/* ================= BATCH MASTER ENTRY ================= */
+const MACHINE_CATEGORIES = ['Greens Mower','Fairway Mower','Rough Mower','Utility Vehicle','Tractor','Sprayer','Buggy','Top Dresser','Aerator','Chainsaw','Brush Cutter','Leaf Blower'];
+function batchMasterRow(type, i) {
+  const cell = (cls, placeholder, extra='') => '<td><input class="bm-'+cls+'" '+extra+' placeholder="'+placeholder+'" aria-label="'+placeholder+' row '+(i+1)+'"></td>';
+  if(type==='machines') return '<tr data-bm-row>'+cell('name','Machine / asset name')+'<td><select class="bm-category">'+MACHINE_CATEGORIES.map(x=>'<option>'+x+'</option>').join('')+'</select></td><td><select class="bm-fuel"><option>Diesel</option><option>Petrol</option><option>None</option></select></td>'+cell('hours','Hours','type="number" min="0" step="0.1" value="0"')+cell('last','Last service hrs','type="number" min="0" step="0.1" placeholder="Optional"')+'</tr>';
+  if(type==='inventory') return '<tr data-bm-row>'+cell('name','Part / product name')+'<td><select class="bm-category">'+STORE_CATS.map(x=>'<option>'+esc(x)+'</option>').join('')+'</select></td>'+cell('unit','Unit','list="bm-units"')+cell('stock','Opening stock','type="number" min="0" step="any" value="0"')+cell('cost','Unit cost ₹','type="number" min="0" step="0.01" value="0"')+'</tr>';
+  return '<tr data-bm-row>'+cell('name','Full name')+cell('mobile','Mobile number','inputmode="tel"')+'<td><select class="bm-role"><option value="operator">Operator</option><option value="incharge">Incharge</option><option value="storekeeper">Storekeeper (Fuel Ledger)</option><option value="storekeeper_fertilizer">Storekeeper (Fertilizers & Pesticides)</option></select></td></tr>';
+}
+function batchMasterAllowed(type){if(type==='users'&&!RBAC.can('access.manage')){toast('You do not have permission to add workforce profiles.','err');return;}if(type==='inventory'&&!RBAC.can('inventory.manage')){toast('You do not have permission to manage inventory.','err');return;}openBatchMaster(type);}
+function openBatchMaster(type) {
+  const cfg = {
+    machines:{title:'Batch add machines',desc:'Existing machines are shown for reference. Add new machines in the blank rows below.',heads:['Asset name','Category','Fuel','Current hours','Last serviced hrs']},
+    inventory:{title:'Batch add inventory masters',desc:'Existing SKUs are shown for reference. Opening stock is the initial master quantity, not a goods receipt.',heads:['Part / product','Category','Unit','Opening stock','Unit cost ₹']},
+    users:{title:'Batch add workforce',desc:'Existing profiles are shown for reference. This creates Firestore workforce profiles only, not Firebase Authentication accounts.',heads:['Full name','Mobile','Role']}
+  }[type];
+  const existing = type==='machines' ? S.machines : type==='inventory' ? S.inventory : S.users;
+  const existingRows = existing.map(x=> type==='machines' ? [x.assetName,x.category,x.fuelType,x.currentHours] : type==='inventory' ? [itemName(x),x.category,x.unit,x.stockQuantity,x.unitCost] : [x.fullName||x.username,x.mobileNumber,x.role]).map(row=>'<tr>'+row.map(v=>'<td>'+esc(v??'')+'</td>').join('')+'</tr>').join('');
+  const grid = '<div class="table-wrap" style="max-height:32vh;overflow:auto"><table><thead><tr>'+cfg.heads.map(h=>'<th>'+h+'</th>').join('')+'</tr></thead><tbody>'+(existingRows||'<tr><td colspan="'+cfg.heads.length+'" class="muted">No existing records</td></tr>')+'</tbody></table></div><div style="display:flex;justify-content:space-between;align-items:center;margin:14px 0 6px"><b>New rows</b><button type="button" class="btn btn-sm" id="bmAddRow">+ Add 5 rows</button></div><div class="table-wrap"><table><thead><tr>'+cfg.heads.map(h=>'<th>'+h+'</th>').join('')+'</tr></thead><tbody id="bmRows">'+Array.from({length:5},(_,i)=>batchMasterRow(type,i)).join('')+'</tbody></table></div>'+(type==='inventory'?'<datalist id="bm-units"><option>Nos</option><option>Kg</option><option>Litre</option><option>Gram</option><option>ML</option><option>Bag</option><option>Pack</option></datalist>':'')+'<p class="muted sm">Blank rows are ignored. Only completed rows are saved.</p>';
+  openForm({title:cfg.title,submit:'Save all new rows',size:'xl',html:'<p class="muted sm">'+cfg.desc+'</p>'+grid,onSubmit:async()=>{
+    const rows=$('#bmRows [data-bm-row]'), parsed=[]; let invalid=false;
+    rows.forEach((r,idx)=>{
+      const val=c=>r.querySelector('.bm-'+c)?.value?.trim()||'';
+      const name=val('name'); if(!name)return;
+      if(type==='machines') parsed.push({name,category:val('category'),fuel:val('fuel'),hours:num(val('hours')),last:val('last')});
+      else if(type==='inventory') {const unit=val('unit');if(!unit){invalid=true;return;}parsed.push({name,category:val('category'),unit,stock:num(val('stock')),cost:num(val('cost'))});}
+      else {const mobile=normMobile(val('mobile'));if(!/^\+\d{10,14}$/.test(mobile)){invalid=true;return;}parsed.push({name,mobile,role:val('role')});}
+    });
+    if(invalid){toast(type==='users'?'Check mobile numbers. Use a valid country code or 10-digit number.':'Every inventory row needs a unit of measure.','err');return false;}
+    if(!parsed.length){toast('Enter at least one complete row.','warn');return false;}
+    const seen=new Set(), existingKeys=new Set(type==='machines'?S.machines.map(x=>String(x.assetName||'').toLowerCase()):type==='inventory'?S.inventory.map(x=>String(itemName(x)).toLowerCase()):S.users.map(x=>String(x.mobileNumber||'')));
+    for(const x of parsed){const key=type==='machines'||type==='inventory'?x.name.toLowerCase():x.mobile;if(seen.has(key)||existingKeys.has(key)){toast('Duplicate '+(type==='users'?'mobile number':'name')+': '+key,'err');return false;}seen.add(key);}
+    const batch=writeBatch(db);
+    parsed.forEach(x=>{
+      const ref=doc(collection(db,CONFIG.COL[type]));
+      if(type==='machines') batch.set(ref,{assetName:x.name,category:x.category||'Utility Vehicle',fuelType:x.fuel==='None'?'':x.fuel,currentHours:x.hours,lastServiceHours:x.last===''?x.hours:num(x.last),status:'Active'});
+      else if(type==='inventory') batch.set(ref,{partName:x.name,category:x.category,unit:x.unit,stockQuantity:Math.max(0,x.stock),reorderLevel:0,unitCost:Math.max(0,x.cost)});
+      else batch.set(ref,{fullName:x.name,username:x.name,mobileNumber:x.mobile,role:x.role});
+    });
+    await batch.commit();toast(parsed.length+' '+(type==='machines'?'machines':type==='inventory'?'inventory masters':'workforce profiles')+' added.');
+  }});
+  $('#bmAddRow')?.addEventListener('click',()=>$('#bmRows').insertAdjacentHTML('beforeend',Array.from({length:5},(_,i)=>batchMasterRow(type,$('#bmRows [data-bm-row]').length+i)).join('')));
+}
+
 function machineForm(m) {
-  const edit = !!m, cats = ['Greens Mower', 'Fairway Mower', 'Rough Mower', 'Utility Vehicle', 'Tractor', 'Sprayer', 'Buggy'];
+  const edit = !!m, cats = MACHINE_CATEGORIES;
   openForm({
     title: edit ? 'Edit machine' : 'Register machine',
     html: fld('Asset name', `<input id="fName" value="${esc(m?.assetName || '')}" placeholder="e.g. Toro Greensmaster 3150">`) +
@@ -1998,7 +2044,7 @@ function renderUsersMaster() {
   const all = [...(S.users || [])].sort((a, b) => (a.fullName || a.username || '').localeCompare(b.fullName || b.username || ''));
   const rows = all.filter(u => (!q || [u.fullName,u.username,u.mobileNumber,u.role].some(v => String(v||'').toLowerCase().includes(q))) && (usersRoleFilter === 'all' || String(u.role||'') === usersRoleFilter));
   const roles = [...new Set(all.map(u=>String(u.role||'').trim()).filter(Boolean))].sort();
-  setHTML($('#usersTbl'), `<div class="user-tools"><label class="user-search"><span class="material-symbols-rounded">search</span><input id="usersSearch" value="${esc(usersSearchText)}" placeholder="Search name, mobile or role" aria-label="Search users"></label><label class="user-role-filter">Role<select id="usersRoleFilter"><option value="all">All roles</option>${roles.map(r=>`<option value="${esc(r)}" ${usersRoleFilter===r?'selected':''}>${esc(r)}</option>`).join('')}</select></label><span class="muted sm user-count">${rows.length} of ${all.length} users</span>${RBAC.can('access.manage') ? '<button class="btn btn-sm" data-act="open-role-admin">Manage app access</button>' : ''}</div><div class="table-wrap"><table><thead><tr><th>Name</th><th>Mobile</th><th>Role</th><th>Record ID</th><th class="right">Actions</th></tr></thead><tbody>${!LOADED.users ? '<tr><td colspan="5"><div class="skeleton" style="height:80px"></div></td></tr>' : rows.length ? rows.map(u => `<tr><td><b>${esc(u.fullName || u.username || 'Staff')}</b><div class="muted sm">${u.username && u.username!==u.fullName ? esc(u.username) : 'Workforce profile'}</div></td><td>${esc(u.mobileNumber || '—')}</td><td><span class="badge ${u.role === 'incharge' ? 'gold' : String(u.role||'').startsWith('storekeeper') ? 'warn' : 'ok'}">${esc(u.role || '—')}</span></td><td><code>${esc(u.id)}</code></td><td class="right" style="white-space:nowrap"><button class="btn btn-sm" data-act="edit-user" data-id="${esc(u.id)}">Edit</button> <button class="btn btn-danger btn-sm" data-act="del" data-col="users" data-id="${esc(u.id)}" data-label="${esc(u.fullName || 'this user')}"><span class="material-symbols-rounded">delete</span></button></td></tr>`).join('') : `<tr><td colspan="5" class="empty">${all.length?'No users match these filters.':'No users yet. Add a workforce member to begin.'}</td></tr>`}</tbody></table></div>`);
+  setHTML($('#usersTbl'), `<div class="user-tools"><label class="user-search"><span class="material-symbols-rounded">search</span><input id="usersSearch" value="${esc(usersSearchText)}" placeholder="Search name, mobile or role" aria-label="Search users"></label><label class="user-role-filter">Role<select id="usersRoleFilter"><option value="all">All roles</option>${roles.map(r=>`<option value="${esc(r)}" ${usersRoleFilter===r?'selected':''}>${esc(r)}</option>`).join('')}</select></label><span class="muted sm user-count">${rows.length} of ${all.length} users</span>${RBAC.can('access.manage') ? '<button class="btn btn-sm" data-act="open-role-admin">Manage app access</button>' : ''}<button class="btn btn-sm" data-act="batch-users">Batch add</button></div><div class="table-wrap"><table><thead><tr><th>Name</th><th>Mobile</th><th>Role</th><th>Record ID</th><th class="right">Actions</th></tr></thead><tbody>${!LOADED.users ? '<tr><td colspan="5"><div class="skeleton" style="height:80px"></div></td></tr>' : rows.length ? rows.map(u => `<tr><td><b>${esc(u.fullName || u.username || 'Staff')}</b><div class="muted sm">${u.username && u.username!==u.fullName ? esc(u.username) : 'Workforce profile'}</div></td><td>${esc(u.mobileNumber || '—')}</td><td><span class="badge ${u.role === 'incharge' ? 'gold' : String(u.role||'').startsWith('storekeeper') ? 'warn' : 'ok'}">${esc(u.role || '—')}</span></td><td><code>${esc(u.id)}</code></td><td class="right" style="white-space:nowrap"><button class="btn btn-sm" data-act="edit-user" data-id="${esc(u.id)}">Edit</button> <button class="btn btn-danger btn-sm" data-act="del" data-col="users" data-id="${esc(u.id)}" data-label="${esc(u.fullName || 'this user')}"><span class="material-symbols-rounded">delete</span></button></td></tr>`).join('') : `<tr><td colspan="5" class="empty">${all.length?'No users match these filters.':'No users yet. Add a workforce member to begin.'}</td></tr>`}</tbody></table></div>`);
   const search = $('#usersSearch'); if (search && document.activeElement?.id === 'usersSearch') { search.focus(); search.setSelectionRange(search.value.length, search.value.length); }
 }
 const STORE_CATS = ['Fuel','Fertilizers','Pesticides','Turf Enhancements','Spare Parts','Tools','F&B','Other'];
@@ -2012,6 +2058,7 @@ function inventoryRowsMarkup(items) {
 }
 function renderRegistry() {
   const importToolbar = $('#v-registry .toolbar');
+  if (importToolbar && !$('#batchInventoryButton')) importToolbar.insertAdjacentHTML('beforeend', '<button id="batchInventoryButton" class="btn" data-act="batch-inventory">Batch add</button>');
   if (importToolbar && !$('#openInventoryImportButton')) importToolbar.insertAdjacentHTML('beforeend', '<button id="openInventoryImportButton" class="btn" data-act="open-inventory-import"><span class="material-symbols-rounded">upload_file</span> Import stock</button>');
   const items=S.inventory.slice();
   const low=items.filter(i=>inventoryOnHand(i)<=effectiveReorderLevel(i)).length;
@@ -2791,7 +2838,10 @@ const H = {
   rpreset: d => { if (d.p === 'custom') R[d.k].preset = 'custom'; else setPreset(R[d.k], d.p); RER[d.k](); },
   'close-modal': closeModal, 'close-drawer': closeDrawer,
   fcat: d => { F.cat = d.v; renderFleet(); }, ffuel: d => { F.fuel = d.v; renderFleet(); },
-  'add-machine': () => machineForm(null), 'edit-machine': d => machineForm(mx().get(d.id)),
+  'add-machine': () => machineForm(null),
+  'batch-machines': () => batchMasterAllowed('machines'),
+  'batch-inventory': () => batchMasterAllowed('inventory'),
+  'batch-users': () => batchMasterAllowed('users'), 'edit-machine': d => machineForm(mx().get(d.id)),
   'svc-done': d => { const m = mx().get(d.id); openForm({ title: 'Mark as serviced', submit: 'Confirm service', html: `<p style="margin:0">Record that <b>${esc(m.assetName)}</b> was serviced at <b>${fmt(num(m.currentHours))} hrs</b>? The ${CONFIG.SERVICE_INTERVAL}-hr cycle restarts from here.</p>`, onSubmit: async () => { await updateDoc(doc(db, CONFIG.COL.machines, m.id), { lastServiceHours: num(m.currentHours), lastServiceDate: today() }); toast('Service recorded'); } }); },
   del: d => confirmDelete(d.col, d.id, d.label),
   kebab: (d, el, e) => { e.stopPropagation(); const menu = el.nextElementSibling, open = menu.classList.contains('open'); $$('.kmenu.open').forEach(x => x.classList.remove('open')); if (!open) menu.classList.add('open'); },
