@@ -314,7 +314,11 @@
           <div class="turf-card-head"><div><div class="turf-card-eyebrow">SEARCHABLE REGISTER</div><h3>Application log</h3><p>Review planned and marked-applied records by product, date and treated area.</p></div><button class="btn" data-act="export-turf-applications"><span class="material-symbols-rounded">download</span>Export CSV</button></div>
           <div class="turf-filter-bar"><label class="turf-search"><span class="material-symbols-rounded">search</span><input id="turfLogSearch" data-inp="turf-log-search" placeholder="Search product or treated area"></label><label>Category<select id="turfAppCategoryFilter" data-chg="turf-app-category"><option>All categories</option><option>Fertilizers</option><option>Pesticides</option><option>Turf Enhancements</option></select></label><label>Status<select id="turfAppStatusFilter" data-chg="turf-app-status"><option>All statuses</option><option>Planned</option><option>Issued</option><option>Applied</option></select></label><span class="turf-count-pill" id="turfApplicationCount">0 records</span></div>
           <div class="table-wrap" id="turfApplicationsTbl"></div>
-          <div class="turf-data-note">“Applied” is a recorded status, not independent proof of physical application.</div>
+          <div class="turf-data-note">Planned rows show scheduled quantity. Issued / Applied rows show actual issue quantity. “Applied” is a recorded status, not independent proof of physical application.</div>
+        </section>
+        <section class="card turf-log-card" style="margin-top:16px">
+          <div class="turf-card-head"><div><div class="turf-card-eyebrow">COURSE-WIDE CONSUMPTION</div><h3>Area-wise chemical &amp; fertilizer issues</h3><p>Actual quantities grouped by course area, with planned and out-of-plan issues separated. Different stock units are never added together.</p></div></div>
+          <div id="turfAreaConsumptionTbl"></div>
         </section>
       </section>
 
