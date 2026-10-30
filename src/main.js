@@ -73,19 +73,13 @@ function fuelRecordDate(f) {
   return normDate(dateValue, f && (f.issuedAt ?? f.issueTimestamp ?? f.timestamp ?? f.createdAt ?? f.createdOn ?? f.updatedAt ?? f.recordedAt));
 }
 /**
- * Fuel inventory is maintained as opening stock + goods receipts in stockQuantity.
- * Fuel issue documents are the consumption ledger. Derive available stock from both
- * sources in one place; do not decrement stockQuantity again when a fuel log is written.
+ * Inventory stockQuantity is the live balance maintained by stock transactions:
+ * goods inward increases it; fuel issue transactions decrease it in the issuing app.
+ * Fuel logs are an audit/analytics ledger only and must never be subtracted here,
+ * otherwise each issue would be counted twice once the Android app updates inventory.
  */
-const fuelIssueQuantity = f => Math.max(0, num(f && (f.litres ?? f.quantity ?? f.qty ?? f.fuelLitres ?? f.fuelQuantity)));
 function inventoryOnHand(item) {
-  const baseline = Math.max(0, num(item && item.stockQuantity));
-  if (String(item && item.category || '').trim().toLowerCase() !== 'fuel') return baseline;
-  const type = canonicalFuelType(itemName(item));
-  if (!type) return baseline;
-  const issued = (S.fuel || []).reduce((sum, record) =>
-    fuelTypeFromRecord(record) === type ? sum + fuelIssueQuantity(record) : sum, 0);
-  return Math.max(0, baseline - issued);
+  return Math.max(0, num(item && item.stockQuantity));
 }
 const fuelIn = (a, b) => S.fuel.filter(f => { const d = fuelRecordDate(f); return d && d >= a && d <= b; });
 const shiftsIn = (a, b) => S.shifts.filter(s => s._d && s._d >= a && s._d <= b);
