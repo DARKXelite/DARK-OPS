@@ -110,8 +110,9 @@ test("App Check is initialized before Firestore when a site key is configured", 
 test("realtime listeners are filtered by the current user's collection permissions", async () => {
   const js = await read("../src/ops-app.js");
   const rbac = await read("../src/modules/rbac.js");
-  assert.match(js, /permissionForCollection\(CONFIG\.COL\[k\], false\)/);
-  assert.match(js, /if \(!RBAC\.can\(requiredPermission\)\)/);
+  assert.match(js, /RBAC\\.can\\(permissionForCollection\\(CONFIG\\.COL\\[k\\], false\\)\\)/);
+  assert.match(js, /const shouldListen = desired\\.has\\(k\\) && permitted/);
+  assert.match(js, /Unauthori[sz]ed collections never subscribe/);
   assert.match(rbac, /store_inwards:\s*"inventory\.receipts\.read"/);
   assert.match(rbac, /operator: Object\.freeze\(\[[\s\S]*?"inventory\.read"/);
 });
