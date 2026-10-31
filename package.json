@@ -14,5 +14,8 @@
     "vite": "6.4.5",
     "@firebase/rules-unit-testing": "6.0.0",
     "firebase": "13.1.0"
+  },
+  "overrides": {
+    "@grpc/grpc-js": "^1.13.6"
   }
 }
