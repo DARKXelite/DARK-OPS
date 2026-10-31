@@ -1,3 +1,17 @@
+/** Pure fleet filtering/sorting helper shared by rendering and unit tests. */
+export function filterAndSortMachines({ machines = [], category = "All", fuel = "All", query = "", sort = "service", serviceFor = () => ({ remaining: 0 }) } = {}) {
+  const q = String(query || "").trim().toLowerCase();
+  const rows = machines
+    .filter(m => (!q || `${m.assetName || ""} ${m.category || ""}`.toLowerCase().includes(q))
+      && (category === "All" || m.category === category)
+      && (fuel === "All" || m.fuelType === fuel))
+    .map(m => ({ m, s: serviceFor(m) }));
+  if (sort === "service") rows.sort((a, b) => a.s.remaining - b.s.remaining);
+  else if (sort === "hours") rows.sort((a, b) => Number(b.m.currentHours || 0) - Number(a.m.currentHours || 0));
+  else rows.sort((a, b) => String(a.m.assetName || "").localeCompare(String(b.m.assetName || "")));
+  return rows;
+}
+
 /** Function-based Fleet module. Dependencies are injected from the application context. */
 export function createFleetModule(deps) {
   const { ATTR, CONFIG, F, H, LOADED, R, S, TILE, addDays, addDoc, barChart, collection, dLong, dShort, daysBetween, db, doc, eff, esc, fld, fmt, fmtHrs, fuelCostSummary, fuelIn, fuelLogCost, fuelTypeFromRecord, getDocs, liveKeys, mKey, mName, money, monthStart, mx, num, openDrawer, openForm, openModal, pad, rangeBar, rangeLabel, rateForFuelLog, setCurModalRenderer, setHTML, shiftsIn, sortFuel, sparkline, splitFuel, sum, svc, timeOf, toast, today, tsMs, updateDoc } = deps;
@@ -7,10 +21,8 @@ function renderFleet() {
   setHTML($('#fuelChips'), ['All', 'Diesel', 'Petrol'].map(c => `<button class="chip ${F.fuel === c ? 'on' : ''}" data-act="ffuel" data-v="${c}">${c === 'All' ? 'All fuels' : c}</button>`).join(''));
   $('#fleetSort').value = F.sort;
   if (!LOADED.machines) { setHTML($('#fleetGrid'), Array(6).fill('<div class="skeleton" style="height:300px"></div>').join('')); return; }
-  const lk = liveKeys(), q = F.q.toLowerCase();
-  let list = S.machines.filter(m => (!q || `${m.assetName} ${m.category}`.toLowerCase().includes(q)) && (F.cat === 'All' || m.category === F.cat) && (F.fuel === 'All' || m.fuelType === F.fuel));
-  list = list.map(m => ({ m, s: svc(m) }));
-  if (F.sort === 'service') list.sort((a, b) => a.s.remaining - b.s.remaining); else if (F.sort === 'hours') list.sort((a, b) => num(b.m.currentHours) - num(a.m.currentHours)); else list.sort((a, b) => (a.m.assetName || '').localeCompare(b.m.assetName || ''));
+  const lk = liveKeys();
+  const list = filterAndSortMachines({ machines: S.machines, category: F.cat, fuel: F.fuel, query: F.q, sort: F.sort, serviceFor: svc });
   setHTML($('#fleetGrid'), list.length ? list.map(({ m, s }) => machineCard(m, s, lk.has(m.assetName) || lk.has(m.id))).join('') : '<div class="empty" style="grid-column:1/-1">No machines match. Use “Add machine” to register one.</div>');
 }
 function machineCard(m, s, isLive) {
