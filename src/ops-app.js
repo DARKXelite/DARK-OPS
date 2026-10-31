@@ -3,6 +3,7 @@ import { getFirestore, collection, addDoc, deleteDoc, doc, updateDoc, setDoc, ge
 import { getAuth, onAuthStateChanged, signInWithPhoneNumber, RecaptchaVerifier, signOut } from "https://www.gstatic.com/firebasejs/12.19.0/firebase-auth.js";
 import { initializeAppCheck, ReCaptchaEnterpriseProvider } from "https://www.gstatic.com/firebasejs/12.19.0/firebase-app-check.js";
 import { createFnbModule } from "./modules/fnb/fnb-module.js";
+import { inventoryOnHand } from "./domain/inventory-balance.js";
 import { ROLE_PERMISSIONS, ROLE_LABELS, canRole, permissionForAction, permissionForView, permissionForCollection } from "./modules/rbac.js";
 
 
@@ -187,18 +188,8 @@ function fuelRecordDate(f) {
   const dateValue = f && (f.issueDate ?? f.issuedDate ?? f.date ?? f.transactionDate ?? f.createdDate);
   return normDate(dateValue, f && (f.issuedAt ?? f.issueTimestamp ?? f.timestamp ?? f.createdAt ?? f.createdOn ?? f.updatedAt ?? f.recordedAt));
 }
-// Fuel issue logs are the consumption ledger already used by the dashboard. Compute on-hand
-// from the same records; never mutate stock from snapshot listeners (that would double-deduct).
-function inventoryOnHand(item) {
-  const raw = Math.max(0, num(item && item.stockQuantity));
-  if (String(item && item.category || '').trim().toLowerCase() !== 'fuel') return raw;
-  const fuelType = canonicalFuelType(item && (item.partName ?? item.itemName ?? item.name ?? item.productName));
-  if (!fuelType) return raw;
-  const issued = (S.fuel || []).reduce((total, f) => fuelTypeFromRecord(f) === fuelType
-    ? total + Math.max(0, fuelQuantity(f))
-    : total, 0);
-  return Math.max(0, raw - issued);
-}
+// Inventory stockQuantity is the live balance maintained by the issuing transaction.
+// Fuel logs are audit/analytics records and must not be subtracted a second time.
 const fuelIn = (a, b) => S.fuel.filter(f => { const d = fuelRecordDate(f); return d && d >= a && d <= b; });
 const shiftsIn = (a, b) => S.shifts.filter(s => s._d && s._d >= a && s._d <= b);
 const litresFor = (m, a, b) => S.fuel.reduce((t, f) => { const d=fuelRecordDate(f); return (d >= a && d <= b && (f.machineId === m.id || f.machineId === m.assetName)) ? t + fuelQuantity(f) : t; }, 0);
