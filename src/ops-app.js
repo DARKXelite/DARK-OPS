@@ -3010,10 +3010,16 @@ let turfProductCategory = 'All categories';
 $('#dateChip').textContent = new Date().toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' });
 toggleDock(false); renderWeather(); loadWeather(); setInterval(loadWeather, 30 * 60 * 1000);
 
+// TEMPORARY TEST ONLY: bypass frontend RBAC while retaining Firebase Authentication.
+// Firestore security rules remain authoritative and are NOT changed by this flag.
+const RBAC_TEST_BYPASS = true;
 const RBAC = {
   roles: ROLE_PERMISSIONS,
   session: { role: null, authenticated: false, uid: null, displayName: "" },
-  can(permission) { return this.session.authenticated && canRole(this.session.role, permission); }
+  can(permission) {
+    return this.session.authenticated
+      && (RBAC_TEST_BYPASS || canRole(this.session.role, permission));
+  }
 };
 window.CLOVER_RBAC = RBAC;
 buildNav();
