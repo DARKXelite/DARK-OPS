@@ -1315,6 +1315,61 @@ const H = {
   kebab: (d, el, e) => { e.stopPropagation(); const menu = el.nextElementSibling, open = menu.classList.contains('open'); $$('.kmenu.open').forEach(x => x.classList.remove('open')); if (!open) menu.classList.add('open'); },
   'add-spray': d => openAddSprayTaskForm(d.day, d.date), 
   "open-planner": () => openTurfPlanner(),
+  "tp-area": d => { tpState.area = d.area; tpState.draft.scope = 'overall'; renderTp(); },
+  "tp-category": d => { tpState.category = d.category; tpState.draft.pId = ''; renderTp(); },
+  "tp-add-line": () => {
+    const product = S.inventory.find(p => p.id === tpState.draft.pId && isTurfCategory(p.category));
+    const qty = num(tpState.draft.qty);
+    if (!product) { toast('No matching inventory product. Check Inventory Master category mapping.', 'err'); return; }
+    const unit = turfProductUnit(product);
+    if (!unit) { toast('Set the product stock unit in Inventory Master first.', 'err'); return; }
+    if (!(qty > 0)) { toast('Enter a quantity greater than zero.', 'err'); return; }
+    const scope = tpState.area === 'Greens' && tpState.draft.scope === 'per_green' ? 'per_green' : 'overall';
+    const totalQty = qty * (scope === 'per_green' ? 18 : 1);
+    const key = tpState.area + '|' + tpState.category;
+    if (!tpState.areaPlans[key]) tpState.areaPlans[key] = [];
+    tpState.areaPlans[key].push({ pId: product.id, productName: itemName(product), qty, unit, scope, totalQty, area: tpState.area, categoryTab: tpState.category });
+    if (totalQty > num(product.stockQuantity)) toast('Planned quantity exceeds current stock. Review stock before application.', 'warn');
+    renderTp();
+  },
+  "tp-remove-line": d => { const key = tpState.area + '|' + tpState.category; tpState.areaPlans[key]?.splice(parseInt(d.index),1); renderTp(); },
+  "tp-save-tab": async () => {
+    const key = tpState.area + '|' + tpState.category;
+    const lines = tpState.areaPlans[key] || [];
+    if (!lines.length) { toast('Add at least one item before saving.', 'err'); return; }
+    const btn = document.querySelector("[data-act='tp-save-tab']");
+    if (btn) btn.disabled = true;
+    try {
+      const date = tpState.start;
+      const dayIndex = new Date(date + 'T00:00:00').getDay();
+      const weekStart = getSunday(date);
+      for (const line of lines) {
+        const product = S.inventory.find(p => p.id === line.pId);
+        if (!product || !isTurfCategory(product.category) || !turfProductUnit(product) || line.unit !== turfProductUnit(product)) throw new Error('An item or its stock unit changed. Recheck the tab.');
+      }
+      const batch = writeBatch(db);
+      lines.forEach(line => {
+        const product = S.inventory.find(p => p.id === line.pId);
+        const ref = doc(collection(db, CONFIG.COL.plans));
+        batch.set(ref, {
+          weekStart, date, dayIndex, productId: line.pId, productName: product ? itemName(product) : line.productName,
+          category: product?.category || tpState.category, plannerCategory: tpState.category,
+          targetQty: line.totalQty, inputQty: line.qty, scope: line.scope, unit: line.unit,
+          targetArea: line.area, notes: 'Planned via Turf Ops Day Planner', status: 'Planned', createdAt: Date.now()
+        });
+      });
+      await batch.commit();
+      delete tpState.areaPlans[key];
+      toast('Tab saved to Turf Ops plans.');
+      renderTp();
+      currentTurfWeekStart = weekStart;
+      renderTurfCare();
+    } catch (e) {
+      console.error(e);
+      toast(e.message || 'Failed to save this tab.', 'err');
+      if (btn) btn.disabled = false;
+    }
+  },
   "tp-add-app": d => { tpState.activeDay = parseInt(d.day); renderTp(); },
   "tp-cancel": () => { tpState.activeDay = -1; renderTp(); },
   "tp-del-app": d => { tpState.days[d.day].splice(parseInt(d.app), 1); renderTp(); },
@@ -1398,6 +1453,9 @@ const C = {
   'turf-product-category': v => { turfProductCategory = v; renderTurfCare(); },
   'spray-product': v => { const product = S.inventory.find(i => i.id === v && isTurfCategory(i.category)); const unit = $('#spUnit'); if (unit) unit.value = turfProductUnit(product) || 'Unit not set'; },
   'tp-product': (v, d) => { const product = S.inventory.find(i => i.id === v && isTurfCategory(i.category)); const unit = $('#tpUnit_' + d.day); if (unit) unit.value = turfProductUnit(product) || 'Unit not set'; calcTot(d.day); },
+  'tp-draft-product': v => { tpState.draft.pId = v; renderTp(); },
+  'tp-draft-scope': v => { tpState.draft.scope = v; renderTp(); },
+
   'tp-start': v => { tpState.start = v; }, 'tp-weeks': v => { tpState.weeks = parseInt(v) || 1; }, 'tp-scope': (v, d) => calcTot(d.day), drdate: (v, d) => drawerRoute(d.id, v), smachine: (v) => { R.shifts.machine = v; RER.shifts(); }, sop: (v) => { R.shifts.op = v; RER.shifts(); },
   fleetsort: v => { F.sort = v; renderFleet(); },
   'inward-category': () => updateInwardItems(),
@@ -1411,7 +1469,7 @@ document.addEventListener('click', e => {
   const fn = H[el.dataset.act]; if (fn) fn(el.dataset, el, e);
 });
 document.addEventListener('change', e => { const el = e.target.closest('[data-chg]'); if (el && C[el.dataset.chg]) C[el.dataset.chg](el.value, el.dataset, el); });
-document.addEventListener('input', e => { const el = e.target.closest('[data-inp]'); if (el && ['inQty','inRate','inCustomGst'].includes(el.id)) { previewInward(); } else if (el && el.dataset.inp === 'fleetq') { F.q = el.value; renderFleet(); } else if (el && el.dataset.inp === 'tp-qty') { calcTot(el.dataset.day); } else if (el && el.dataset.inp === 'turf-log-search') { turfAppSearch = el.value; renderTurfApplications(); } });
+document.addEventListener('input', e => { const el = e.target.closest('[data-inp]'); if (el && ['inQty','inRate','inCustomGst'].includes(el.id)) { previewInward(); } else if (el && el.dataset.inp === 'fleetq') { F.q = el.value; renderFleet(); } else if (el && el.dataset.inp === 'tp-qty') { calcTot(el.dataset.day); } else if (el && el.dataset.inp === 'tp-draft-qty') { tpState.draft.qty = el.value; const product = S.inventory.find(p => p.id === tpState.draft.pId); const unit = turfProductUnit(product) || 'units'; const total = num(el.value) * (tpState.area === 'Greens' && tpState.draft.scope === 'per_green' ? 18 : 1); const preview = $('#tpCalculated'); if (preview) preview.innerHTML = '<span class="muted">Calculated planned quantity</span><b style="color:var(--gold)">' + fmt(total,2) + ' ' + esc(unit) + (tpState.area === 'Greens' && tpState.draft.scope === 'per_green' ? ' (' + fmt(num(el.value),2) + ' × 18 greens)' : '') + '</b>'; } else if (el && el.dataset.inp === 'turf-log-search') { turfAppSearch = el.value; renderTurfApplications(); } });
 $('#overlay').addEventListener('mousedown', e => { if (e.target.id === 'overlay') closeModal(); });
 $('#drawerOv').addEventListener('mousedown', e => { if (e.target.id === 'drawerOv') closeDrawer(); });
 document.addEventListener('keydown', e => { if (e.key === 'Escape') { closeModal(); closeDrawer(); } });
@@ -1498,15 +1556,15 @@ function openAddSprayTaskForm(dayIdx, dateStr) {
 
 
 
-let tpState = { start: '', weeks: 1, days: [[],[],[],[],[],[],[]], activeDay: -1 };
+let tpState = { start: '', weeks: 1, days: [[],[],[],[],[],[],[]], activeDay: -1, area: 'Greens', category: 'Fertilizers', draft: { pId: '', qty: 1, scope: 'overall' }, areaPlans: {} };
 
 function openTurfPlanner() {
-  tpState = { start: currentTurfWeekStart || getSunday(today()), weeks: 1, days: [[],[],[],[],[],[],[]], activeDay: -1 };
+  tpState = { start: today(), weeks: 1, days: [[],[],[],[],[],[],[]], activeDay: -1, area: 'Greens', category: 'Fertilizers', draft: { pId: '', qty: 1, scope: 'overall' }, areaPlans: {} };
   openModal({
-    title: 'Weekly Turf Application Planner',
+    title: 'Turf Ops · Day Planner',
     size: 'lg',
     body: '<div id="tpContainer"></div>',
-    footer: '<button class="btn" data-act="close-modal">Cancel</button><button class="btn btn-primary" data-act="save-turf-plan">Save Weekly Plan</button>'
+    footer: '<button class="btn" data-act="close-modal">Close Planner</button>'
   });
   renderTp();
 }
@@ -1514,71 +1572,50 @@ function openTurfPlanner() {
 function renderTp() {
   const c = $('#tpContainer');
   if (!c) return;
-  const daysOfWeek = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
-  const products = S.inventory.filter(i => isTurfCategory(i.category));
-  const pOptions = products.map((p,idx) => `<option value="${esc(p.id)}" ${idx===0?'selected':''}>${esc(itemName(p))} (${esc(turfCategoryLabel(p.category))} · Stock: ${fmt(p.stockQuantity,3)} ${esc(turfProductUnit(p) || 'UNIT NOT SET')})</option>`).join("");
-
-  const unitTotals = {};
-  tpState.days.forEach(day => day.forEach(app => { const u = String(app.unit || 'units'); unitTotals[u] = (unitTotals[u] || 0) + num(app.totQty); }));
-  const plannedLines = tpState.days.reduce((n,day)=>n+day.length,0);
-  const plannedByUnit = Object.entries(unitTotals).map(([unit,qty])=>`${fmt(qty,1)} ${unit}`).join(' · ');
-  let h = `<div class="turf-plan-summary"><span class="material-symbols-rounded">summarize</span><div><b>Plan summary</b><span>${plannedLines ? `${plannedLines} planned application line(s) · ${plannedByUnit}` : 'Add products and treated areas to build this week’s plan.'}</span></div><small>Confirm label rate and actual treated area before application. Per-hole multiplication is only for a rate entered per hole.</small></div>`;
-
-  h += `<div class="row2" style="margin-bottom:16px">
-    ${fld('Week Starting (Sunday)', `<input type="date" id="tpStart" value="${tpState.start}" data-chg="tp-start">`)}
-    ${fld('Repeat Plan', `<select id="tpWeeks" data-chg="tp-weeks"><option value="1" ${tpState.weeks==1?'selected':''}>1 Week (Current only)</option><option value="2" ${tpState.weeks==2?'selected':''}>2 Weeks</option><option value="3" ${tpState.weeks==3?'selected':''}>3 Weeks</option><option value="4" ${tpState.weeks==4?'selected':''}>4 Weeks</option></select>`)}
-  </div>`;
-
-  h += `<div style="display:flex;flex-direction:column;gap:8px">`;
-  tpState.days.forEach((apps, dIdx) => {
-    h += `<div class="card" style="padding:12px;background:var(--surface)">
-      <div style="display:flex;justify-content:space-between;align-items:center">
-        <h4 style="margin:0;color:var(--gold);font-size:14px">${daysOfWeek[dIdx]}</h4>
-        <button class="btn btn-sm" data-act="tp-add-app" data-day="${dIdx}">+ Add Spray</button>
-      </div>`;
-
-    if (apps.length > 0) {
-      h += `<div style="margin-top:10px;display:flex;flex-direction:column;gap:6px">`;
-      apps.forEach((app, aIdx) => {
-        const p = S.inventory.find(x => x.id === app.pId);
-        const pName = p ? p.partName : "Unknown";
-        h += `<div style="display:flex;justify-content:space-between;align-items:center;background:rgba(0,0,0,0.4);padding:8px 12px;border-radius:8px;border-left:3px solid var(--ok)">
-          <div><b style="font-size:13px">${esc(pName)}</b> <div class="muted sm">(${app.scope === 'per_area' ? app.qty + ' ' + app.unit + ' per ' + app.area : app.qty + ' ' + app.unit + ' overall course'})</div></div>
-          <div style="display:flex;align-items:center;gap:12px">
-            <b style="color:var(--gold);font-size:13px">Total: ${app.totQty} ${app.unit}</b>
-            <button class="icon-btn" style="width:28px;height:28px;min-height:0" data-act="tp-del-app" data-day="${dIdx}" data-app="${aIdx}"><span class="material-symbols-rounded" style="font-size:16px">close</span></button>
-          </div>
-        </div>`;
-      });
-      h += `</div>`;
-    }
-
-    if (tpState.activeDay === dIdx) {
-       h += `<div style="margin-top:12px;padding:14px;background:rgba(0,0,0,0.6);border:1px solid var(--brand-2);border-radius:12px">
-         <div class="row2">
-           ${fld('Product', `<select id="tpProd_${dIdx}" data-chg="tp-product" data-day="${dIdx}">${pOptions || '<option value="">No turf products available</option>'}</select>`)}
-           ${fld('Area Target', `<select id="tpArea_${dIdx}"><option>Greens</option><option>Fairways</option><option>Roughs</option><option>Tees</option><option>Nursery</option></select>`)}
-         </div>
-         <div class="row2">
-           ${fld('Scope Strategy', `<select id="tpScope_${dIdx}" data-chg="tp-scope" data-day="${dIdx}"><option value="overall">Overall Course</option><option value="per_area">Per-hole quantity × 18</option></select>`)}
-           <div style="display:flex;gap:8px">
-             <div style="flex:1">${fld('Quantity', `<input type="number" id="tpQty_${dIdx}" value="1" min="0.1" step="0.1" data-inp="tp-qty" data-day="${dIdx}">`)}</div>
-             <div style="flex:1">${fld('Stock unit', `<input id="tpUnit_${dIdx}" value="${esc(turfProductUnit(products[0]) || 'Unit not set')}" readonly aria-readonly="true">`)}</div>
-           </div>
-         </div>
-         <div style="margin-top:6px;font-size:13px;color:var(--ok);font-weight:800" id="tpTot_${dIdx}">Calculated Total Need: 1</div>
-         <div style="display:flex;justify-content:flex-end;gap:10px;margin-top:14px">
-           <button class="btn" data-act="tp-cancel">Cancel</button>
-           <button class="btn btn-primary" data-act="tp-save-app" data-day="${dIdx}">Save to ${daysOfWeek[dIdx]}</button>
-         </div>
-       </div>`;
-    }
-    h += `</div>`;
-  });
-  h += `</div>`;
-  setHTML(c, h);
+  const areas = ['Greens','Fairways','Roughs','Tees','Nursery','Driving Range','Bunkers','Landscaping','Practice Areas','All Areas'];
+  const categories = ['Fertilizers','Pesticides','Turf Enhancements'];
+  const allProducts = S.inventory.filter(i => isTurfCategory(i.category));
+  const key = tpState.area + '|' + tpState.category;
+  const lines = tpState.areaPlans[key] || [];
+  const matches = p => {
+    const cat = String(turfCategoryLabel(p.category) || p.category || '').toLowerCase();
+    if (tpState.category === 'Fertilizers') return /fertiliz|fertiliser|fertilizer/.test(cat);
+    if (tpState.category === 'Pesticides') return /pestic|fungicide|herbicide|insecticide|nematicide/.test(cat);
+    return /enhance|wetting|soil conditioner|growth regulator|biostimulant|amendment/.test(cat);
+  };
+  let products = allProducts.filter(matches);
+  // Some inventories use broad/legacy categories. Never silently show unrelated items.
+  const selectedId = tpState.draft.pId;
+  if (!products.some(p => p.id === selectedId)) tpState.draft.pId = products[0]?.id || '';
+  const selected = products.find(p => p.id === tpState.draft.pId) || products[0];
+  const qty = Math.max(0, num(tpState.draft.qty));
+  const perGreen = tpState.area === 'Greens' && tpState.draft.scope === 'per_green';
+  const multiplier = perGreen ? 18 : 1;
+  const total = qty * multiplier;
+  const totalQty = lines.reduce((n, line) => n + num(line.totalQty), 0);
+  const unitSummary = [...new Set(lines.map(line => line.unit))].join(', ');
+  let h = `<div class="turf-plan-summary"><span class="material-symbols-rounded">yard</span><div><b>Day Planner · ${esc(tpState.area)}</b><span>${lines.length} item(s) in this tab · ${fmt(totalQty,2)} ${esc(unitSummary)}</span></div><small>Planned quantities do not deduct inventory. Record the actual issue/application separately.</small></div>`;
+  h += `<div class="row2" style="margin:0 0 14px">${fld('Application Date', `<input type="date" id="tpStart" value="${esc(tpState.start)}" data-chg="tp-start">`)}<div style="display:flex;align-items:end;padding-bottom:8px" class="muted sm">Greens multiplier: 18 greens</div></div>`;
+  h += '<div class="tp-workspace" style="display:grid;grid-template-columns:minmax(155px,205px) minmax(0,1fr);gap:16px;min-height:380px">';
+  h += '<nav style="display:flex;flex-direction:column;gap:5px;border-right:1px solid var(--border);padding-right:12px"><div class="muted sm" style="padding:8px 10px;font-weight:800;letter-spacing:.08em">COURSE AREAS</div>';
+  areas.forEach(area => { const active = area === tpState.area; h += `<button class="btn ${active?'btn-primary':''}" style="text-align:left;justify-content:flex-start" data-act="tp-area" data-area="${esc(area)}">${active?'▸ ':''}${esc(area)}${area==='Greens'?' · 18':''}</button>`; });
+  h += '</nav><section style="min-width:0;display:flex;flex-direction:column;gap:12px"><div style="display:flex;gap:8px;flex-wrap:wrap">';
+  categories.forEach(cat => { h += `<button class="btn ${cat===tpState.category?'btn-primary':''}" data-act="tp-category" data-category="${esc(cat)}">${esc(cat)}</button>`; });
+  h += '</div><div class="card" style="padding:14px"><b style="display:block;margin-bottom:12px">Add ${esc(tpState.category)} · ${esc(tpState.area)}</b><div class="row2">';
+  h += fld('Inventory item', `<select id="tpProd" data-chg="tp-draft-product">${products.length ? products.map(p=>`<option value="${esc(p.id)}" ${selected&&p.id===selected.id?'selected':''}>${esc(itemName(p))} · Stock ${fmt(p.stockQuantity,2)} ${esc(turfProductUnit(p)||'UNIT NOT SET')}</option>`).join('') : '<option value="">No products mapped to this category</option>'}</select>`);
+  h += fld('Quantity', `<input type="number" id="tpQty" min="0.01" step="0.01" value="${esc(String(tpState.draft.qty||1))}" data-inp="tp-draft-qty">`);
+  h += '</div><div class="row2" style="margin-top:10px">';
+  h += fld('Application scope', `<select id="tpScope" data-chg="tp-draft-scope"><option value="overall" ${!perGreen?'selected':''}>Total for selected area</option>${tpState.area==='Greens'?'<option value="per_green" '+(perGreen?'selected':'')+'>Per green × 18</option>':''}</select>`);
+  h += fld('Stock unit', `<input readonly aria-readonly="true" value="${esc(turfProductUnit(selected)||'Unit not set')}">`);
+  h += '</div>';
+  h += `<div id="tpCalculated" style="margin-top:12px;padding:12px;border-radius:10px;background:var(--surface);display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap"><span class="muted">Calculated planned quantity</span><b style="color:var(--gold)">${fmt(total,2)} ${esc(turfProductUnit(selected)||'units')}${perGreen?' ('+fmt(qty,2)+' × 18 greens)':''}</b></div>`;
+  h += `<div style="display:flex;justify-content:flex-end;margin-top:12px"><button class="btn btn-primary" data-act="tp-add-line" ${!selected?'disabled':''}>Add item to tab</button></div></div>`;
+  h += '<b>Planned items in this tab</b>';
+  if (!lines.length) h += '<div class="muted" style="padding:18px;text-align:center;border:1px dashed var(--border);border-radius:10px">No items added yet.</div>';
+  lines.forEach((line, idx) => { const p=S.inventory.find(x=>x.id===line.pId); h += `<div class="card" style="padding:12px;display:flex;justify-content:space-between;align-items:center;gap:12px"><div><b>${esc(p?itemName(p):line.productName||'Unknown item')}</b><div class="muted sm">${esc(line.scope==='per_green'?'Per green × 18':'Total for '+tpState.area)} · ${fmt(line.qty,2)} ${esc(line.unit)}</div></div><div style="display:flex;align-items:center;gap:12px"><b>${fmt(line.totalQty,2)} ${esc(line.unit)}</b><button class="icon-btn" data-act="tp-remove-line" data-index="${idx}" aria-label="Remove item">×</button></div></div>`; });
+  h += `<div style="position:sticky;bottom:0;padding:12px 0 0;background:var(--surface);display:flex;justify-content:space-between;align-items:center;gap:12px"><span class="muted sm">Save only this area and category for ${esc(tpState.start)}</span><button class="btn btn-primary" data-act="tp-save-tab" ${!lines.length?'disabled':''}>Save This Tab</button></div></section></div>`;
+  setHTML(c,h);
 }
-
 function calcTot(dIdx) {
   const scopeEl = $(`#tpScope_${dIdx}`);
   const qtyEl = $(`#tpQty_${dIdx}`);
