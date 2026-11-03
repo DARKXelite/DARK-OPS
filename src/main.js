@@ -72,6 +72,15 @@ function fuelRecordDate(f) {
   const dateValue = f && (f.issueDate ?? f.issuedDate ?? f.date ?? f.transactionDate ?? f.createdDate);
   return normDate(dateValue, f && (f.issuedAt ?? f.issueTimestamp ?? f.timestamp ?? f.createdAt ?? f.createdOn ?? f.updatedAt ?? f.recordedAt));
 }
+/**
+ * Inventory stockQuantity is the live balance maintained by stock transactions:
+ * goods inward increases it; fuel issue transactions decrease it in the issuing app.
+ * Fuel logs are an audit/analytics ledger only and must never be subtracted here,
+ * otherwise each issue would be counted twice once the Android app updates inventory.
+ */
+function inventoryOnHand(item) {
+  return Math.max(0, num(item && item.stockQuantity));
+}
 const fuelIn = (a, b) => S.fuel.filter(f => { const d = fuelRecordDate(f); return d && d >= a && d <= b; });
 const shiftsIn = (a, b) => S.shifts.filter(s => s._d && s._d >= a && s._d <= b);
 const litresFor = (m, a, b) => S.fuel.reduce((t, f) => { const d=fuelRecordDate(f); return (d >= a && d <= b && (f.machineId === m.id || f.machineId === m.assetName)) ? t + num(f.litres ?? f.quantity ?? f.qty) : t; }, 0);
@@ -413,7 +422,7 @@ function autoReorderDetails(item) {
   const unit=String(item.unit||item.uom||item.stockUnit||'').toLowerCase();
   const integerUnit=/^(nos?|pieces?|pcs?|packs?|bags?|sets?|units?)$/.test(unit);
   const level=reliable ? (integerUnit?Math.ceil(raw):Math.ceil(raw*10)/10) : Math.max(legacy,policy.floor);
-  const details={level,leadDays:policy.leadDays,meanDaily:mean,totalUsage:total,windowDays:observedDates.length,transactions:events.length,activeDays,reliable,method:reliable?`${observedDates.length}-day demand + safety buffer`:'Provisional floor',daysCover:mean>0?Math.max(0,num(item.stockQuantity))/mean:null,events};
+  const details={level,leadDays:policy.leadDays,meanDaily:mean,totalUsage:total,windowDays:observedDates.length,transactions:events.length,activeDays,reliable,method:reliable?`${observedDates.length}-day demand + safety buffer`:'Provisional floor',daysCover:mean>0?inventoryOnHand(item)/mean:null,events};
   _reorderDetailCache.set(item.id,details); return details;
 }
 function effectiveReorderLevel(item) { return autoReorderDetails(item).level; }
@@ -451,12 +460,12 @@ function renderOperationalIntelligence(t=today()) {
     (spike?`<div class="ops-intel-message warn">Usage signal: <b>${esc(spike.name)}</b> issued ${fmt(spike.current,1)} L in the last 7 days, up ${fmt(spike.change,0)}% versus the prior 7 days. Review run hours and issue notes before drawing conclusions.</div>`:drop?`<div class="ops-intel-message">${esc(drop.name)} recorded ${fmt(Math.abs(drop.change),0)}% less fuel this week than the prior week. Check whether operating hours or work assignments also changed.</div>`:`<div class="ops-intel-message">No machine's last-week fuel total is 30% or more above its preceding-week baseline, based on available logs. Compare litres with engine hours before treating a change as abnormal.</div>`);
   setHTML($('#opsMachineDayIntel'), machineHtml);
   const itemRows=S.inventory.map(i=>({item:i,reorder:autoReorderDetails(i)}));
-  const urgent=itemRows.filter(x=>num(x.item.stockQuantity)<=x.reorder.level || (x.reorder.daysCover!==null && x.reorder.daysCover<x.reorder.leadDays)).sort((a,b)=>{
-    const ra=Math.max(1,a.reorder.level), rb=Math.max(1,b.reorder.level);return (num(a.item.stockQuantity)/ra)-(num(b.item.stockQuantity)/rb);
+  const urgent=itemRows.filter(x=>inventoryOnHand(x.item)<=x.reorder.level || (x.reorder.daysCover!==null && x.reorder.daysCover<x.reorder.leadDays)).sort((a,b)=>{
+    const ra=Math.max(1,a.reorder.level), rb=Math.max(1,b.reorder.level);return (inventoryOnHand(a.item)/ra)-(inventoryOnHand(b.item)/rb);
   }).slice(0,6);
   const historyCount=itemRows.filter(x=>x.reorder.reliable).length;
   const reorderHtml=!S.inventory.length?'<div class="ops-intel-message">Add products to the Inventory Master. Automatic levels will be computed once the item is linked to actual usage records.</div>':
-    `${urgent.length?urgent.map(({item,reorder})=>`<div class="ops-intel-row"><div class="ops-intel-main"><b>${esc(itemName(item))}</b><small>${esc(item.category||'Other')} · ${reorder.reliable?`${reorder.activeDays} use-days / ${reorder.windowDays}-day window · ${reorder.leadDays}-day lead time`:`Provisional threshold · ${reorder.leadDays}-day policy lead time`}</small></div><div class="ops-intel-value">${fmt(item.stockQuantity,2)} / ${fmt(reorder.level,2)} ${esc(item.unit||'units')}<small>${num(item.stockQuantity)<=reorder.level?'Reorder attention':'Coverage watch'}</small></div></div>`).join(''):'<div class="ops-intel-message">No items are currently below their calculated reorder threshold or projected to run out within policy lead time.</div>'}`+
+    `${urgent.length?urgent.map(({item,reorder})=>`<div class="ops-intel-row"><div class="ops-intel-main"><b>${esc(itemName(item))}</b><small>${esc(item.category||'Other')} · ${reorder.reliable?`${reorder.activeDays} use-days / ${reorder.windowDays}-day window · ${reorder.leadDays}-day lead time`:`Provisional threshold · ${reorder.leadDays}-day policy lead time`}</small></div><div class="ops-intel-value">${fmt(inventoryOnHand(item),2)} / ${fmt(reorder.level,2)} ${esc(item.unit||'units')}<small>${inventoryOnHand(item)<=reorder.level?'Reorder attention':'Coverage watch'}</small></div></div>`).join(''):'<div class="ops-intel-message">No items are currently below their calculated reorder threshold or projected to run out within policy lead time.</div>'}`+
     `<div class="ops-intel-message ${historyCount?'':'alert'}">${historyCount} of ${S.inventory.length} item(s) have enough dated usage history (at least 3 issue days across a 14+ day observation window). Other items use a provisional floor until history improves. Auto-reorder levels recalculate as records update.</div>`;
   setHTML($('#opsAutoReorderIntel'),reorderHtml);
   renderTurfUsageIntelligence(t);
@@ -574,7 +583,7 @@ function renderOverview() {
   if (outside) outside.innerHTML = !LOADED.plans ? 'Waiting for turf records' : outsidePlan.length ? outsidePlan.slice(0,5).map(p=>`<div class="ops-unplanned-row"><b>${esc(turfRecordProductName(p)||'Unnamed product')}</b><span>${esc(turfRecordDate(p)||'Date missing')} · ${fmt(turfRecordQuantity(p),2)} ${esc(unitLabel(p))}</span></div>`).join('') + (outsidePlan.length>5?`<small>+${outsidePlan.length-5} more</small>`:'') : '<span class="ops-no-unplanned">No unplanned issues detected in the current month.</span>';
 
   setHTML($('#opsFuelTrend'), barChart(days.map(d=>({label:dShort(d),value:litresByDay[d]||0})), {unit:'L'}));
-  const fuelMasterMatches = type => S.inventory.filter(i => itemName(i).trim().toLowerCase() === type.toLowerCase());
+  const fuelMasterMatches = type => S.inventory.filter(i => String(i.category || '').trim().toLowerCase() === 'fuel' && canonicalFuelType(itemName(i)) === type);
   const fuelMasterMarkup = ['Diesel','Petrol'].map(type => {
     const matches = fuelMasterMatches(type);
     const issued = fuelIssuedMTD[type] || 0;
@@ -737,7 +746,7 @@ function exportROIReport() {
     ['Projected monthly fuel reduction scenario',x.savingsScenario,`${fmt(COST.savingsPct)}% of projected month-end fuel spend; not a realised saving`],['Annualised gross fuel savings scenario',x.annualSavingsScenario,'Projected monthly scenario × 12; assumes a comparable run rate'],['One-time improvement investment',COST.improvementCost,'User-entered estimate / quote'],['Payback period in months',x.paybackMonths==null?'':x.paybackMonths,'Only calculated when investment and positive monthly savings are entered'],['First-year ROI %',x.firstYearROI==null?'':x.firstYearROI,'(Annualised gross savings − one-time investment) ÷ investment'],['Fuel cost per engine hour · 30d',x.fuelCostPerHour==null?'':x.fuelCostPerHour,'Fuel only; matched logged engine hours'],['Labour cost proxy · MTD',x.labourCostMTD,`Based on ${money(COST.labourPerHour)}/recorded engine hour; assumption only`],['Projected month-end fuel spend',x.projectedFuel,'Run rate projection, not a budget'],['Inventory stock value · priced lines',x.inv.value,`${x.inv.unpricedCount} stocked line(s) lack unit cost`],['Priced reorder gap',x.inv.reorderValue,'Cost to reach reorder levels on priced items only'],['Priced turf plan lines · MTD',x.plans.cost,`${x.plans.priced} priced lines; ${x.plans.unpriced} unpriced lines`],['Maintenance costs recorded · MTD',x.maintenanceCost,'Only explicit cost fields from maintenance logs included'],['Open incidents',x.openIncidents.length,`${x.downtimeHours} estimated downtime hours entered`],['Estimated downtime exposure',x.downtimeExposure,'Only shown when downtime hours and hourly exposure rate are configured'],[],['MACHINE COST / HOUR · TRAILING 30 DAYS','CATEGORY','FUEL COST','RUN HOURS','LITRES','FUEL COST / HOUR']];
   x.machineCosts.forEach(m=>rows.push([m.name,m.category,m.fuelCost,m.hours,m.litres,m.costPerHour]));
   rows.push([],['INVENTORY','STOCK','AUTO REORDER AT','UNIT COST','STOCK VALUE','LOW STOCK']);
-  S.inventory.slice().sort((a,b)=>(a.partName||'').localeCompare(b.partName||'')).forEach(i=>rows.push([itemName(i),num(i.stockQuantity),effectiveReorderLevel(i),num(i.unitCost)||'',num(i.unitCost)>0?num(i.stockQuantity)*num(i.unitCost):'',num(i.stockQuantity)<=effectiveReorderLevel(i)?'YES':'NO']));
+  S.inventory.slice().sort((a,b)=>(a.partName||'').localeCompare(b.partName||'')).forEach(i=>rows.push([itemName(i),inventoryOnHand(i),effectiveReorderLevel(i),num(i.unitCost)||'',num(i.unitCost)>0?inventoryOnHand(i)*num(i.unitCost):'',inventoryOnHand(i)<=effectiveReorderLevel(i)?'YES':'NO']));
   downloadCSV(`clover_greens_roi_${start}_to_${end}.csv`,rows);
 }
 function editInventoryCost(id) {
@@ -1141,14 +1150,14 @@ const itemName = i => i.partName || i.itemName || 'Unnamed item';
 const inventoryCategoryOpen = new Set();
 function inventoryRowsMarkup(items) {
   return `<div class="table-wrap inv-category-table"><table><thead><tr><th>Item name</th><th>Unit</th><th class="num">On hand</th><th class="num">Auto reorder at</th><th class="num">Last unit rate</th><th class="num">Stock value</th><th>Status</th><th></th></tr></thead><tbody>${items.length ? items.map(i=>{
-    const qty=num(i.stockQuantity), reorder=effectiveReorderLevel(i), policy=autoReorderDetails(i), low=qty<=reorder;
+    const qty=inventoryOnHand(i), reorder=effectiveReorderLevel(i), policy=autoReorderDetails(i), low=qty<=reorder;
     return `<tr><td><b>${esc(itemName(i))}</b></td><td>${esc(i.unit||'Unit not set')}</td><td class="num"><b>${fmt(qty,3)}</b></td><td class="num"><b>${fmt(reorder,3)}</b><div class="muted sm">${policy.reliable?'Trend-based':'Provisional floor'}</div></td><td class="num">${num(i.unitCost)?money(i.unitCost,2):'—'}</td><td class="num">${money(qty*num(i.unitCost),2)}</td><td><span class="badge ${low?'warn':'ok'}">${low?'Reorder':'In stock'}</span></td><td><button class="btn btn-sm" data-act="edit-part" data-id="${esc(i.id)}">Edit</button></td></tr>`;
   }).join(''):'<tr><td colspan="8" class="empty">No items in this category.</td></tr>'}</tbody></table></div>`;
 }
 function renderRegistry() {
   const items=S.inventory.slice();
-  const low=items.filter(i=>num(i.stockQuantity)<=effectiveReorderLevel(i)).length;
-  const total=items.reduce((v,i)=>v+Math.max(0,num(i.stockQuantity))*Math.max(0,num(i.unitCost)),0);
+  const low=items.filter(i=>inventoryOnHand(i)<=effectiveReorderLevel(i)).length;
+  const total=items.reduce((v,i)=>v+inventoryOnHand(i)*Math.max(0,num(i.unitCost)),0);
   setHTML($('#storeKpis'), `<div class="kpi"><div class="kpi-label">SKUs</div><div class="kpi-value">${items.length}</div></div><div class="kpi"><div class="kpi-label">Low stock</div><div class="kpi-value">${low}</div></div><div class="kpi"><div class="kpi-label">Stock value (recorded rates)</div><div class="kpi-value">${money(total)}</div></div><div class="kpi"><div class="kpi-label">Goods receipts</div><div class="kpi-value">${S.inwards.length}</div></div>`);
 
   if (!LOADED.inventory) {
@@ -1166,8 +1175,8 @@ function renderRegistry() {
       return ra-rb || a.localeCompare(b);
     });
     const markup = cats.map(cat=>{
-      const rows=groups.get(cat), lowRows=rows.filter(i=>num(i.stockQuantity)<=effectiveReorderLevel(i));
-      const value=rows.reduce((v,i)=>v+Math.max(0,num(i.stockQuantity))*Math.max(0,num(i.unitCost)),0);
+      const rows=groups.get(cat), lowRows=rows.filter(i=>inventoryOnHand(i)<=effectiveReorderLevel(i));
+      const value=rows.reduce((v,i)=>v+inventoryOnHand(i)*Math.max(0,num(i.unitCost)),0);
       const isOpen=inventoryCategoryOpen.has(cat);
       return `<details class="inv-category" data-inv-category="${esc(cat)}" ${isOpen?'open':''}><summary><span class="inv-cat-icon material-symbols-rounded">${cat==='Fuel'?'local_gas_station':cat==='Fertilizers'?'spa':cat==='Pesticides'?'pest_control':cat==='Turf Enhancements'?'eco':cat==='Spare Parts'?'build':cat==='Tools'?'handyman':'inventory_2'}</span><span class="inv-cat-main"><b>${esc(cat)}</b><small>${rows.length} item${rows.length===1?'':'s'} · ${money(value)} recorded stock value</small></span><span class="inv-cat-alert ${lowRows.length?'warn':''}">${lowRows.length?`${lowRows.length} reorder`:'Stock OK'}</span><span class="inv-cat-chevron material-symbols-rounded">expand_more</span></summary><div class="inv-category-body">${isOpen?inventoryRowsMarkup(rows):'<div class="inv-category-placeholder">Expand to view items in this category</div>'}</div></details>`;
     }).join('');
