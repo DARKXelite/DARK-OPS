@@ -3010,10 +3010,16 @@ let turfProductCategory = 'All categories';
 $('#dateChip').textContent = new Date().toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' });
 toggleDock(false); renderWeather(); loadWeather(); setInterval(loadWeather, 30 * 60 * 1000);
 
+// TEMPORARY TEST ONLY: bypass frontend RBAC while retaining Firebase Authentication.
+// Firestore security rules remain authoritative and are NOT changed by this flag.
+const RBAC_TEST_BYPASS = true;
 const RBAC = {
   roles: ROLE_PERMISSIONS,
   session: { role: null, authenticated: false, uid: null, displayName: "" },
-  can(permission) { return this.session.authenticated && canRole(this.session.role, permission); }
+  can(permission) {
+    return this.session.authenticated
+      && (RBAC_TEST_BYPASS || canRole(this.session.role, permission));
+  }
 };
 window.CLOVER_RBAC = RBAC;
 buildNav();
@@ -3060,6 +3066,24 @@ onAuthStateChanged(auth, async user => {
     return;
   }
   try {
+    if (RBAC_TEST_BYPASS) {
+      // Temporary webapp-only bypass: do not read app_roles or assign a real role.
+      // Authentication is still required; Firestore rules still govern database access.
+      RBAC.session.role = "test-bypass";
+      RBAC.session.authenticated = true;
+      RBAC.session.uid = user.uid;
+      RBAC.session.displayName = user.displayName || user.phoneNumber || user.email || "";
+      if (login) login.hidden = true;
+      if ($("#signoutBtn")) $("#signoutBtn").hidden = false;
+      document.body.classList.remove("auth-locked");
+      buildNav();
+      switchView((location.hash || "").slice(1) || "overview");
+      startListeners();
+      toast("Signed in · Temporary webapp RBAC bypass");
+      console.warn("[RBAC TEST BYPASS] Frontend role checks are disabled. Firestore rules are unchanged.");
+      return;
+    }
+
     let roleSnap = await getDoc(doc(db, "app_roles", user.uid));
     // One-time bootstrap for the explicitly allowlisted first-owner UID.
     // Firestore rules must enforce the same UID, own-document-only, admin-only creation.
