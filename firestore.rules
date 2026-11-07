@@ -393,7 +393,8 @@ service cloud.firestore {
           && get(passPath).data.breakfastDates.hasAny([request.resource.data.validDate])
           && get(passPath).data.guestCount == request.resource.data.guestCount;
       }
-      allow read: if breakfastManagers();
+      allow get: if breakfastStaff();
+      allow list: if breakfastManagers();
       allow create: if breakfastStaff()
         && request.resource.data.keys().hasOnly([
           'passId','bookingId','bookingRef','roomNumber','guestName','guestCount','redeemedCount',
