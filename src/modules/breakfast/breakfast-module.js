@@ -311,18 +311,24 @@ export function createBreakfastModule(deps) {
         const redemptionId = tokenHash + "_" + today();
         const redemptionRef = doc(db, "breakfast_redemptions", redemptionId);
         const prior = await transaction.get(redemptionRef);
-        if (prior.exists()) throw new Error("DUPLICATE|" + (prior.data().redeemedAt?.toDate ? prior.data().redeemedAt.toDate().toLocaleTimeString("en-IN") : "already used"));
-        transaction.update(entitlementRef, { lastRedeemedDate: today(), lastRedeemedAt: serverTimestamp(), lastRedeemedBy: RBAC.session.uid });
-        transaction.set(redemptionRef, {
-          entitlementId: tokenHash, bookingId: data.bookingId, bookingRef: data.bookingRef,
-          roomNumber: data.roomNumber, guestName: data.guestName, guestSlot: data.guestSlot,
-          validDate: today(), serviceWindowStart: "07:00", serviceWindowEnd: "10:00",
-          redeemedAt: serverTimestamp(), redeemedBy: RBAC.session.uid
-        });
-        return data;
+        const alreadyRedeemed=prior.exists()?Number(prior.data().redeemedCount||0):0;
+        const guestLimit=Number(data.guestCount||1);
+        if(alreadyRedeemed>=guestLimit) throw new Error("ROOM_FULL|" + alreadyRedeemed + "|" + guestLimit);
+        const nextCount=alreadyRedeemed+1;
+        const redemptionData={
+          passId:tokenHash, bookingId:data.bookingId, bookingRef:data.bookingRef,
+          roomNumber:data.roomNumber, guestName:data.guestName, guestCount:guestLimit,
+          redeemedCount:nextCount, validDate:today(), serviceWindowStart:"07:00", serviceWindowEnd:"10:00",
+          redeemedAt:prior.exists()?prior.data().redeemedAt:serverTimestamp(),
+          redeemedBy:prior.exists()?prior.data().redeemedBy:RBAC.session.uid,
+          lastRedeemedAt:serverTimestamp(), lastRedeemedBy:RBAC.session.uid
+        };
+        if(prior.exists()) transaction.update(redemptionRef,redemptionData);
+        else transaction.set(redemptionRef,redemptionData);
+        return {...data,todayRedeemedCount:nextCount};
       });
       lastResult = outcome;
-      setResult("success", "BREAKFAST ACCEPTED", "Room " + outcome.roomNumber + " · " + outcome.guestName + " · Guest " + outcome.guestSlot + " · " + today() + " · Daily pass consumed.");
+      setResult("success", "BREAKFAST ACCEPTED", "Room " + outcome.roomNumber + " · " + outcome.todayRedeemedCount + "/" + outcome.guestCount + " guests redeemed today · " + today() + ". Scan again for the next guest.");
       const input = document.getElementById("bfManualToken");
       if (input) input.value = "";
       if (canManage()) await loadData();
@@ -348,7 +354,7 @@ export function createBreakfastModule(deps) {
       const button = event.target.closest("[data-bf-act]");
       if (!button) return;
       if (button.dataset.bfAct === "view-coupons") viewBookingCoupons(button.dataset.id);
-      if (button.dataset.bfAct === "view-one" || button.dataset.bfAct === "whatsapp-one") { const p=todayEntitlements.find(x=>x.id===button.dataset.id); if(p){renderCoupons([p],"Room "+p.roomNumber+" · Guest "+p.guestSlot);if(button.dataset.bfAct==="whatsapp-one")shareCouponForPass(p);} }
+      if (button.dataset.bfAct === "view-room" || button.dataset.bfAct === "whatsapp-room") { const p=todayEntitlements.find(x=>x.id===button.dataset.id); if(p){renderCoupons([p],"Room "+p.roomNumber+" · "+p.guestCount+" guests");if(button.dataset.bfAct==="whatsapp-room")sendRoomWhatsApp(p);} }
       if (button.dataset.bfAct === "share-coupon") shareCoupon(Number(button.dataset.index));
     });
   }
