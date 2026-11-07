@@ -2275,6 +2275,7 @@ function updateBadges(changedCollection = null) {
 function switchView(v) {
   if (!VIEWS[v]) v = 'overview';
   if (RBAC.session.authenticated && !RBAC.can(permissionForView(v))) { toast("Your role does not have access to this section.", "err"); v = "overview"; }
+  if (v !== "breakfast") breakfastModule?.stop();
   cur = v;
   if (listenersStarted) syncListenersForView();
   document.body.classList.toggle('turf-board-mode', v === 'turfcare'); history.replaceState(null, '', '#' + v);
