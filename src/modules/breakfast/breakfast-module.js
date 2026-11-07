@@ -289,30 +289,30 @@ export function createBreakfastModule(deps) {
         const snap = await transaction.get(entitlementRef);
         if (!snap.exists()) throw new Error("This pass does not exist or the QR is invalid.");
         const data = snap.data();
-        if (data.status === "redeemed") throw new Error("DUPLICATE|" + (data.redeemedAt?.toDate ? data.redeemedAt.toDate().toLocaleTimeString("en-IN") : "already used"));
-        if (data.status !== "active") throw new Error("This pass is no longer active.");
-        if (data.validDate !== today()) throw new Error("This coupon is valid on " + data.validDate + ", not today (" + today() + ").");
-        const redemptionRef = doc(collection(db, "breakfast_redemptions"));
-        transaction.update(entitlementRef, {
-          status: "redeemed", redeemedAt: serverTimestamp(), redeemedBy: RBAC.session.uid,
-          redemptionId: redemptionRef.id
-        });
+        if (data.status !== "active") throw new Error("This guest pass is inactive.");
+        if (!(data.breakfastDates || []).includes(today())) throw new Error("This guest is not eligible today. Eligible dates: " + (data.breakfastDates || []).join(", "));
+        const redemptionId = tokenHash + "_" + today();
+        const redemptionRef = doc(db, "breakfast_redemptions", redemptionId);
+        const prior = await transaction.get(redemptionRef);
+        if (prior.exists()) throw new Error("DUPLICATE|" + (prior.data().redeemedAt?.toDate ? prior.data().redeemedAt.toDate().toLocaleTimeString("en-IN") : "already used"));
+        transaction.update(entitlementRef, { lastRedeemedDate: today(), lastRedeemedAt: serverTimestamp(), lastRedeemedBy: RBAC.session.uid });
         transaction.set(redemptionRef, {
           entitlementId: tokenHash, bookingId: data.bookingId, bookingRef: data.bookingRef,
           roomNumber: data.roomNumber, guestName: data.guestName, guestSlot: data.guestSlot,
-          validDate: data.validDate, redeemedAt: serverTimestamp(), redeemedBy: RBAC.session.uid
+          validDate: today(), serviceWindowStart: "07:00", serviceWindowEnd: "10:00",
+          redeemedAt: serverTimestamp(), redeemedBy: RBAC.session.uid
         });
         return data;
       });
       lastResult = outcome;
-      setResult("success", "BREAKFAST ACCEPTED", "Room " + outcome.roomNumber + " · " + outcome.guestName + " · Guest " + outcome.guestSlot + " · " + outcome.validDate);
+      setResult("success", "BREAKFAST ACCEPTED", "Room " + outcome.roomNumber + " · " + outcome.guestName + " · Guest " + outcome.guestSlot + " · " + today() + " · Daily pass consumed.");
       const input = document.getElementById("bfManualToken");
       if (input) input.value = "";
       if (canManage()) await loadData();
     } catch (error) {
       console.error("Breakfast redemption failed", error);
       const message = error.message || "Could not validate this pass.";
-      if (message.startsWith("DUPLICATE|")) setResult("duplicate", "ALREADY REDEEMED", "This pass was already used at " + message.split("|")[1] + ".");
+      if (message.startsWith("DUPLICATE|")) setResult("duplicate", "ALREADY REDEEMED TODAY", "This guest's breakfast was already redeemed at " + message.split("|")[1] + ". The same QR can be used again on the next eligible date.");
       else setResult("error", "REDEMPTION REJECTED", message);
     }
   }
