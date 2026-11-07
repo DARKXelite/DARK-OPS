@@ -54,7 +54,7 @@ export function createBreakfastModule(deps) {
               '<button class="bf-primary" type="submit" id="bfCreateButton"><span class="material-symbols-rounded">confirmation_number</span>Generate room QR pass</button>' +
               '<p class="bf-form-note">One QR covers every guest in this room. The booking contact receives one WhatsApp message with the room QR link.</p>' +
             '</form></section>' : '') +
-          '<section class="bf-panel bf-scanner-panel"><div class="bf-panel-head"><div><span class="bf-step">02 / RESTAURANT</span><h3>Redeem breakfast</h3><p>Scan the same guest QR once per eligible date.</p></div><span class="material-symbols-rounded">qr_code_scanner</span></div>' +
+          '<section class="bf-panel bf-scanner-panel"><div class="bf-panel-head"><div><span class="bf-step">02 / RESTAURANT</span><h3>Redeem breakfast</h3><p>Scan the same room QR once for each guest in the booking.</p></div><span class="material-symbols-rounded">qr_code_scanner</span></div>' +
             '<div class="bf-scanner-frame"><div id="breakfastQrReader" class="bf-reader"></div><div class="bf-scanner-placeholder" id="bfScannerPlaceholder"><span class="material-symbols-rounded">photo_camera</span><b>Camera scanner ready</b><small>Use the rear camera on a phone or tablet.</small></div></div>' +
             '<div class="bf-scan-actions"><button class="bf-primary" id="bfStartScanner" type="button" ' + (!canRedeem() ? 'disabled' : '') + '><span class="material-symbols-rounded">photo_camera</span>Start camera</button><button class="bf-secondary" id="bfStopScanner" type="button" disabled><span class="material-symbols-rounded">stop_circle</span>Stop</button></div>' +
             '<div class="bf-manual-scan"><label for="bfManualToken">Manual token entry</label><div><input id="bfManualToken" autocomplete="off" placeholder="Paste pass token"><button class="bf-secondary" id="bfRedeemManual" type="button" ' + (!canRedeem() ? 'disabled' : '') + '>Verify</button></div></div>' +
@@ -63,7 +63,7 @@ export function createBreakfastModule(deps) {
           '</section>' +
         '</div>' +
         (manager ? '<section class="bf-panel bf-bookings-panel"><div class="bf-panel-head bf-bookings-head"><div><span class="bf-step">03 / RECEPTION RECORDS</span><h3>Guest bookings</h3><p>One shared room QR, one booking WhatsApp number, and daily guest redemption counts.</p></div><button class="bf-secondary" id="bfRefresh" type="button"><span class="material-symbols-rounded">refresh</span>Refresh</button></div><div class="bf-date-filter"><label for="bfGuestDate">Breakfast date</label><input id="bfGuestDate" type="date" value="' + today() + '"><span id="bfGuestCountLabel"></span></div><div id="bfBookingsList" class="bf-bookings-list"><div class="bf-empty">Loading room guest list…</div></div></section>' : '') +
-        '<section class="bf-panel bf-coupons-panel" id="bfCouponsPanel" hidden><div class="bf-panel-head bf-bookings-head"><div><span class="bf-step">GENERATED PASSES</span><h3 id="bfCouponsTitle">Guest coupons</h3><p>The same room QR works for every guest on every eligible breakfast date.</p></div><button class="bf-secondary" id="bfCloseCoupons" type="button">Close</button></div><div id="bfCouponGrid" class="bf-coupon-grid"></div></section>' +
+        '<section class="bf-panel bf-coupons-panel" id="bfCouponsPanel" hidden><div class="bf-panel-head bf-bookings-head"><div><span class="bf-step">GENERATED PASSES</span><h3 id="bfCouponsTitle">Room QR pass</h3><p>The same room QR works for every guest on every eligible breakfast date.</p></div><button class="bf-secondary" id="bfCloseCoupons" type="button">Close</button></div><div id="bfCouponGrid" class="bf-coupon-grid"></div></section>' +
         '<div class="bf-footer-note"><span class="material-symbols-rounded">verified_user</span> Secure single-use passes · Staff access controlled · Redemption history retained</div>' +
       '</div>';
     bind();
@@ -84,7 +84,7 @@ export function createBreakfastModule(deps) {
     if (!target) return;
     if (!checkIn || !checkOut || checkOut <= checkIn) { target.textContent="Choose valid check-in and checkout date/times."; return; }
     const dates=breakfastDates(checkIn,checkOut);
-    target.innerHTML='<b>'+guests+' guest QR pass(es)</b><span>'+dates.length+' eligible breakfast date(s) × '+guests+' guest(s)</span><small>'+(dates.length?esc(dates[0])+' to '+esc(dates[dates.length-1]):'No 7–10 AM service window overlaps this stay')+'</small>';
+    target.innerHTML='<b>One room QR for '+guests+' guest(s)</b><span>'+dates.length+' eligible breakfast date(s)</span><small>'+(dates.length?esc(dates[0])+' to '+esc(dates[dates.length-1]):'No 7–10 AM service window overlaps this stay')+'</small>';
   }
   async function loadData() {
     if (!canManage()) return;
@@ -208,11 +208,11 @@ export function createBreakfastModule(deps) {
     const box = document.querySelector('[data-bf-qr="' + index + '"]');
     const canvas = box?.querySelector("canvas");
     const image = box?.querySelector("img");
-    const message = "Clover Greens breakfast pass for room " + pass.roomNumber + ", guest " + pass.guestSlot + ". Valid dates: " + (pass.breakfastDates || []).join(", ") + ". Breakfast window 7:00–10:00 AM. Same QR can be used once per eligible date.";
+    const message = "Clover Greens shared breakfast QR for Room " + pass.roomNumber + " covering " + pass.guestCount + " guest(s). Valid dates: " + (pass.breakfastDates || []).join(", ") + ". Breakfast window 7:00–10:00 AM. Scan once for each guest on each eligible date.";
     try {
       if ((image?.src || canvas) && navigator.share && navigator.canShare) {
         const blob = image?.src ? await (await fetch(image.src)).blob() : await new Promise(resolve => canvas.toBlob(resolve, "image/png"));
-        const file = new File([blob], "breakfast-" + pass.validDate + "-guest-" + pass.guestSlot + ".png", { type: "image/png" });
+        const file = new File([blob], "breakfast-room-" + pass.roomNumber + ".png", { type: "image/png" });
         if (navigator.canShare({ files: [file] })) {
           await navigator.share({ title: "Clover Greens Breakfast Pass", text: message, files: [file] });
           return;
