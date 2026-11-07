@@ -128,7 +128,7 @@ export function createBreakfastModule(deps) {
     document.getElementById("bfCouponsTitle").textContent = title || "Guest coupons";
     panel.hidden = false;
     grid.innerHTML = rows.map((c, i) =>
-      '<article class="bf-coupon-card"><div class="bf-coupon-top"><b>Room ' + esc(c.roomNumber) + ' · Guest ' + esc(c.guestSlot) + '</b><span class="bf-coupon-status ' + (c.status === "redeemed" ? "used" : c.status === "revoked" ? "revoked" : "active") + '">' + esc(c.status || "active") + '</span></div><div class="bf-qr-wrap"><img alt="Breakfast QR coupon" data-bf-qr="' + i + '"></div><strong>' + esc(c.validDate) + '</strong><small>' + esc(c.guestName) + '</small><button class="bf-secondary" type="button" data-bf-act="share-coupon" data-index="' + i + '"><span class="material-symbols-rounded">share</span>Share / download</button></article>'
+      '<article class="bf-coupon-card"><div class="bf-coupon-top"><b>Room ' + esc(c.roomNumber) + ' · Guest ' + esc(c.guestSlot) + '</b><span class="bf-coupon-status ' + (c.status === "redeemed" ? "used" : c.status === "revoked" ? "revoked" : "active") + '">' + esc(c.status || "active") + '</span></div><div class="bf-qr-wrap"><div class="bf-qr-target" data-bf-qr="' + i + '"></div><strong>' + esc(c.validDate) + '</strong><small>' + esc(c.guestName) + '</small><button class="bf-secondary" type="button" data-bf-act="share-coupon" data-index="' + i + '"><span class="material-symbols-rounded">share</span>Share / download</button></article>'
     ).join("");
     rows.forEach((pass,i)=>{
       const target=grid.querySelector('[data-bf-qr="'+i+'"]');
@@ -198,11 +198,13 @@ export function createBreakfastModule(deps) {
   async function shareCoupon(index) {
     const pass = couponRows[index];
     if (!pass) return;
-    const image = document.querySelector('[data-bf-qr="' + index + '"]');
-    const message = "Your complimentary breakfast pass for room " + pass.roomNumber + " is valid on " + pass.validDate + ". Please present this QR at the restaurant.";
+    const box = document.querySelector('[data-bf-qr="' + index + '"]');
+    const canvas = box?.querySelector("canvas");
+    const image = box?.querySelector("img");
+    const message = "Clover Greens breakfast pass for room " + pass.roomNumber + ", guest " + pass.guestSlot + ". Valid dates: " + (pass.breakfastDates || []).join(", ") + ". Breakfast window 7:00–10:00 AM. Same QR can be used once per eligible date.";
     try {
-      if (image?.src && navigator.share && navigator.canShare) {
-        const blob = await (await fetch(image.src)).blob();
+      if ((image?.src || canvas) && navigator.share && navigator.canShare) {
+        const blob = image?.src ? await (await fetch(image.src)).blob() : await new Promise(resolve => canvas.toBlob(resolve, "image/png"));
         const file = new File([blob], "breakfast-" + pass.validDate + "-guest-" + pass.guestSlot + ".png", { type: "image/png" });
         if (navigator.canShare({ files: [file] })) {
           await navigator.share({ title: "Clover Greens Breakfast Pass", text: message, files: [file] });
@@ -213,11 +215,10 @@ export function createBreakfastModule(deps) {
       if (error.name === "AbortError") return;
       console.warn("Native share unavailable", error);
     }
-    if (image?.src) {
-      const a = document.createElement("a");
-      a.href = image.src;
-      a.download = "breakfast-" + pass.validDate + "-guest-" + pass.guestSlot + ".png";
-      a.click();
+    if (image?.src || canvas) {
+      const url = image?.src || canvas.toDataURL("image/png");
+      const a = document.createElement("a"); a.href = url;
+      a.download = "breakfast-room-" + pass.roomNumber + "-guest-" + pass.guestSlot + ".png"; a.click();
     }
     if (pass.guestPhone) {
       let phone = pass.guestPhone.replace(/\D/g, "");
