@@ -16,7 +16,7 @@ service cloud.firestore {
     function opsTeam() { return hasRole(['admin', 'manager', 'operator']); }
     function fnbTeam() { return hasRole(['admin', 'manager', 'storekeeper']); }
     function breakfastStaff() { return hasRole(['admin', 'manager', 'storekeeper', 'operator']); }
-    function breakfastManagers() { return hasRole(['admin', 'manager']); }\n    function golfStaff() { return hasRole(['admin', 'manager', 'operator']); }\n    function golfManagers() { return hasRole(['admin', 'manager']); }
+    function breakfastManagers() { return hasRole(['admin', 'manager']); }\n    function golfStaff() { return hasRole(['admin', 'manager', 'storekeeper', 'operator']); }\n    function golfManagers() { return hasRole(['admin', 'manager']); }
 
     function validFnbOrderCreate() {
       let d = request.resource.data;
