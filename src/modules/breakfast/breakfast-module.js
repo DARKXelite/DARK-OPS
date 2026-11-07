@@ -235,20 +235,16 @@ export function createBreakfastModule(deps) {
       toast("QR downloaded. Add the guest's WhatsApp number to send it directly.");
     }
   }
-  async function shareCouponForPass(pass) {
-    const phone=(pass.guestPhone||"").replace(/\D/g,""),normalized=phone.length===10?"91"+phone:phone;
-    const msg="Clover Greens breakfast pass for Room "+pass.roomNumber+", Guest "+pass.guestSlot+". Valid dates: "+(pass.breakfastDates||[]).join(", ")+". Breakfast window 7:00–10:00 AM. Same QR can be used once per eligible date.";
-    const box=document.querySelector('[data-bf-qr="0"]'),img=box?.querySelector("img"),canvas=box?.querySelector("canvas");
-    try {
-      const blob=img?.src?await (await fetch(img.src)).blob():canvas?await new Promise(resolve=>canvas.toBlob(resolve,"image/png")):null;
-      if(blob&&navigator.share&&navigator.canShare){
-        const file=new File([blob],"breakfast-room-"+pass.roomNumber+"-guest-"+pass.guestSlot+".png",{type:"image/png"});
-        if(navigator.canShare({files:[file]})){await navigator.share({title:"Clover Greens Breakfast Pass",text:msg,files:[file]});return;}
-      }
-      if(blob){const url=URL.createObjectURL(blob),a=document.createElement("a");a.href=url;a.download="breakfast-room-"+pass.roomNumber+"-guest-"+pass.guestSlot+".png";a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);}
-    } catch(e){if(e.name==="AbortError")return;console.warn("WhatsApp QR share failed",e);}
-    if(normalized)window.open("https://wa.me/"+normalized+"?text="+encodeURIComponent(msg+" The QR image has been downloaded. Please attach it to this chat."),"_blank","noopener");
-    else toast("QR downloaded. Add a WhatsApp number to open the guest chat.");
+  function sendRoomWhatsApp(pass) {
+    const digits=(pass.guestPhone||"").replace(/\D/g,"");
+    const phone=digits.length===10?"91"+digits:digits;
+    if(!phone){toast("This booking has no WhatsApp number. Update the booking contact first.","err");return;}
+    const qrPage=new URL("/breakfast-pass.html",window.location.origin);
+    qrPage.searchParams.set("t",pass.qrToken);
+    const valid=(pass.breakfastDates||[]).join(", ");
+    const nl=String.fromCharCode(10);
+    const message="Hello "+pass.guestName+","+nl+nl+"Your Clover Greens breakfast pass for Room "+pass.roomNumber+" is ready."+nl+"Guests: "+pass.guestCount+nl+"Valid breakfast dates: "+valid+nl+"Breakfast service: 7:00 AM–10:00 AM (the pass can still be scanned later on an eligible date)."+nl+nl+"Open your room QR here: "+qrPage.toString()+nl+nl+"Show this same QR once for each guest. Each guest can redeem once per eligible date."; 
+    window.open("https://wa.me/"+phone+"?text="+encodeURIComponent(message),"_blank","noopener");
   }
   async function startScanner() {
     if (!canRedeem() || scannerBusy) return;
