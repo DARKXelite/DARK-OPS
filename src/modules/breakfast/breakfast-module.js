@@ -137,7 +137,7 @@ export function createBreakfastModule(deps) {
     document.getElementById("bfCouponsTitle").textContent = title || "Guest coupons";
     panel.hidden = false;
     grid.innerHTML = rows.map((c, i) =>
-      '<article class="bf-coupon-card"><div class="bf-coupon-top"><b>Room ' + esc(c.roomNumber) + ' · ' + esc(c.guestCount) + ' guests</b><span class="bf-coupon-status active">ROOM QR</span></div><div class="bf-qr-wrap"><div class="bf-qr-target" data-bf-qr="' + i + '"></div></div><strong>' + esc((c.breakfastDates || []).length) + ' eligible breakfast date(s)</strong><small>' + esc(c.guestName) + ' · ' + esc(c.bookingRef) + '</small><small>7:00–10:00 AM · one scan per guest</small><button class="bf-secondary" type="button" data-bf-act="share-coupon" data-index="' + i + '"><span class="material-symbols-rounded">share</span>Share / download</button></article>'
+      '<article class="bf-coupon-card"><div class="bf-coupon-top"><b>Room ' + esc(c.roomNumber) + ' · ' + esc(c.guestCount) + ' guests</b><span class="bf-coupon-status active">ROOM QR</span></div><div class="bf-qr-wrap"><div class="bf-qr-target" data-bf-qr="' + i + '"></div></div><strong>' + esc((c.breakfastDates || []).length) + ' eligible breakfast date(s)</strong><small>' + esc(c.guestName) + ' · ' + esc(c.bookingRef) + '</small><small>7:00–10:00 AM · one scan per guest</small><button class="bf-primary" type="button" data-bf-act="whatsapp-coupon" data-index="' + i + '"><span class="material-symbols-rounded">chat</span>Send WhatsApp</button><button class="bf-secondary" type="button" data-bf-act="share-coupon" data-index="' + i + '"><span class="material-symbols-rounded">download</span>Download QR</button></article>'
     ).join("");
     rows.forEach((pass,i)=>{
       const target=grid.querySelector('[data-bf-qr="'+i+'"]');
@@ -352,6 +352,7 @@ export function createBreakfastModule(deps) {
       if (button.dataset.bfAct === "view-coupons") viewBookingCoupons(button.dataset.id);
       if (button.dataset.bfAct === "view-room" || button.dataset.bfAct === "whatsapp-room") { const p=todayEntitlements.find(x=>x.id===button.dataset.id); if(p){renderCoupons([p],"Room "+p.roomNumber+" · "+p.guestCount+" guests");if(button.dataset.bfAct==="whatsapp-room")sendRoomWhatsApp(p);} }
       if (button.dataset.bfAct === "share-coupon") shareCoupon(Number(button.dataset.index));
+      if (button.dataset.bfAct === "whatsapp-coupon") sendRoomWhatsApp(couponRows[Number(button.dataset.index)]);
     });
   }
   function render() {
