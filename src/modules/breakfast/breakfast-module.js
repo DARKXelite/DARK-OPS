@@ -335,12 +335,18 @@ export function createBreakfastModule(deps) {
       if (button.dataset.bfAct === "whatsapp-coupon") sendRoomWhatsApp(couponRows[Number(button.dataset.index)]);
     });
   }
+  function mountLayout(scannerOnly) {
+    const oldRoot = root();
+    if (!oldRoot) return;
+    const freshRoot = oldRoot.cloneNode(false);
+    oldRoot.replaceWith(freshRoot);
+    shell(scannerOnly);
+    freshRoot.dataset.initialized = "true";
+    freshRoot.dataset.layout = scannerOnly ? "scanner" : "full";
+  }
   function render() {
     if (!root()) return;
-    if (!root().dataset.initialized) {
-      shell();
-      root().dataset.initialized = "true";
-    }
+    if (!root().dataset.initialized || root().dataset.layout !== "full") mountLayout(false);
     if (canManage()) loadData();
     else {
       document.getElementById("bfExpected").textContent = "—";
@@ -348,6 +354,10 @@ export function createBreakfastModule(deps) {
       document.getElementById("bfRemaining").textContent = "—";
     }
   }
+  function renderScanner() {
+    if (!root()) return;
+    if (!root().dataset.initialized || root().dataset.layout !== "scanner") mountLayout(true);
+  }
   function stop() { stopScanner(); }
-  return { render, stop };
+  return { render, renderScanner, stop };
 }
