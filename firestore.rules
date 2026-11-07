@@ -327,7 +327,7 @@ service cloud.firestore {
       allow update, delete: if false;
     }
 
-    // Breakfast Pass: one reusable QR per guest, with a separate daily redemption record.
+    // Breakfast Pass: one room-level QR, with an atomic per-day guest redemption counter.
     match /breakfast_bookings/{id} {
       allow read: if breakfastManagers();
       allow create: if breakfastManagers()
@@ -343,7 +343,7 @@ service cloud.firestore {
         ])
         && request.resource.data.guestName is string && request.resource.data.guestName.size() > 0 && request.resource.data.guestName.size() <= 100
         && request.resource.data.roomNumber is string && request.resource.data.roomNumber.size() > 0 && request.resource.data.roomNumber.size() <= 20
-        && request.resource.data.guestPhone is string && request.resource.data.guestPhone.size() <= 18
+        && request.resource.data.guestPhone is string && request.resource.data.guestPhone.size() >= 8 && request.resource.data.guestPhone.size() <= 18
         && request.resource.data.guestCount is int && request.resource.data.guestCount >= 1 && request.resource.data.guestCount <= 12
         && request.resource.data.checkIn is string && request.resource.data.checkIn.size() == 10
         && request.resource.data.checkOut is string && request.resource.data.checkOut.size() == 10
@@ -352,7 +352,7 @@ service cloud.firestore {
         && request.resource.data.serviceWindowStart == '07:00'
         && request.resource.data.serviceWindowEnd == '10:00'
         && request.resource.data.breakfastDates is list && request.resource.data.breakfastDates.size() >= 1 && request.resource.data.breakfastDates.size() <= 31
-        && request.resource.data.couponCount == request.resource.data.guestCount
+        && request.resource.data.couponCount == 1
         && request.resource.data.status == 'active'
         && request.resource.data.createdAt == request.time && request.resource.data.createdBy == request.auth.uid;
       allow update, delete: if false;
@@ -362,12 +362,12 @@ service cloud.firestore {
       allow list: if breakfastManagers();
       allow create: if breakfastManagers()
         && request.resource.data.keys().hasOnly([
-          'id','bookingId','bookingRef','guestName','roomNumber','guestPhone','guestSlot',
+          'id','bookingId','bookingRef','guestName','roomNumber','guestPhone','guestCount',
           'checkInAt','checkOutAt','breakfastDates','serviceWindowStart','serviceWindowEnd',
           'status','qrToken','createdAt','createdBy'
         ])
         && request.resource.data.keys().hasAll([
-          'id','bookingId','bookingRef','guestName','roomNumber','guestPhone','guestSlot',
+          'id','bookingId','bookingRef','guestName','roomNumber','guestPhone','guestCount',
           'checkInAt','checkOutAt','breakfastDates','serviceWindowStart','serviceWindowEnd',
           'status','qrToken','createdAt','createdBy'
         ])
@@ -375,46 +375,60 @@ service cloud.firestore {
         && request.resource.data.bookingId is string && request.resource.data.bookingRef is string
         && request.resource.data.guestName is string && request.resource.data.guestName.size() > 0 && request.resource.data.guestName.size() <= 100
         && request.resource.data.roomNumber is string && request.resource.data.roomNumber.size() > 0 && request.resource.data.roomNumber.size() <= 20
-        && request.resource.data.guestPhone is string && request.resource.data.guestPhone.size() <= 18
-        && request.resource.data.guestSlot is int && request.resource.data.guestSlot >= 1 && request.resource.data.guestSlot <= 12
+        && request.resource.data.guestPhone is string && request.resource.data.guestPhone.size() >= 8 && request.resource.data.guestPhone.size() <= 18
+        && request.resource.data.guestCount is int && request.resource.data.guestCount >= 1 && request.resource.data.guestCount <= 12
         && request.resource.data.checkInAt is string && request.resource.data.checkOutAt is string
         && request.resource.data.breakfastDates is list && request.resource.data.breakfastDates.size() >= 1 && request.resource.data.breakfastDates.size() <= 31
         && request.resource.data.serviceWindowStart == '07:00' && request.resource.data.serviceWindowEnd == '10:00'
         && request.resource.data.status == 'active'
         && request.resource.data.qrToken is string && request.resource.data.qrToken.size() == 43
         && request.resource.data.createdAt == request.time && request.resource.data.createdBy == request.auth.uid;
-      allow update: if breakfastStaff()
-        && resource.data.status == 'active'
-        && request.resource.data.status == 'active'
-        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['lastRedeemedDate','lastRedeemedAt','lastRedeemedBy'])
-        && request.resource.data.lastRedeemedDate is string
-        && request.resource.data.lastRedeemedAt == request.time
-        && request.resource.data.lastRedeemedBy == request.auth.uid
-        && existsAfter(/databases/$(database)/documents/breakfast_redemptions/$(id + '_' + request.resource.data.lastRedeemedDate))
-        && getAfter(/databases/$(database)/documents/breakfast_redemptions/$(id + '_' + request.resource.data.lastRedeemedDate)).data.entitlementId == id;
-      allow delete: if false;
+      allow update, delete: if false;
     }
     match /breakfast_redemptions/{id} {
+      function validRoomRedemption(passId) {
+        let passPath = /databases/$(database)/documents/breakfast_entitlements/$(passId);
+        return exists(passPath)
+          && get(passPath).data.status == 'active'
+          && get(passPath).data.breakfastDates.hasAny([request.resource.data.validDate])
+          && get(passPath).data.guestCount == request.resource.data.guestCount;
+      }
       allow read: if breakfastManagers();
       allow create: if breakfastStaff()
         && request.resource.data.keys().hasOnly([
-          'entitlementId','bookingId','bookingRef','roomNumber','guestName','guestSlot',
-          'validDate','serviceWindowStart','serviceWindowEnd','redeemedAt','redeemedBy'
+          'passId','bookingId','bookingRef','roomNumber','guestName','guestCount','redeemedCount',
+          'validDate','serviceWindowStart','serviceWindowEnd','redeemedAt','redeemedBy','lastRedeemedAt','lastRedeemedBy'
         ])
         && request.resource.data.keys().hasAll([
-          'entitlementId','bookingId','bookingRef','roomNumber','guestName','guestSlot',
-          'validDate','serviceWindowStart','serviceWindowEnd','redeemedAt','redeemedBy'
+          'passId','bookingId','bookingRef','roomNumber','guestName','guestCount','redeemedCount',
+          'validDate','serviceWindowStart','serviceWindowEnd','redeemedAt','redeemedBy','lastRedeemedAt','lastRedeemedBy'
         ])
-        && request.resource.data.entitlementId is string
+        && request.resource.data.passId is string
         && request.resource.data.bookingId is string && request.resource.data.bookingRef is string
         && request.resource.data.roomNumber is string && request.resource.data.guestName is string
-        && request.resource.data.guestSlot is int && request.resource.data.validDate is string
+        && request.resource.data.guestCount is int && request.resource.data.guestCount >= 1 && request.resource.data.guestCount <= 12
+        && request.resource.data.redeemedCount == 1
+        && request.resource.data.validDate is string
         && request.resource.data.serviceWindowStart == '07:00' && request.resource.data.serviceWindowEnd == '10:00'
         && request.resource.data.redeemedAt == request.time && request.resource.data.redeemedBy == request.auth.uid
-        && id == request.resource.data.entitlementId + '_' + request.resource.data.validDate
-        && existsAfter(/databases/$(database)/documents/breakfast_entitlements/$(request.resource.data.entitlementId))
-        && getAfter(/databases/$(database)/documents/breakfast_entitlements/$(request.resource.data.entitlementId)).data.lastRedeemedDate == request.resource.data.validDate;
-      allow update, delete: if false;
+        && request.resource.data.lastRedeemedAt == request.time && request.resource.data.lastRedeemedBy == request.auth.uid
+        && id == request.resource.data.passId + '_' + request.resource.data.validDate
+        && validRoomRedemption(request.resource.data.passId);
+      allow update: if breakfastStaff()
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['redeemedCount','lastRedeemedAt','lastRedeemedBy'])
+        && request.resource.data.passId == resource.data.passId
+        && request.resource.data.bookingId == resource.data.bookingId
+        && request.resource.data.bookingRef == resource.data.bookingRef
+        && request.resource.data.roomNumber == resource.data.roomNumber
+        && request.resource.data.guestName == resource.data.guestName
+        && request.resource.data.guestCount == resource.data.guestCount
+        && request.resource.data.validDate == resource.data.validDate
+        && request.resource.data.redeemedCount == resource.data.redeemedCount + 1
+        && request.resource.data.redeemedCount <= resource.data.guestCount
+        && request.resource.data.lastRedeemedAt == request.time
+        && request.resource.data.lastRedeemedBy == request.auth.uid
+        && validRoomRedemption(resource.data.passId);
+      allow delete: if false;
     }
 
     match /{document=**} {
