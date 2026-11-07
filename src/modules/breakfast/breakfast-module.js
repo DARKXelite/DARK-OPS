@@ -36,33 +36,33 @@ export function createBreakfastModule(deps) {
     const manager = canManage();
     el.innerHTML =
       '<div class="bf-page">' +
-        '<header class="bf-header"><div><div class="bf-eyebrow">GUEST SERVICES · DIGITAL ENTITLEMENTS</div><h2>Breakfast Pass</h2><p>One reusable QR per guest · one redemption per eligible day.</p></div><div class="bf-header-mark"><span class="material-symbols-rounded">qr_code_2</span><span>7 AM – 10 AM</span></div></header>' +
+        '<header class="bf-header"><div><div class="bf-eyebrow">GUEST SERVICES · DIGITAL ENTITLEMENTS</div><h2>Breakfast Pass</h2><p>One QR per room booking · one redemption per guest per eligible day.</p></div><div class="bf-header-mark"><span class="material-symbols-rounded">qr_code_2</span><span>7 AM – 10 AM</span></div></header>' +
         '<section class="bf-kpis" aria-label="Today breakfast summary">' +
-          '<article class="bf-kpi"><span>EXPECTED TODAY</span><strong id="bfExpected">—</strong><small>Eligible guest passes</small></article>' +
-          '<article class="bf-kpi"><span>REDEEMED</span><strong id="bfRedeemed">—</strong><small>Successfully scanned</small></article>' +
-          '<article class="bf-kpi"><span>REMAINING</span><strong id="bfRemaining">—</strong><small>Not yet redeemed</small></article>' +
+          '<article class="bf-kpi"><span>EXPECTED TODAY</span><strong id="bfExpected">—</strong><small>Eligible guests</small></article>' +
+          '<article class="bf-kpi"><span>REDEEMED</span><strong id="bfRedeemed">—</strong><small>Guests checked in</small></article>' +
+          '<article class="bf-kpi"><span>REMAINING</span><strong id="bfRemaining">—</strong><small>Guests remaining</small></article>' +
         '</section>' +
         '<div class="bf-workspace">' +
-          (manager ? '<section class="bf-panel bf-booking-panel"><div class="bf-panel-head"><div><span class="bf-step">01 / RECEPTION</span><h3>Add guest booking</h3><p>Enter stay details to generate one reusable QR per guest.</p></div><span class="material-symbols-rounded">hotel</span></div>' +
+          (manager ? '<section class="bf-panel bf-booking-panel"><div class="bf-panel-head"><div><span class="bf-step">01 / RECEPTION</span><h3>Add guest booking</h3><p>Enter the room booking, guest count and one WhatsApp contact.</p></div><span class="material-symbols-rounded">hotel</span></div>' +
             '<form id="bfBookingForm" class="bf-form" novalidate>' +
               '<label>Lead guest name<input id="bfGuestName" name="guestName" required maxlength="100" placeholder="Guest full name" autocomplete="name"></label>' +
               '<div class="bf-form-row"><label>Room number<input id="bfRoom" name="roomNumber" required maxlength="20" placeholder="e.g. 204"></label><label>Guest count<input id="bfGuestCount" name="guestCount" type="number" min="1" max="12" step="1" value="2" required inputmode="numeric"></label></div>' +
-              '<label>Guest WhatsApp number <span class="bf-optional">optional</span><input id="bfPhone" name="guestPhone" type="tel" maxlength="18" placeholder="+91 98765 43210" autocomplete="tel"></label>' +
+              '<label>Booking WhatsApp number<input id="bfPhone" name="guestPhone" type="tel" maxlength="18" required placeholder="+91 98765 43210" autocomplete="tel"></label>' +
               '<div class="bf-form-row"><label>Check-in date<input id="bfCheckIn" name="checkInAt" type="datetime-local" required></label><label>Checkout date<input id="bfCheckOut" name="checkOutAt" type="datetime-local" required></label></div>' +
               '<div class="bf-date-preview" id="bfDatePreview">Enter stay date/time to preview breakfast eligibility.</div>' +
-              '<button class="bf-primary" type="submit" id="bfCreateButton"><span class="material-symbols-rounded">confirmation_number</span>Generate breakfast passes</button>' +
-              '<p class="bf-form-note">Checkout-day breakfast is included by default. Each guest receives one reusable QR for the entire stay.</p>' +
+              '<button class="bf-primary" type="submit" id="bfCreateButton"><span class="material-symbols-rounded">confirmation_number</span>Generate room QR pass</button>' +
+              '<p class="bf-form-note">One QR covers every guest in this room. The booking contact receives one WhatsApp message with the room QR link.</p>' +
             '</form></section>' : '') +
           '<section class="bf-panel bf-scanner-panel"><div class="bf-panel-head"><div><span class="bf-step">02 / RESTAURANT</span><h3>Redeem breakfast</h3><p>Scan the same guest QR once per eligible date.</p></div><span class="material-symbols-rounded">qr_code_scanner</span></div>' +
             '<div class="bf-scanner-frame"><div id="breakfastQrReader" class="bf-reader"></div><div class="bf-scanner-placeholder" id="bfScannerPlaceholder"><span class="material-symbols-rounded">photo_camera</span><b>Camera scanner ready</b><small>Use the rear camera on a phone or tablet.</small></div></div>' +
             '<div class="bf-scan-actions"><button class="bf-primary" id="bfStartScanner" type="button" ' + (!canRedeem() ? 'disabled' : '') + '><span class="material-symbols-rounded">photo_camera</span>Start camera</button><button class="bf-secondary" id="bfStopScanner" type="button" disabled><span class="material-symbols-rounded">stop_circle</span>Stop</button></div>' +
             '<div class="bf-manual-scan"><label for="bfManualToken">Manual token entry</label><div><input id="bfManualToken" autocomplete="off" placeholder="Paste pass token"><button class="bf-secondary" id="bfRedeemManual" type="button" ' + (!canRedeem() ? 'disabled' : '') + '>Verify</button></div></div>' +
             '<div id="bfScanResult" class="bf-scan-result" aria-live="polite">' + (canRedeem() ? 'Ready to validate a breakfast pass.' : 'Your role does not have redemption access.') + '</div>' +
-            '<p class="bf-form-note">One scan per guest per eligible date. Scanning after 10 AM is allowed until the end of that local date.</p>' +
+            '<p class="bf-form-note">Scan the room QR once for each guest. The same QR can be scanned up to the room guest count per eligible date, including after 10 AM.</p>' +
           '</section>' +
         '</div>' +
-        (manager ? '<section class="bf-panel bf-bookings-panel"><div class="bf-panel-head bf-bookings-head"><div><span class="bf-step">03 / RECEPTION RECORDS</span><h3>Guest bookings</h3><p>View stays and reopen their generated QR coupons.</p></div><button class="bf-secondary" id="bfRefresh" type="button"><span class="material-symbols-rounded">refresh</span>Refresh</button></div><div class="bf-date-filter"><label for="bfGuestDate">Breakfast date</label><input id="bfGuestDate" type="date" value="' + today() + '"><span id="bfGuestCountLabel"></span></div><div id="bfBookingsList" class="bf-bookings-list"><div class="bf-empty">Loading room guest list…</div></div></section>' : '') +
-        '<section class="bf-panel bf-coupons-panel" id="bfCouponsPanel" hidden><div class="bf-panel-head bf-bookings-head"><div><span class="bf-step">GENERATED PASSES</span><h3 id="bfCouponsTitle">Guest coupons</h3><p>The same guest QR works on every eligible breakfast date.</p></div><button class="bf-secondary" id="bfCloseCoupons" type="button">Close</button></div><div id="bfCouponGrid" class="bf-coupon-grid"></div></section>' +
+        (manager ? '<section class="bf-panel bf-bookings-panel"><div class="bf-panel-head bf-bookings-head"><div><span class="bf-step">03 / RECEPTION RECORDS</span><h3>Guest bookings</h3><p>One shared room QR, one booking WhatsApp number, and daily guest redemption counts.</p></div><button class="bf-secondary" id="bfRefresh" type="button"><span class="material-symbols-rounded">refresh</span>Refresh</button></div><div class="bf-date-filter"><label for="bfGuestDate">Breakfast date</label><input id="bfGuestDate" type="date" value="' + today() + '"><span id="bfGuestCountLabel"></span></div><div id="bfBookingsList" class="bf-bookings-list"><div class="bf-empty">Loading room guest list…</div></div></section>' : '') +
+        '<section class="bf-panel bf-coupons-panel" id="bfCouponsPanel" hidden><div class="bf-panel-head bf-bookings-head"><div><span class="bf-step">GENERATED PASSES</span><h3 id="bfCouponsTitle">Guest coupons</h3><p>The same room QR works for every guest on every eligible breakfast date.</p></div><button class="bf-secondary" id="bfCloseCoupons" type="button">Close</button></div><div id="bfCouponGrid" class="bf-coupon-grid"></div></section>' +
         '<div class="bf-footer-note"><span class="material-symbols-rounded">verified_user</span> Secure single-use passes · Staff access controlled · Redemption history retained</div>' +
       '</div>';
     bind();
@@ -148,7 +148,7 @@ export function createBreakfastModule(deps) {
     const checkInAt=document.getElementById("bfCheckIn").value;
     const checkOutAt=document.getElementById("bfCheckOut").value;
     if(!guestName||!roomNumber||!checkInAt||!checkOutAt||!Number.isInteger(guestCount)||guestCount<1||guestCount>12||checkOutAt<=checkInAt){toast("Check guest name, room, guest count and date/time values.","err");return;}
-    if (guestPhone && !/^\+?[0-9\s()-]{8,18}$/.test(guestPhone)) { toast("Enter a valid WhatsApp number or leave it blank.", "err"); return; }
+    if (!guestPhone || !/^\+?[0-9\s()-]{8,18}$/.test(guestPhone)) { toast("Enter the booking WhatsApp number.", "err"); return; }
     const dates=breakfastDates(checkInAt,checkOutAt);
     if(!dates.length||dates.length>31){toast("No 7–10 AM breakfast window overlaps this stay, or stay exceeds 31 days.","err");return;}
     const button = document.getElementById("bfCreateButton");
@@ -158,25 +158,23 @@ export function createBreakfastModule(deps) {
       const bookingRef = "CG-" + Date.now().toString(36).toUpperCase() + "-" + Math.random().toString(36).slice(2, 6).toUpperCase();
       const bookingDoc = doc(collection(db, "breakfast_bookings"));
       const batch = writeBatch(db);
-      const passes = [];
+      let pass = null;
       const nowUid = RBAC.session.uid;
       batch.set(bookingDoc, {
         bookingRef, guestName, roomNumber, guestPhone, guestCount, checkIn:checkInAt.slice(0,10), checkOut:checkOutAt.slice(0,10),
-        checkInAt, checkOutAt, serviceWindowStart:"07:00", serviceWindowEnd:"10:00", breakfastDates:dates, couponCount:guestCount,
+        checkInAt, checkOutAt, serviceWindowStart:"07:00", serviceWindowEnd:"10:00", breakfastDates:dates, couponCount:1,
         status: "active", createdAt: serverTimestamp(), createdBy: nowUid
       });
-      for(let guestSlot=1;guestSlot<=guestCount;guestSlot++){
-        const token=randomToken(),tokenHash=await hashToken(token),entitlementRef=doc(db,"breakfast_entitlements",tokenHash);
-        const pass={id:tokenHash,bookingId:bookingDoc.id,bookingRef,guestName,roomNumber,guestPhone,guestSlot,checkInAt,checkOutAt,breakfastDates:dates,serviceWindowStart:"07:00",serviceWindowEnd:"10:00",status:"active",qrToken:token,createdAt:serverTimestamp(),createdBy:nowUid};
-        batch.set(entitlementRef,pass);passes.push(pass);
-      }
+      const token=randomToken(),tokenHash=await hashToken(token),entitlementRef=doc(db,"breakfast_entitlements",tokenHash);
+      pass={id:tokenHash,bookingId:bookingDoc.id,bookingRef,guestName,roomNumber,guestPhone,guestCount,checkInAt,checkOutAt,breakfastDates:dates,serviceWindowStart:"07:00",serviceWindowEnd:"10:00",status:"active",qrToken:token,createdAt:serverTimestamp(),createdBy:nowUid};
+      batch.set(entitlementRef,pass);
       await batch.commit();
-      toast("Breakfast passes generated · " + passes.length + " coupons");
+      toast("Room breakfast QR generated · " + guestCount + " guest entitlements");
       document.getElementById("bfBookingForm").reset();
       document.getElementById("bfGuestCount").value = "2";
       updateDatePreview();
       await loadData();
-      await renderCoupons(passes, "New passes · " + bookingRef);
+      await renderCoupons([pass], "Room QR · " + bookingRef);
     } catch (error) {
       console.error("Breakfast booking creation failed", error);
       toast("Could not create breakfast passes: " + (error.code || error.message), "err");
