@@ -61,7 +61,7 @@ export function createBreakfastModule(deps) {
             '<p class="bf-form-note">One scan per guest per eligible date. Scanning after 10 AM is allowed until the end of that local date.</p>' +
           '</section>' +
         '</div>' +
-        (manager ? '<section class="bf-panel bf-bookings-panel"><div class="bf-panel-head bf-bookings-head"><div><span class="bf-step">03 / RECEPTION RECORDS</span><h3>Guest bookings</h3><p>View stays and reopen their generated QR coupons.</p></div><button class="bf-secondary" id="bfRefresh" type="button"><span class="material-symbols-rounded">refresh</span>Refresh</button></div><div id="bfBookingsList" class="bf-bookings-list"><div class="bf-empty">Loading bookings…</div></div></section>' : '') +
+        (manager ? '<section class="bf-panel bf-bookings-panel"><div class="bf-panel-head bf-bookings-head"><div><span class="bf-step">03 / RECEPTION RECORDS</span><h3>Guest bookings</h3><p>View stays and reopen their generated QR coupons.</p></div><button class="bf-secondary" id="bfRefresh" type="button"><span class="material-symbols-rounded">refresh</span>Refresh</button></div><div class="bf-date-filter"><label for="bfGuestDate">Breakfast date</label><input id="bfGuestDate" type="date" value="' + today() + '"><span id="bfGuestCountLabel"></span></div><div id="bfBookingsList" class="bf-bookings-list"><div class="bf-empty">Loading room guest list…</div></div></section>' : '') +
         '<section class="bf-panel bf-coupons-panel" id="bfCouponsPanel" hidden><div class="bf-panel-head bf-bookings-head"><div><span class="bf-step">GENERATED PASSES</span><h3 id="bfCouponsTitle">Guest coupons</h3><p>The same guest QR works on every eligible breakfast date.</p></div><button class="bf-secondary" id="bfCloseCoupons" type="button">Close</button></div><div id="bfCouponGrid" class="bf-coupon-grid"></div></section>' +
         '<div class="bf-footer-note"><span class="material-symbols-rounded">verified_user</span> Secure single-use passes · Staff access controlled · Redemption history retained</div>' +
       '</div>';
@@ -113,12 +113,12 @@ export function createBreakfastModule(deps) {
     set("bfRemaining", remaining);
   }
   function renderBookings() {
-    const el = document.getElementById("bfBookingsList");
-    if (!el) return;
-    if (!bookings.length) { el.innerHTML = '<div class="bf-empty">No guest bookings added yet.</div>'; return; }
-    el.innerHTML = bookings.map(b =>
-      '<article class="bf-booking-row"><div class="bf-booking-main"><b>' + esc(b.guestName) + '</b><span>Room ' + esc(b.roomNumber) + ' · ' + Number(b.guestCount || 0) + ' guest(s)</span><small>' + esc(b.checkIn) + ' → ' + esc(b.checkOut) + ' · ' + Number(b.couponCount || 0) + ' coupons</small></div><span class="bf-booking-status">' + esc(b.status || "Active") + '</span><button class="bf-secondary bf-view-coupons" type="button" data-bf-act="view-coupons" data-id="' + esc(b.id) + '"><span class="material-symbols-rounded">qr_code_2</span>View coupons</button></article>'
-    ).join("");
+    const el=document.getElementById("bfBookingsList");if(!el)return;
+    const date=document.getElementById("bfGuestDate")?.value||today(),used=new Set(todayEntitlements.filter(p=>p.lastRedeemedDate===date).map(p=>p.id)),rows=[];
+    bookings.forEach(b=>{if(!(b.breakfastDates||[]).includes(date))return;for(let slot=1;slot<=Number(b.guestCount||0);slot++){const p=todayEntitlements.find(x=>x.bookingId===b.id&&Number(x.guestSlot)===slot);if(p)rows.push({b,p,slot,done:used.has(p.id)});}});
+    const label=document.getElementById("bfGuestCountLabel");if(label)label.textContent=rows.length+" eligible guest(s)";
+    if(!rows.length){el.innerHTML='<div class="bf-empty">No eligible room guests for '+esc(date)+'.</div>';return;}
+    el.innerHTML=rows.map(({b,p,slot,done})=>'<article class="bf-booking-row"><div class="bf-booking-main"><b>Room '+esc(b.roomNumber)+' · '+esc(b.guestName)+'</b><span>Guest '+slot+' of '+Number(b.guestCount)+'</span><small>'+esc(b.checkInAt||b.checkIn)+' → '+esc(b.checkOutAt||b.checkOut)+'</small></div><span class="bf-booking-status">'+(done?'REDEEMED':'PENDING')+'</span><button class="bf-secondary" type="button" data-bf-act="view-one" data-id="'+esc(p.id)+'">View QR</button><button class="bf-secondary" type="button" data-bf-act="whatsapp-one" data-id="'+esc(p.id)+'">Send to WhatsApp</button></article>').join("");
   }
   async function renderCoupons(rows, title) {
     couponRows = rows;
@@ -130,16 +130,12 @@ export function createBreakfastModule(deps) {
     grid.innerHTML = rows.map((c, i) =>
       '<article class="bf-coupon-card"><div class="bf-coupon-top"><b>Room ' + esc(c.roomNumber) + ' · Guest ' + esc(c.guestSlot) + '</b><span class="bf-coupon-status ' + (c.status === "redeemed" ? "used" : c.status === "revoked" ? "revoked" : "active") + '">' + esc(c.status || "active") + '</span></div><div class="bf-qr-wrap"><img alt="Breakfast QR coupon" data-bf-qr="' + i + '"></div><strong>' + esc(c.validDate) + '</strong><small>' + esc(c.guestName) + '</small><button class="bf-secondary" type="button" data-bf-act="share-coupon" data-index="' + i + '"><span class="material-symbols-rounded">share</span>Share / download</button></article>'
     ).join("");
-    if (window.QRCode && typeof window.QRCode.toDataURL === "function") {
-      for (let i = 0; i < rows.length; i++) {
-        const img = grid.querySelector('[data-bf-qr="' + i + '"]');
-        if (!img) continue;
-        try { img.src = await window.QRCode.toDataURL(rows[i].qrToken, { width: 280, margin: 1, errorCorrectionLevel: "M" }); }
-        catch (error) { console.error("QR generation failed", error); }
-      }
-    } else {
-      grid.querySelectorAll(".bf-qr-wrap").forEach(x => { x.textContent = "QR generator unavailable. Reload the page."; });
-    }
+    rows.forEach((pass,i)=>{
+      const target=grid.querySelector('[data-bf-qr="'+i+'"]');
+      if(!target||typeof window.QRCode!=="function"){if(target)target.textContent="QR library unavailable. Reload while online.";return;}
+      try{new window.QRCode(target,{text:pass.qrToken,width:220,height:220,colorDark:"#07100B",colorLight:"#FFFFFF",correctLevel:window.QRCode.CorrectLevel.M});}
+      catch(error){console.error("QR render failed",error);target.textContent="QR could not be rendered.";}
+    });
     panel.scrollIntoView({ behavior: "smooth", block: "start" });
   }
   async function createBooking(event) {
@@ -149,15 +145,12 @@ export function createBreakfastModule(deps) {
     const roomNumber = document.getElementById("bfRoom").value.trim();
     const guestPhone = document.getElementById("bfPhone").value.trim();
     const guestCount = Number(document.getElementById("bfGuestCount").value);
-    const checkIn = document.getElementById("bfCheckIn").value;
-    const checkOut = document.getElementById("bfCheckOut").value;
-    const includeArrivalBreakfast = document.getElementById("bfArrival").checked;
-    if (!guestName || !roomNumber || !checkIn || !checkOut || !Number.isInteger(guestCount) || guestCount < 1 || guestCount > 12 || checkOut <= checkIn) {
-      toast("Check guest name, room, guest count and stay dates.", "err"); return;
-    }
+    const checkInAt=document.getElementById("bfCheckIn").value;
+    const checkOutAt=document.getElementById("bfCheckOut").value;
+    if(!guestName||!roomNumber||!checkInAt||!checkOutAt||!Number.isInteger(guestCount)||guestCount<1||guestCount>12||checkOutAt<=checkInAt){toast("Check guest name, room, guest count and date/time values.","err");return;}
     if (guestPhone && !/^\+?[0-9\s()-]{8,18}$/.test(guestPhone)) { toast("Enter a valid WhatsApp number or leave it blank.", "err"); return; }
-    const dates = breakfastDates(checkIn, checkOut, includeArrivalBreakfast);
-    if (!dates.length || dates.length > 31 || dates.length * guestCount > 360) { toast("This stay creates too many coupons. Maximum is 360 per booking.", "err"); return; }
+    const dates=breakfastDates(checkInAt,checkOutAt);
+    if(!dates.length||dates.length>31){toast("No 7–10 AM breakfast window overlaps this stay, or stay exceeds 31 days.","err");return;}
     const button = document.getElementById("bfCreateButton");
     button.disabled = true;
     button.innerHTML = '<span class="material-symbols-rounded">hourglass_top</span>Generating passes…';
@@ -168,24 +161,14 @@ export function createBreakfastModule(deps) {
       const passes = [];
       const nowUid = RBAC.session.uid;
       batch.set(bookingDoc, {
-        bookingRef, guestName, roomNumber, guestPhone, guestCount, checkIn, checkOut,
-        includeArrivalBreakfast, breakfastDates: dates, couponCount: dates.length * guestCount,
+        bookingRef, guestName, roomNumber, guestPhone, guestCount, checkIn:checkInAt.slice(0,10), checkOut:checkOutAt.slice(0,10),
+        checkInAt, checkOutAt, serviceWindowStart:"07:00", serviceWindowEnd:"10:00", breakfastDates:dates, couponCount:guestCount,
         status: "active", createdAt: serverTimestamp(), createdBy: nowUid
       });
-      for (const date of dates) {
-        for (let guestSlot = 1; guestSlot <= guestCount; guestSlot++) {
-          const token = randomToken();
-          const tokenHash = await hashToken(token);
-          const entitlementRef = doc(db, "breakfast_entitlements", tokenHash);
-          const pass = {
-            id: tokenHash, bookingId: bookingDoc.id, bookingRef, guestName, roomNumber,
-            guestPhone, guestSlot, validDate: date, validFrom: dateStart(date), validUntil: dateEnd(date),
-            status: "active", qrToken: token, redeemedAt: null, redeemedBy: null,
-            redemptionId: null, createdAt: serverTimestamp(), createdBy: nowUid
-          };
-          batch.set(entitlementRef, pass);
-          passes.push(pass);
-        }
+      for(let guestSlot=1;guestSlot<=guestCount;guestSlot++){
+        const token=randomToken(),tokenHash=await hashToken(token),entitlementRef=doc(db,"breakfast_entitlements",tokenHash);
+        const pass={id:tokenHash,bookingId:bookingDoc.id,bookingRef,guestName,roomNumber,guestPhone,guestSlot,checkInAt,checkOutAt,breakfastDates:dates,serviceWindowStart:"07:00",serviceWindowEnd:"10:00",status:"active",qrToken:token,createdAt:serverTimestamp(),createdBy:nowUid};
+        batch.set(entitlementRef,pass);passes.push(pass);
       }
       await batch.commit();
       toast("Breakfast passes generated · " + passes.length + " coupons");
@@ -205,8 +188,7 @@ export function createBreakfastModule(deps) {
   async function viewBookingCoupons(id) {
     if (!canManage()) return;
     try {
-      const snap = await getDocs(query(collection(db, "breakfast_entitlements"), where("bookingId", "==", id)));
-      const rows = snap.docs.map(s => ({ id: s.id, ...s.data() })).sort((a, b) => a.validDate.localeCompare(b.validDate) || a.guestSlot - b.guestSlot);
+      const rows=todayEntitlements.filter(p=>p.bookingId===id).sort((a,b)=>a.guestSlot-b.guestSlot);
       if (!rows.length) { toast("No coupons found for this booking.", "err"); return; }
       await renderCoupons(rows, "Booking coupons · " + rows[0].bookingRef);
     } catch (error) {
@@ -244,6 +226,12 @@ export function createBreakfastModule(deps) {
     } else {
       toast("QR downloaded. Add the guest's WhatsApp number to send it directly.");
     }
+  }
+  async function shareCouponForPass(pass) {
+    const phone=(pass.guestPhone||"").replace(/\D/g,""),normalized=phone.length===10?"91"+phone:phone;
+    const msg="Clover Greens breakfast pass for Room "+pass.roomNumber+", Guest "+pass.guestSlot+". Valid dates: "+(pass.breakfastDates||[]).join(", ")+". Breakfast window 7:00–10:00 AM. Same QR can be used once per eligible date.";
+    if(normalized)window.open("https://wa.me/"+normalized+"?text="+encodeURIComponent(msg+" Please attach the downloaded QR image."),"_blank","noopener");
+    else toast("QR displayed. Add a guest WhatsApp number to open a direct chat.");
   }
   async function startScanner() {
     if (!canRedeem() || scannerBusy) return;
@@ -337,11 +325,13 @@ export function createBreakfastModule(deps) {
     document.getElementById("bfRedeemManual")?.addEventListener("click", () => redeemToken(document.getElementById("bfManualToken")?.value));
     document.getElementById("bfManualToken")?.addEventListener("keydown", e => { if (e.key === "Enter") redeemToken(e.currentTarget.value); });
     document.getElementById("bfRefresh")?.addEventListener("click", loadData);
+    document.getElementById("bfGuestDate")?.addEventListener("change", renderBookings);
     document.getElementById("bfCloseCoupons")?.addEventListener("click", () => { const panel = document.getElementById("bfCouponsPanel"); if (panel) panel.hidden = true; });
     root()?.addEventListener("click", event => {
       const button = event.target.closest("[data-bf-act]");
       if (!button) return;
       if (button.dataset.bfAct === "view-coupons") viewBookingCoupons(button.dataset.id);
+      if (button.dataset.bfAct === "view-one" || button.dataset.bfAct === "whatsapp-one") { const p=todayEntitlements.find(x=>x.id===button.dataset.id); if(p){renderCoupons([p],"Room "+p.roomNumber+" · Guest "+p.guestSlot);if(button.dataset.bfAct==="whatsapp-one")shareCouponForPass(p);} }
       if (button.dataset.bfAct === "share-coupon") shareCoupon(Number(button.dataset.index));
     });
   }
