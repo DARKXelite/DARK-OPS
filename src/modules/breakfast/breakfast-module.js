@@ -36,14 +36,14 @@ export function createBreakfastModule(deps) {
     const manager = canManage();
     el.innerHTML =
       '<div class="bf-page">' +
-        '<header class="bf-header"><div><div class="bf-eyebrow">GUEST SERVICES · DIGITAL ENTITLEMENTS</div><h2>Breakfast Pass</h2><p>One reusable QR per guest · one redemption per eligible day.</p></div><div class="bf-header-mark"><span class="material-symbols-rounded">qr_code_2</span><span>DAILY PASS</span></div></header>' +
+        '<header class="bf-header"><div><div class="bf-eyebrow">GUEST SERVICES · DIGITAL ENTITLEMENTS</div><h2>Breakfast Pass</h2><p>One reusable QR per guest · one redemption per eligible day.</p></div><div class="bf-header-mark"><span class="material-symbols-rounded">qr_code_2</span><span>7 AM – 10 AM</span></div></header>' +
         '<section class="bf-kpis" aria-label="Today breakfast summary">' +
           '<article class="bf-kpi"><span>EXPECTED TODAY</span><strong id="bfExpected">—</strong><small>Eligible guest passes</small></article>' +
           '<article class="bf-kpi"><span>REDEEMED</span><strong id="bfRedeemed">—</strong><small>Successfully scanned</small></article>' +
           '<article class="bf-kpi"><span>REMAINING</span><strong id="bfRemaining">—</strong><small>Not yet redeemed</small></article>' +
         '</section>' +
         '<div class="bf-workspace">' +
-          (manager ? '<section class="bf-panel bf-booking-panel"><div class="bf-panel-head"><div><span class="bf-step">01 / RECEPTION</span><h3>Add guest booking</h3><p>Enter stay details to generate daily passes.</p></div><span class="material-symbols-rounded">hotel</span></div>' +
+          (manager ? '<section class="bf-panel bf-booking-panel"><div class="bf-panel-head"><div><span class="bf-step">01 / RECEPTION</span><h3>Add guest booking</h3><p>Enter stay details to generate one reusable QR per guest.</p></div><span class="material-symbols-rounded">hotel</span></div>' +
             '<form id="bfBookingForm" class="bf-form" novalidate>' +
               '<label>Lead guest name<input id="bfGuestName" name="guestName" required maxlength="100" placeholder="Guest full name" autocomplete="name"></label>' +
               '<div class="bf-form-row"><label>Room number<input id="bfRoom" name="roomNumber" required maxlength="20" placeholder="e.g. 204"></label><label>Guest count<input id="bfGuestCount" name="guestCount" type="number" min="1" max="12" step="1" value="2" required inputmode="numeric"></label></div>' +
@@ -53,7 +53,7 @@ export function createBreakfastModule(deps) {
               '<button class="bf-primary" type="submit" id="bfCreateButton"><span class="material-symbols-rounded">confirmation_number</span>Generate breakfast passes</button>' +
               '<p class="bf-form-note">Checkout-day breakfast is included by default. Each guest receives one reusable QR for the entire stay.</p>' +
             '</form></section>' : '') +
-          '<section class="bf-panel bf-scanner-panel"><div class="bf-panel-head"><div><span class="bf-step">02 / RESTAURANT</span><h3>Redeem breakfast</h3><p>Scan a guest QR code or enter its pass token.</p></div><span class="material-symbols-rounded">qr_code_scanner</span></div>' +
+          '<section class="bf-panel bf-scanner-panel"><div class="bf-panel-head"><div><span class="bf-step">02 / RESTAURANT</span><h3>Redeem breakfast</h3><p>Scan the same guest QR once per eligible date.</p></div><span class="material-symbols-rounded">qr_code_scanner</span></div>' +
             '<div class="bf-scanner-frame"><div id="breakfastQrReader" class="bf-reader"></div><div class="bf-scanner-placeholder" id="bfScannerPlaceholder"><span class="material-symbols-rounded">photo_camera</span><b>Camera scanner ready</b><small>Use the rear camera on a phone or tablet.</small></div></div>' +
             '<div class="bf-scan-actions"><button class="bf-primary" id="bfStartScanner" type="button" ' + (!canRedeem() ? 'disabled' : '') + '><span class="material-symbols-rounded">photo_camera</span>Start camera</button><button class="bf-secondary" id="bfStopScanner" type="button" disabled><span class="material-symbols-rounded">stop_circle</span>Stop</button></div>' +
             '<div class="bf-manual-scan"><label for="bfManualToken">Manual token entry</label><div><input id="bfManualToken" autocomplete="off" placeholder="Paste pass token"><button class="bf-secondary" id="bfRedeemManual" type="button" ' + (!canRedeem() ? 'disabled' : '') + '>Verify</button></div></div>' +
@@ -231,8 +231,17 @@ export function createBreakfastModule(deps) {
   async function shareCouponForPass(pass) {
     const phone=(pass.guestPhone||"").replace(/\D/g,""),normalized=phone.length===10?"91"+phone:phone;
     const msg="Clover Greens breakfast pass for Room "+pass.roomNumber+", Guest "+pass.guestSlot+". Valid dates: "+(pass.breakfastDates||[]).join(", ")+". Breakfast window 7:00–10:00 AM. Same QR can be used once per eligible date.";
-    if(normalized)window.open("https://wa.me/"+normalized+"?text="+encodeURIComponent(msg+" Please attach the downloaded QR image."),"_blank","noopener");
-    else toast("QR displayed. Add a guest WhatsApp number to open a direct chat.");
+    const box=document.querySelector('[data-bf-qr="0"]'),img=box?.querySelector("img"),canvas=box?.querySelector("canvas");
+    try {
+      const blob=img?.src?await (await fetch(img.src)).blob():canvas?await new Promise(resolve=>canvas.toBlob(resolve,"image/png")):null;
+      if(blob&&navigator.share&&navigator.canShare){
+        const file=new File([blob],"breakfast-room-"+pass.roomNumber+"-guest-"+pass.guestSlot+".png",{type:"image/png"});
+        if(navigator.canShare({files:[file]})){await navigator.share({title:"Clover Greens Breakfast Pass",text:msg,files:[file]});return;}
+      }
+      if(blob){const url=URL.createObjectURL(blob),a=document.createElement("a");a.href=url;a.download="breakfast-room-"+pass.roomNumber+"-guest-"+pass.guestSlot+".png";a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);}
+    } catch(e){if(e.name==="AbortError")return;console.warn("WhatsApp QR share failed",e);}
+    if(normalized)window.open("https://wa.me/"+normalized+"?text="+encodeURIComponent(msg+" The QR image has been downloaded. Please attach it to this chat."),"_blank","noopener");
+    else toast("QR downloaded. Add a WhatsApp number to open the guest chat.");
   }
   async function startScanner() {
     if (!canRedeem() || scannerBusy) return;
