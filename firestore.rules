@@ -15,6 +15,8 @@ service cloud.firestore {
     function storeTeam() { return hasRole(['admin', 'manager', 'storekeeper']); }
     function opsTeam() { return hasRole(['admin', 'manager', 'operator']); }
     function fnbTeam() { return hasRole(['admin', 'manager', 'storekeeper']); }
+    function breakfastStaff() { return hasRole(['admin', 'manager', 'storekeeper', 'operator']); }
+    function breakfastManagers() { return hasRole(['admin', 'manager']); }
 
     function validFnbOrderCreate() {
       let d = request.resource.data;
@@ -324,6 +326,138 @@ service cloud.firestore {
       // Receipt ledger records are immutable. Correct errors through a documented reversal flow.
       allow update, delete: if false;
     }
+
+    // Breakfast Pass: manager-created guest entitlements and staff-only single-use redemption.
+    match /breakfast_bookings/{id} {
+      allow read: if breakfastManagers();
+      allow create: if breakfastManagers()
+        && request.resource.data.keys().hasOnly([
+          'bookingRef', 'guestName', 'roomNumber', 'guestPhone', 'guestCount',
+          'checkIn', 'checkOut', 'includeArrivalBreakfast', 'breakfastDates',
+          'couponCount', 'status', 'createdAt', 'createdBy'
+        ])
+        && request.resource.data.keys().hasAll([
+          'bookingRef', 'guestName', 'roomNumber', 'guestPhone', 'guestCount',
+          'checkIn', 'checkOut', 'includeArrivalBreakfast', 'breakfastDates',
+          'couponCount', 'status', 'createdAt', 'createdBy'
+        ])
+        && request.resource.data.guestName is string
+        && request.resource.data.guestName.size() > 0
+        && request.resource.data.guestName.size() <= 100
+        && request.resource.data.roomNumber is string
+        && request.resource.data.roomNumber.size() > 0
+        && request.resource.data.roomNumber.size() <= 20
+        && request.resource.data.guestPhone is string
+        && request.resource.data.guestPhone.size() <= 18
+        && request.resource.data.guestCount is int
+        && request.resource.data.guestCount >= 1
+        && request.resource.data.guestCount <= 12
+        && request.resource.data.checkIn is string
+        && request.resource.data.checkIn.size() == 10
+        && request.resource.data.checkOut is string
+        && request.resource.data.checkOut.size() == 10
+        && request.resource.data.checkOut > request.resource.data.checkIn
+        && request.resource.data.includeArrivalBreakfast is bool
+        && request.resource.data.breakfastDates is list
+        && request.resource.data.breakfastDates.size() >= 1
+        && request.resource.data.breakfastDates.size() <= 31
+        && request.resource.data.couponCount is int
+        && request.resource.data.couponCount >= 1
+        && request.resource.data.couponCount <= 360
+        && request.resource.data.status == 'active'
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.createdBy == request.auth.uid;
+      allow update, delete: if false;
+    }
+
+    match /breakfast_entitlements/{id} {
+      allow get: if breakfastStaff();
+      allow list: if breakfastManagers();
+      allow create: if breakfastManagers()
+        && request.resource.data.keys().hasOnly([
+          'id', 'bookingId', 'bookingRef', 'guestName', 'roomNumber', 'guestPhone',
+          'guestSlot', 'validDate', 'validFrom', 'validUntil', 'status', 'qrToken',
+          'redeemedAt', 'redeemedBy', 'redemptionId', 'createdAt', 'createdBy'
+        ])
+        && request.resource.data.keys().hasAll([
+          'id', 'bookingId', 'bookingRef', 'guestName', 'roomNumber', 'guestPhone',
+          'guestSlot', 'validDate', 'validFrom', 'validUntil', 'status', 'qrToken',
+          'redeemedAt', 'redeemedBy', 'redemptionId', 'createdAt', 'createdBy'
+        ])
+        && request.resource.data.id == id
+        && request.resource.data.bookingId is string
+        && request.resource.data.bookingRef is string
+        && request.resource.data.guestName is string
+        && request.resource.data.guestName.size() > 0
+        && request.resource.data.guestName.size() <= 100
+        && request.resource.data.roomNumber is string
+        && request.resource.data.roomNumber.size() > 0
+        && request.resource.data.roomNumber.size() <= 20
+        && request.resource.data.guestPhone is string
+        && request.resource.data.guestPhone.size() <= 18
+        && request.resource.data.guestSlot is int
+        && request.resource.data.guestSlot >= 1
+        && request.resource.data.guestSlot <= 12
+        && request.resource.data.validDate is string
+        && request.resource.data.validDate.size() == 10
+        && request.resource.data.validFrom is timestamp
+        && request.resource.data.validUntil is timestamp
+        && request.resource.data.validFrom < request.resource.data.validUntil
+        && request.resource.data.status == 'active'
+        && request.resource.data.qrToken is string
+        && request.resource.data.qrToken.size() == 43
+        && request.resource.data.redeemedAt == null
+        && request.resource.data.redeemedBy == null
+        && request.resource.data.redemptionId == null
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.createdBy == request.auth.uid;
+      allow update: if (
+          breakfastManagers()
+          && resource.data.status == 'active'
+          && request.resource.data.status == 'revoked'
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'revokedAt', 'revokedBy'])
+          && request.resource.data.revokedAt == request.time
+          && request.resource.data.revokedBy == request.auth.uid
+        ) || (
+          breakfastStaff()
+          && resource.data.status == 'active'
+          && request.resource.data.status == 'redeemed'
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'redeemedAt', 'redeemedBy', 'redemptionId'])
+          && request.resource.data.redeemedAt == request.time
+          && request.resource.data.redeemedBy == request.auth.uid
+          && request.resource.data.redemptionId is string
+          && request.resource.data.validFrom <= request.time
+          && request.resource.data.validUntil > request.time
+        );
+      allow delete: if false;
+    }
+
+    match /breakfast_redemptions/{id} {
+      allow read: if breakfastManagers();
+      allow create: if breakfastStaff()
+        && request.resource.data.keys().hasOnly([
+          'entitlementId', 'bookingId', 'bookingRef', 'roomNumber',
+          'guestName', 'guestSlot', 'validDate', 'redeemedAt', 'redeemedBy'
+        ])
+        && request.resource.data.keys().hasAll([
+          'entitlementId', 'bookingId', 'bookingRef', 'roomNumber',
+          'guestName', 'guestSlot', 'validDate', 'redeemedAt', 'redeemedBy'
+        ])
+        && request.resource.data.entitlementId is string
+        && request.resource.data.bookingId is string
+        && request.resource.data.bookingRef is string
+        && request.resource.data.roomNumber is string
+        && request.resource.data.guestName is string
+        && request.resource.data.guestSlot is int
+        && request.resource.data.validDate is string
+        && request.resource.data.redeemedAt == request.time
+        && request.resource.data.redeemedBy == request.auth.uid
+        && existsAfter(/databases/$(database)/documents/breakfast_entitlements/$(request.resource.data.entitlementId))
+        && getAfter(/databases/$(database)/documents/breakfast_entitlements/$(request.resource.data.entitlementId)).data.status == 'redeemed'
+        && getAfter(/databases/$(database)/documents/breakfast_entitlements/$(request.resource.data.entitlementId)).data.redemptionId == id;
+      allow update, delete: if false;
+    }
+
     match /{document=**} {
       allow read, write: if false;
     }
