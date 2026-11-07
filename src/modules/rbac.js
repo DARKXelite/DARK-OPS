@@ -5,12 +5,13 @@ export const ROLE_PERMISSIONS = Object.freeze({
     "shifts.read", "shifts.write", "turf.read", "turf.write", "turf.issue",
     "inventory.read", "inventory.write", "inventory.receipts.read", "expenses.read", "expenses.write",
     "reports.read", "users.read", "users.manage", "fnb.read", "fnb.write", "fnb.receive", "fnb.delete", "fuel.delete", "shifts.delete", "incidents.write", "incidents.delete",
-    "maintenance.read", "maintenance.write", "assignments.read", "assignments.write"
+    "maintenance.read", "maintenance.write", "assignments.read", "assignments.write",
+    "breakfast.read", "breakfast.manage", "breakfast.redeem"
   ]),
   storekeeper: Object.freeze([
     "dashboard.read", "fuel.read", "fuel.write", "turf.read", "turf.issue",
     "inventory.read", "inventory.write", "inventory.receipts.read", "expenses.read", "reports.read",
-    "fnb.read", "fnb.write", "fnb.receive"
+    "fnb.read", "fnb.write", "fnb.receive", "breakfast.read", "breakfast.redeem"
   ]),
   operator: Object.freeze([
     "dashboard.read", "fleet.read", "shifts.read", "shifts.write",
@@ -40,6 +41,7 @@ export function permissionForView(view) {
   if (view === "users") return "users.read";
   if (view === "turfcare") return "turf.read";
   if (view === "fnb") return "fnb.read";
+  if (view === "breakfast") return "breakfast.read";
   return "dashboard.read";
 }
 
