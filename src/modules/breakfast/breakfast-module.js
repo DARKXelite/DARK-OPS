@@ -25,13 +25,9 @@ export function createBreakfastModule(deps) {
     const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(token));
     return [...new Uint8Array(digest)].map(v => v.toString(16).padStart(2, "0")).join("");
   }
-  function breakfastDates(checkIn, checkOut, includeArrival) {
-    const dates = [];
-    let date = includeArrival ? checkIn : addDays(checkIn, 1);
-    while (date <= checkOut && dates.length < 31) {
-      dates.push(date);
-      date = addDays(date, 1);
-    }
+  function breakfastDates(checkInAt, checkOutAt) {
+    const dates=[], first=checkInAt.slice(0,10), last=checkOutAt.slice(0,10);
+    for(let date=first,n=0;date<=last&&n<32;date=addDays(date,1),n++) if(checkInAt<=date+"T10:00"&&checkOutAt>date+"T07:00") dates.push(date);
     return dates;
   }
   function shell() {
@@ -40,7 +36,7 @@ export function createBreakfastModule(deps) {
     const manager = canManage();
     el.innerHTML =
       '<div class="bf-page">' +
-        '<header class="bf-header"><div><div class="bf-eyebrow">GUEST SERVICES · DIGITAL ENTITLEMENTS</div><h2>Breakfast Pass</h2><p>One secure breakfast redemption per guest, per eligible day.</p></div><div class="bf-header-mark"><span class="material-symbols-rounded">qr_code_2</span><span>DAILY PASS</span></div></header>' +
+        '<header class="bf-header"><div><div class="bf-eyebrow">GUEST SERVICES · DIGITAL ENTITLEMENTS</div><h2>Breakfast Pass</h2><p>One reusable QR per guest · one redemption per eligible day.</p></div><div class="bf-header-mark"><span class="material-symbols-rounded">qr_code_2</span><span>DAILY PASS</span></div></header>' +
         '<section class="bf-kpis" aria-label="Today breakfast summary">' +
           '<article class="bf-kpi"><span>EXPECTED TODAY</span><strong id="bfExpected">—</strong><small>Eligible guest passes</small></article>' +
           '<article class="bf-kpi"><span>REDEEMED</span><strong id="bfRedeemed">—</strong><small>Successfully scanned</small></article>' +
@@ -52,22 +48,21 @@ export function createBreakfastModule(deps) {
               '<label>Lead guest name<input id="bfGuestName" name="guestName" required maxlength="100" placeholder="Guest full name" autocomplete="name"></label>' +
               '<div class="bf-form-row"><label>Room number<input id="bfRoom" name="roomNumber" required maxlength="20" placeholder="e.g. 204"></label><label>Guest count<input id="bfGuestCount" name="guestCount" type="number" min="1" max="12" step="1" value="2" required inputmode="numeric"></label></div>' +
               '<label>Guest WhatsApp number <span class="bf-optional">optional</span><input id="bfPhone" name="guestPhone" type="tel" maxlength="18" placeholder="+91 98765 43210" autocomplete="tel"></label>' +
-              '<div class="bf-form-row"><label>Check-in date<input id="bfCheckIn" name="checkIn" type="date" required></label><label>Checkout date<input id="bfCheckOut" name="checkOut" type="date" required></label></div>' +
-              '<label class="bf-check"><input id="bfArrival" type="checkbox"><span><b>Include arrival-day breakfast</b><small>Otherwise, coupons start the morning after check-in.</small></span></label>' +
-              '<div class="bf-date-preview" id="bfDatePreview">Select stay dates to preview coupon count.</div>' +
+              '<div class="bf-form-row"><label>Check-in date<input id="bfCheckIn" name="checkInAt" type="datetime-local" required></label><label>Checkout date<input id="bfCheckOut" name="checkOutAt" type="datetime-local" required></label></div>' +
+              '<div class="bf-date-preview" id="bfDatePreview">Enter stay date/time to preview breakfast eligibility.</div>' +
               '<button class="bf-primary" type="submit" id="bfCreateButton"><span class="material-symbols-rounded">confirmation_number</span>Generate breakfast passes</button>' +
-              '<p class="bf-form-note">Checkout-day breakfast is included by default. Each guest receives a separate QR for each eligible date.</p>' +
+              '<p class="bf-form-note">Checkout-day breakfast is included by default. Each guest receives one reusable QR for the entire stay.</p>' +
             '</form></section>' : '') +
           '<section class="bf-panel bf-scanner-panel"><div class="bf-panel-head"><div><span class="bf-step">02 / RESTAURANT</span><h3>Redeem breakfast</h3><p>Scan a guest QR code or enter its pass token.</p></div><span class="material-symbols-rounded">qr_code_scanner</span></div>' +
             '<div class="bf-scanner-frame"><div id="breakfastQrReader" class="bf-reader"></div><div class="bf-scanner-placeholder" id="bfScannerPlaceholder"><span class="material-symbols-rounded">photo_camera</span><b>Camera scanner ready</b><small>Use the rear camera on a phone or tablet.</small></div></div>' +
             '<div class="bf-scan-actions"><button class="bf-primary" id="bfStartScanner" type="button" ' + (!canRedeem() ? 'disabled' : '') + '><span class="material-symbols-rounded">photo_camera</span>Start camera</button><button class="bf-secondary" id="bfStopScanner" type="button" disabled><span class="material-symbols-rounded">stop_circle</span>Stop</button></div>' +
             '<div class="bf-manual-scan"><label for="bfManualToken">Manual token entry</label><div><input id="bfManualToken" autocomplete="off" placeholder="Paste pass token"><button class="bf-secondary" id="bfRedeemManual" type="button" ' + (!canRedeem() ? 'disabled' : '') + '>Verify</button></div></div>' +
             '<div id="bfScanResult" class="bf-scan-result" aria-live="polite">' + (canRedeem() ? 'Ready to validate a breakfast pass.' : 'Your role does not have redemption access.') + '</div>' +
-            '<p class="bf-form-note">A pass is valid only on its assigned date and can be redeemed once. Duplicate scans are rejected by Firebase.</p>' +
+            '<p class="bf-form-note">One scan per guest per eligible date. Scanning after 10 AM is allowed until the end of that local date.</p>' +
           '</section>' +
         '</div>' +
         (manager ? '<section class="bf-panel bf-bookings-panel"><div class="bf-panel-head bf-bookings-head"><div><span class="bf-step">03 / RECEPTION RECORDS</span><h3>Guest bookings</h3><p>View stays and reopen their generated QR coupons.</p></div><button class="bf-secondary" id="bfRefresh" type="button"><span class="material-symbols-rounded">refresh</span>Refresh</button></div><div id="bfBookingsList" class="bf-bookings-list"><div class="bf-empty">Loading bookings…</div></div></section>' : '') +
-        '<section class="bf-panel bf-coupons-panel" id="bfCouponsPanel" hidden><div class="bf-panel-head bf-bookings-head"><div><span class="bf-step">GENERATED PASSES</span><h3 id="bfCouponsTitle">Guest coupons</h3><p>Each QR is individual and date-specific.</p></div><button class="bf-secondary" id="bfCloseCoupons" type="button">Close</button></div><div id="bfCouponGrid" class="bf-coupon-grid"></div></section>' +
+        '<section class="bf-panel bf-coupons-panel" id="bfCouponsPanel" hidden><div class="bf-panel-head bf-bookings-head"><div><span class="bf-step">GENERATED PASSES</span><h3 id="bfCouponsTitle">Guest coupons</h3><p>The same guest QR works on every eligible breakfast date.</p></div><button class="bf-secondary" id="bfCloseCoupons" type="button">Close</button></div><div id="bfCouponGrid" class="bf-coupon-grid"></div></section>' +
         '<div class="bf-footer-note"><span class="material-symbols-rounded">verified_user</span> Secure single-use passes · Staff access controlled · Redemption history retained</div>' +
       '</div>';
     bind();
@@ -83,15 +78,12 @@ export function createBreakfastModule(deps) {
     const checkIn = document.getElementById("bfCheckIn")?.value;
     const checkOut = document.getElementById("bfCheckOut")?.value;
     const guests = Math.max(1, Math.min(12, Number(document.getElementById("bfGuestCount")?.value || 1)));
-    const arrival = !!document.getElementById("bfArrival")?.checked;
+    
     const target = document.getElementById("bfDatePreview");
     if (!target) return;
-    if (!checkIn || !checkOut || checkOut <= checkIn) {
-      target.textContent = "Choose a checkout date after check-in to preview coupons.";
-      return;
-    }
-    const dates = breakfastDates(checkIn, checkOut, arrival);
-    target.innerHTML = '<b>' + (dates.length * guests) + ' coupons</b><span>' + dates.length + ' breakfast date(s) × ' + guests + ' guest(s)</span><small>' + esc(dates[0]) + ' to ' + esc(dates[dates.length - 1]) + '</small>';
+    if (!checkIn || !checkOut || checkOut <= checkIn) { target.textContent="Choose valid check-in and checkout date/times."; return; }
+    const dates=breakfastDates(checkIn,checkOut);
+    target.innerHTML='<b>'+guests+' guest QR pass(es)</b><span>'+dates.length+' eligible breakfast date(s) × '+guests+' guest(s)</span><small>'+(dates.length?esc(dates[0])+' to '+esc(dates[dates.length-1]):'No 7–10 AM service window overlaps this stay')+'</small>';
   }
   async function loadData() {
     if (!canManage()) return;
@@ -100,7 +92,7 @@ export function createBreakfastModule(deps) {
     try {
       const results = await Promise.all([
         getDocs(query(collection(db, "breakfast_bookings"), orderBy("createdAt", "desc"))),
-        getDocs(query(collection(db, "breakfast_entitlements"), where("validDate", "==", today())))
+        getDocs(collection(db, "breakfast_entitlements"))
       ]);
       bookings = results[0].docs.map(s => ({ id: s.id, ...s.data() }));
       todayEntitlements = results[1].docs.map(s => ({ id: s.id, ...s.data() }));
@@ -112,9 +104,9 @@ export function createBreakfastModule(deps) {
     } finally { loading = false; }
   }
   function renderStats() {
-    const expected = todayEntitlements.length;
-    const redeemed = todayEntitlements.filter(x => x.status === "redeemed").length;
-    const remaining = todayEntitlements.filter(x => x.status === "active").length;
+    const expected=todayEntitlements.filter(x=>x.status==="active"&&(x.breakfastDates||[]).includes(today())).length;
+    const redeemed=todayEntitlements.filter(x=>x.status==="active"&&(x.breakfastDates||[]).includes(today())&&x.lastRedeemedDate===today()).length;
+    const remaining=Math.max(0,expected-redeemed);
     const set = (id, value) => { const el = document.getElementById(id); if (el) el.textContent = String(value); };
     set("bfExpected", expected);
     set("bfRedeemed", redeemed);
@@ -339,7 +331,7 @@ export function createBreakfastModule(deps) {
   function bind() {
     const form = document.getElementById("bfBookingForm");
     form?.addEventListener("submit", createBooking);
-    ["bfCheckIn", "bfCheckOut", "bfGuestCount", "bfArrival"].forEach(id => document.getElementById(id)?.addEventListener("change", updateDatePreview));
+    ["bfCheckIn", "bfCheckOut", "bfGuestCount"].forEach(id => document.getElementById(id)?.addEventListener("change", updateDatePreview));
     document.getElementById("bfStartScanner")?.addEventListener("click", startScanner);
     document.getElementById("bfStopScanner")?.addEventListener("click", stopScanner);
     document.getElementById("bfRedeemManual")?.addEventListener("click", () => redeemToken(document.getElementById("bfManualToken")?.value));
