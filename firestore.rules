@@ -16,7 +16,7 @@ service cloud.firestore {
     function opsTeam() { return hasRole(['admin', 'manager', 'operator']); }
     function fnbTeam() { return hasRole(['admin', 'manager', 'storekeeper']); }
     function breakfastStaff() { return hasRole(['admin', 'manager', 'storekeeper', 'operator']); }
-    function breakfastManagers() { return hasRole(['admin', 'manager']); }
+    function breakfastManagers() { return hasRole(['admin', 'manager']); }\n    function golfStaff() { return hasRole(['admin', 'manager', 'operator']); }\n    function golfManagers() { return hasRole(['admin', 'manager']); }
 
     function validFnbOrderCreate() {
       let d = request.resource.data;
@@ -328,6 +328,37 @@ service cloud.firestore {
     }
 
     // Breakfast Pass: one room-level QR, with an atomic per-day guest redemption counter.
+    // Golf Pass is an independent one-golfer / one-entry collection.
+    // Create and read are restricted to managers; authorised field staff can perform
+    // only the one-way active -> checked_in transition. No public token lookup.
+    match /golf_passes/{id} {
+      allow read: if golfStaff();
+      allow create: if golfManagers()
+        && request.resource.data.keys().hasOnly([
+          'passRef', 'golferName', 'phone', 'category', 'playDate', 'amountReceived',
+          'paymentMethod', 'paymentReference', 'notes', 'tokenHash', 'status',
+          'createdAt', 'createdBy'
+        ])
+        && request.resource.data.tokenHash == id
+        && request.resource.data.status == 'active'
+        && request.resource.data.golferName is string
+        && request.resource.data.golferName.size() > 0
+        && request.resource.data.phone is string
+        && request.resource.data.playDate is string
+        && request.resource.data.playDate.size() == 10
+        && request.resource.data.amountReceived is number
+        && request.resource.data.amountReceived >= 0
+        && request.resource.data.createdBy == request.auth.uid
+        && request.resource.data.createdAt == request.time;
+      allow update: if golfStaff()
+        && resource.data.status == 'active'
+        && request.resource.data.status == 'checked_in'
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'checkedInAt', 'checkedInBy'])
+        && request.resource.data.checkedInBy == request.auth.uid
+        && request.resource.data.checkedInAt == request.time;
+      allow delete: if golfManagers();
+    }
+
     match /breakfast_bookings/{id} {
       allow read: if breakfastManagers();
       allow create: if breakfastManagers()
