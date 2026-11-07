@@ -6,12 +6,12 @@ export const ROLE_PERMISSIONS = Object.freeze({
     "inventory.read", "inventory.write", "inventory.receipts.read", "expenses.read", "expenses.write",
     "reports.read", "users.read", "users.manage", "fnb.read", "fnb.write", "fnb.receive", "fnb.delete", "fuel.delete", "shifts.delete", "incidents.write", "incidents.delete",
     "maintenance.read", "maintenance.write", "assignments.read", "assignments.write",
-    "breakfast.read", "breakfast.manage", "breakfast.redeem"
+    "breakfast.read", "breakfast.manage", "breakfast.redeem", "golf.read", "golf.manage", "golf.scan"
   ]),
   storekeeper: Object.freeze([
     "dashboard.read", "fuel.read", "fuel.write", "turf.read", "turf.issue",
     "inventory.read", "inventory.write", "inventory.receipts.read", "expenses.read", "reports.read",
-    "fnb.read", "fnb.write", "fnb.receive", "breakfast.read", "breakfast.redeem"
+    "fnb.read", "fnb.write", "fnb.receive", "breakfast.read", "breakfast.redeem", "golf.read", "golf.scan"
   ]),
   operator: Object.freeze([
     "dashboard.read", "fleet.read", "shifts.read", "shifts.write",
@@ -42,6 +42,7 @@ export function permissionForView(view) {
   if (view === "turfcare") return "turf.read";
   if (view === "fnb") return "fnb.read";
   if (view === "breakfast") return "breakfast.read";
+  if (view === "golfpass") return "golf.read";
   return "dashboard.read";
 }
 
@@ -52,7 +53,7 @@ export function permissionForCollection(collectionName, write = false) {
     inventory: "inventory.read", logs: "fleet.read", maintenance_logs: "maintenance.read",
     assignment_logs: "assignments.read", turf_plans: "turf.read",
     store_inwards: "inventory.receipts.read", local_expenses: "expenses.read",
-    fnb_orders: "fnb.read", fnb_receipts: "fnb.read", app_roles: "access.manage"
+    fnb_orders: "fnb.read", fnb_receipts: "fnb.read", golf_passes: "golf.read", app_roles: "access.manage"
   };
   const writeMap = {
     users: "users.manage", machines: "fleet.write", fuel_logs: "fuel.write",
@@ -60,7 +61,7 @@ export function permissionForCollection(collectionName, write = false) {
     inventory: "inventory.write", logs: "incidents.write", maintenance_logs: "maintenance.write",
     assignment_logs: "assignments.write", turf_plans: "turf.write",
     store_inwards: "inventory.write", local_expenses: "expenses.write",
-    fnb_orders: "fnb.write", fnb_receipts: "fnb.receive", app_roles: "access.manage"
+    fnb_orders: "fnb.write", fnb_receipts: "fnb.receive", golf_passes: "golf.manage", app_roles: "access.manage"
   };
   return (write ? writeMap : readMap)[collectionName] || "admin.only";
 }
