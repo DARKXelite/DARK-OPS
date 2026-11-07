@@ -148,3 +148,20 @@ test("Firestore realtime listeners are scoped to the selected view", async () =>
   assert.match(js, /registry: \['inventory','inwards','expenses'\]/);
   assert.match(js, /expenses: \['expenses','inventory'\]/);
 });
+
+
+test("Breakfast Pass uses one room QR, a daily guest counter, and a direct WhatsApp handoff", async () => {
+  const module = await read("../src/modules/breakfast/breakfast-module.js");
+  const rules = await read("../firestore.rules");
+  const guestPage = await read("../public/breakfast-pass.html");
+  assert.match(module, /couponCount:1/);
+  assert.match(module, /guestCount,checkInAt,checkOutAt,breakfastDates/);
+  assert.match(module, /ROOM_FULL\|/);
+  assert.match(module, /redeemedCount:nextCount/);
+  assert.match(module, /sendRoomWhatsApp\(p\)/);
+  assert.match(module, /wa\.me\//);
+  assert.match(module, /breakfast-pass\.html/);
+  assert.match(rules, /request\.resource\.data\.redeemedCount == resource\.data\.redeemedCount \+ 1/);
+  assert.match(rules, /request\.resource\.data\.redeemedCount <= resource\.data\.guestCount/);
+  assert.match(guestPage, /new QRCode\(target/);
+});
