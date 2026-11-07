@@ -128,7 +128,7 @@ export function createBreakfastModule(deps) {
     document.getElementById("bfCouponsTitle").textContent = title || "Guest coupons";
     panel.hidden = false;
     grid.innerHTML = rows.map((c, i) =>
-      '<article class="bf-coupon-card"><div class="bf-coupon-top"><b>Room ' + esc(c.roomNumber) + ' · Guest ' + esc(c.guestSlot) + '</b><span class="bf-coupon-status ' + (c.status === "redeemed" ? "used" : c.status === "revoked" ? "revoked" : "active") + '">' + esc(c.status || "active") + '</span></div><div class="bf-qr-wrap"><div class="bf-qr-target" data-bf-qr="' + i + '"></div><strong>' + esc(c.validDate) + '</strong><small>' + esc(c.guestName) + '</small><button class="bf-secondary" type="button" data-bf-act="share-coupon" data-index="' + i + '"><span class="material-symbols-rounded">share</span>Share / download</button></article>'
+      '<article class="bf-coupon-card"><div class="bf-coupon-top"><b>Room ' + esc(c.roomNumber) + ' · Guest ' + esc(c.guestSlot) + '</b><span class="bf-coupon-status active">REUSABLE QR</span></div><div class="bf-qr-wrap"><div class="bf-qr-target" data-bf-qr="' + i + '"></div></div><strong>' + esc((c.breakfastDates || []).length) + ' eligible breakfast date(s)</strong><small>' + esc(c.guestName) + ' · ' + esc(c.bookingRef) + '</small><small>7:00–10:00 AM service window</small><button class="bf-secondary" type="button" data-bf-act="share-coupon" data-index="' + i + '"><span class="material-symbols-rounded">share</span>Share / download</button></article>'
     ).join("");
     rows.forEach((pass,i)=>{
       const target=grid.querySelector('[data-bf-qr="'+i+'"]');
