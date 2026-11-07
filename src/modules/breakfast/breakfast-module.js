@@ -202,38 +202,18 @@ export function createBreakfastModule(deps) {
       toast("Could not load coupons: " + (error.code || error.message), "err");
     }
   }
-  async function shareCoupon(index) {
-    const pass = couponRows[index];
-    if (!pass) return;
-    const box = document.querySelector('[data-bf-qr="' + index + '"]');
-    const canvas = box?.querySelector("canvas");
-    const image = box?.querySelector("img");
-    const message = "Clover Greens shared breakfast QR for Room " + pass.roomNumber + " covering " + pass.guestCount + " guest(s). Valid dates: " + (pass.breakfastDates || []).join(", ") + ". Breakfast window 7:00–10:00 AM. Scan once for each guest on each eligible date.";
-    try {
-      if ((image?.src || canvas) && navigator.share && navigator.canShare) {
-        const blob = image?.src ? await (await fetch(image.src)).blob() : await new Promise(resolve => canvas.toBlob(resolve, "image/png"));
-        const file = new File([blob], "breakfast-room-" + pass.roomNumber + ".png", { type: "image/png" });
-        if (navigator.canShare({ files: [file] })) {
-          await navigator.share({ title: "Clover Greens Breakfast Pass", text: message, files: [file] });
-          return;
-        }
-      }
-    } catch (error) {
-      if (error.name === "AbortError") return;
-      console.warn("Native share unavailable", error);
-    }
-    if (image?.src || canvas) {
-      const url = image?.src || canvas.toDataURL("image/png");
-      const a = document.createElement("a"); a.href = url;
-      a.download = "breakfast-room-" + pass.roomNumber + "-guest-" + pass.guestSlot + ".png"; a.click();
-    }
-    if (pass.guestPhone) {
-      let phone = pass.guestPhone.replace(/\D/g, "");
-      if (phone.length === 10) phone = "91" + phone;
-      window.open("https://wa.me/" + phone + "?text=" + encodeURIComponent(message + " The QR image has been downloaded; attach it to this chat."), "_blank", "noopener");
-    } else {
-      toast("QR downloaded. Add the guest's WhatsApp number to send it directly.");
-    }
+  function shareCoupon(index) {
+    const pass=couponRows[index];
+    if(!pass)return;
+    const box=document.querySelector('[data-bf-qr="' + index + '"]');
+    const canvas=box?.querySelector("canvas");
+    const image=box?.querySelector("img");
+    const url=canvas?canvas.toDataURL("image/png"):image?.src;
+    if(!url){toast("QR image is not ready yet. Try again.","err");return;}
+    const a=document.createElement("a");
+    a.href=url;
+    a.download="breakfast-room-"+pass.roomNumber+".png";
+    a.click();
   }
   function sendRoomWhatsApp(pass) {
     const digits=(pass.guestPhone||"").replace(/\D/g,"");
