@@ -31,10 +31,10 @@ export function createBreakfastModule(deps) {
     for(let date=first,n=0;date<=last&&n<32;date=addDays(date,1),n++) if(checkInAt<=date+"T10:00"&&checkOutAt>date+"T07:00") dates.push(date);
     return dates;
   }
-  function shell() {
+  function shell(scannerOnly = false) {
     const el = root();
     if (!el) return;
-    const manager = canManage();
+    const manager = canManage() && !scannerOnly;
     el.innerHTML =
       '<div class="bf-page">' +
         '<header class="bf-header"><div><div class="bf-eyebrow">GUEST SERVICES · DIGITAL ENTITLEMENTS</div><h2>Breakfast Pass</h2><p>One QR per room booking · one redemption per guest per eligible day.</p></div><div class="bf-header-mark"><span class="material-symbols-rounded">qr_code_2</span><span>7 AM – 10 AM</span></div></header>' +
