@@ -213,8 +213,8 @@ export function createBreakfastModule(deps) {
   async function viewBookingCoupons(id) {
     if (!canManage()) return;
     try {
-      const snap = await getDocs(query(collection(db, "breakfast_entitlements"), where("bookingId", "==", id), orderBy("validDate", "asc")));
-      const rows = snap.docs.map(s => ({ id: s.id, ...s.data() }));
+      const snap = await getDocs(query(collection(db, "breakfast_entitlements"), where("bookingId", "==", id)));
+      const rows = snap.docs.map(s => ({ id: s.id, ...s.data() })).sort((a, b) => a.validDate.localeCompare(b.validDate) || a.guestSlot - b.guestSlot);
       if (!rows.length) { toast("No coupons found for this booking.", "err"); return; }
       await renderCoupons(rows, "Booking coupons · " + rows[0].bookingRef);
     } catch (error) {
@@ -246,7 +246,8 @@ export function createBreakfastModule(deps) {
       a.click();
     }
     if (pass.guestPhone) {
-      const phone = pass.guestPhone.replace(/\D/g, "");
+      let phone = pass.guestPhone.replace(/\D/g, "");
+      if (phone.length === 10) phone = "91" + phone;
       window.open("https://wa.me/" + phone + "?text=" + encodeURIComponent(message + " The QR image has been downloaded; attach it to this chat."), "_blank", "noopener");
     } else {
       toast("QR downloaded. Add the guest's WhatsApp number to send it directly.");
