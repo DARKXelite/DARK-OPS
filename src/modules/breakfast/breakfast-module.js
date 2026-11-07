@@ -92,10 +92,12 @@ export function createBreakfastModule(deps) {
     try {
       const results = await Promise.all([
         getDocs(query(collection(db, "breakfast_bookings"), orderBy("createdAt", "desc"))),
-        getDocs(collection(db, "breakfast_entitlements"))
+        getDocs(collection(db, "breakfast_entitlements")),
+        getDocs(collection(db, "breakfast_redemptions"))
       ]);
       bookings = results[0].docs.map(s => ({ id: s.id, ...s.data() }));
-      todayEntitlements = results[1].docs.map(s => ({ id: s.id, ...s.data() }));
+      const todayRows=results[2].docs.map(s=>({id:s.id,...s.data()})).filter(x=>x.validDate===today());
+      todayEntitlements = results[1].docs.map(s => ({ id: s.id, ...s.data(), todayRedeemedCount:Number(todayRows.find(r=>r.passId===s.id)?.redeemedCount||0) }));
       renderStats();
       renderBookings();
     } catch (error) {
@@ -104,8 +106,9 @@ export function createBreakfastModule(deps) {
     } finally { loading = false; }
   }
   function renderStats() {
-    const expected=todayEntitlements.filter(x=>x.status==="active"&&(x.breakfastDates||[]).includes(today())).length;
-    const redeemed=todayEntitlements.filter(x=>x.status==="active"&&(x.breakfastDates||[]).includes(today())&&x.lastRedeemedDate===today()).length;
+    const eligible=todayEntitlements.filter(x=>x.status==="active"&&(x.breakfastDates||[]).includes(today()));
+    const expected=eligible.reduce((n,x)=>n+Number(x.guestCount||1),0);
+    const redeemed=eligible.reduce((n,x)=>n+Number(x.todayRedeemedCount||0),0);
     const remaining=Math.max(0,expected-redeemed);
     const set = (id, value) => { const el = document.getElementById(id); if (el) el.textContent = String(value); };
     set("bfExpected", expected);
@@ -114,11 +117,14 @@ export function createBreakfastModule(deps) {
   }
   function renderBookings() {
     const el=document.getElementById("bfBookingsList");if(!el)return;
-    const date=document.getElementById("bfGuestDate")?.value||today(),used=new Set(todayEntitlements.filter(p=>p.lastRedeemedDate===date).map(p=>p.id)),rows=[];
-    bookings.forEach(b=>{if(!(b.breakfastDates||[]).includes(date))return;for(let slot=1;slot<=Number(b.guestCount||0);slot++){const p=todayEntitlements.find(x=>x.bookingId===b.id&&Number(x.guestSlot)===slot);if(p)rows.push({b,p,slot,done:used.has(p.id)});}});
-    const label=document.getElementById("bfGuestCountLabel");if(label)label.textContent=rows.length+" eligible guest(s)";
+    const date=document.getElementById("bfGuestDate")?.value||today();
+    const rows=bookings.filter(b=>(b.breakfastDates||[]).includes(date)).map(b=>{
+      const p=todayEntitlements.find(x=>x.bookingId===b.id);
+      return p?{b,p,done:Number(p.todayRedeemedCount||0),total:Number(b.guestCount||p.guestCount||1)}:null;
+    }).filter(Boolean);
+    const label=document.getElementById("bfGuestCountLabel");if(label)label.textContent=rows.reduce((n,x)=>n+x.total,0)+" eligible guest(s) · "+rows.length+" room(s)";
     if(!rows.length){el.innerHTML='<div class="bf-empty">No eligible room guests for '+esc(date)+'.</div>';return;}
-    el.innerHTML=rows.map(({b,p,slot,done})=>'<article class="bf-booking-row"><div class="bf-booking-main"><b>Room '+esc(b.roomNumber)+' · '+esc(b.guestName)+'</b><span>Guest '+slot+' of '+Number(b.guestCount)+'</span><small>'+esc(b.checkInAt||b.checkIn)+' → '+esc(b.checkOutAt||b.checkOut)+'</small></div><span class="bf-booking-status">'+(done?'REDEEMED':'PENDING')+'</span><button class="bf-secondary" type="button" data-bf-act="view-one" data-id="'+esc(p.id)+'">View QR</button><button class="bf-secondary" type="button" data-bf-act="whatsapp-one" data-id="'+esc(p.id)+'">Send to WhatsApp</button></article>').join("");
+    el.innerHTML=rows.map(({b,p,done,total})=>'<article class="bf-booking-row bf-room-guest"><div class="bf-booking-main"><b>Room '+esc(b.roomNumber)+' · '+esc(b.guestName)+'</b><span>'+total+' guest(s) · '+done+'/'+total+' redeemed</span><small>'+esc(b.checkInAt||b.checkIn)+' → '+esc(b.checkOutAt||b.checkOut)+' · '+esc(b.guestPhone||"No WhatsApp number")+'</small></div><span class="bf-booking-status">'+(done>=total?'COMPLETE':done?'PARTIAL':'PENDING')+'</span><button class="bf-secondary" type="button" data-bf-act="view-room" data-id="'+esc(p.id)+'">View room QR</button><button class="bf-primary" type="button" data-bf-act="whatsapp-room" data-id="'+esc(p.id)+'">Send WhatsApp</button></article>').join("");
   }
   async function renderCoupons(rows, title) {
     couponRows = rows;
@@ -128,7 +134,7 @@ export function createBreakfastModule(deps) {
     document.getElementById("bfCouponsTitle").textContent = title || "Guest coupons";
     panel.hidden = false;
     grid.innerHTML = rows.map((c, i) =>
-      '<article class="bf-coupon-card"><div class="bf-coupon-top"><b>Room ' + esc(c.roomNumber) + ' · Guest ' + esc(c.guestSlot) + '</b><span class="bf-coupon-status active">REUSABLE QR</span></div><div class="bf-qr-wrap"><div class="bf-qr-target" data-bf-qr="' + i + '"></div></div><strong>' + esc((c.breakfastDates || []).length) + ' eligible breakfast date(s)</strong><small>' + esc(c.guestName) + ' · ' + esc(c.bookingRef) + '</small><small>7:00–10:00 AM service window</small><button class="bf-secondary" type="button" data-bf-act="share-coupon" data-index="' + i + '"><span class="material-symbols-rounded">share</span>Share / download</button></article>'
+      '<article class="bf-coupon-card"><div class="bf-coupon-top"><b>Room ' + esc(c.roomNumber) + ' · ' + esc(c.guestCount) + ' guests</b><span class="bf-coupon-status active">ROOM QR</span></div><div class="bf-qr-wrap"><div class="bf-qr-target" data-bf-qr="' + i + '"></div></div><strong>' + esc((c.breakfastDates || []).length) + ' eligible breakfast date(s)</strong><small>' + esc(c.guestName) + ' · ' + esc(c.bookingRef) + '</small><small>7:00–10:00 AM · one scan per guest</small><button class="bf-secondary" type="button" data-bf-act="share-coupon" data-index="' + i + '"><span class="material-symbols-rounded">share</span>Share / download</button></article>'
     ).join("");
     rows.forEach((pass,i)=>{
       const target=grid.querySelector('[data-bf-qr="'+i+'"]');
@@ -186,9 +192,9 @@ export function createBreakfastModule(deps) {
   async function viewBookingCoupons(id) {
     if (!canManage()) return;
     try {
-      const rows=todayEntitlements.filter(p=>p.bookingId===id).sort((a,b)=>a.guestSlot-b.guestSlot);
-      if (!rows.length) { toast("No coupons found for this booking.", "err"); return; }
-      await renderCoupons(rows, "Booking coupons · " + rows[0].bookingRef);
+      const rows=todayEntitlements.filter(p=>p.bookingId===id);
+      if (!rows.length) { toast("No room QR found for this booking.", "err"); return; }
+      await renderCoupons(rows, "Room QR · " + rows[0].bookingRef);
     } catch (error) {
       toast("Could not load coupons: " + (error.code || error.message), "err");
     }
