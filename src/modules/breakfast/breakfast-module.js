@@ -5,6 +5,7 @@ export function createBreakfastModule(deps) {
   } = deps;
   let bookings = [];
   let todayEntitlements = [];
+  let redemptionRows = [];
   let scanner = null;
   let scannerBusy = false;
   let couponRows = [];
@@ -96,7 +97,8 @@ export function createBreakfastModule(deps) {
         getDocs(collection(db, "breakfast_redemptions"))
       ]);
       bookings = results[0].docs.map(s => ({ id: s.id, ...s.data() }));
-      const todayRows=results[2].docs.map(s=>({id:s.id,...s.data()})).filter(x=>x.validDate===today());
+      redemptionRows=results[2].docs.map(s=>({id:s.id,...s.data()}));
+      const todayRows=redemptionRows.filter(x=>x.validDate===today());
       todayEntitlements = results[1].docs.map(s => ({ id: s.id, ...s.data(), todayRedeemedCount:Number(todayRows.find(r=>r.passId===s.id)?.redeemedCount||0) }));
       renderStats();
       renderBookings();
@@ -120,7 +122,8 @@ export function createBreakfastModule(deps) {
     const date=document.getElementById("bfGuestDate")?.value||today();
     const rows=bookings.filter(b=>(b.breakfastDates||[]).includes(date)).map(b=>{
       const p=todayEntitlements.find(x=>x.bookingId===b.id);
-      return p?{b,p,done:Number(p.todayRedeemedCount||0),total:Number(b.guestCount||p.guestCount||1)}:null;
+      const r=p?redemptionRows.find(x=>x.passId===p.id&&x.validDate===date):null;
+      return p?{b,p,done:Number(r?.redeemedCount||0),total:Number(b.guestCount||p.guestCount||1)}:null;
     }).filter(Boolean);
     const label=document.getElementById("bfGuestCountLabel");if(label)label.textContent=rows.reduce((n,x)=>n+x.total,0)+" eligible guest(s) · "+rows.length+" room(s)";
     if(!rows.length){el.innerHTML='<div class="bf-empty">No eligible room guests for '+esc(date)+'.</div>';return;}
