@@ -162,7 +162,7 @@ export function createBreakfastModule(deps) {
     if(!dates.length||dates.length>31){toast("No 7–10 AM breakfast window overlaps this stay, or stay exceeds 31 days.","err");return;}
     const button = document.getElementById("bfCreateButton");
     button.disabled = true;
-    button.innerHTML = '<span class="material-symbols-rounded">hourglass_top</span>Generating passes…';
+    button.innerHTML = '<span class="material-symbols-rounded">hourglass_top</span>Generating room QR…';
     try {
       const bookingRef = "CG-" + Date.now().toString(36).toUpperCase() + "-" + Math.random().toString(36).slice(2, 6).toUpperCase();
       const bookingDoc = doc(collection(db, "breakfast_bookings"));
@@ -189,7 +189,7 @@ export function createBreakfastModule(deps) {
       toast("Could not create breakfast passes: " + (error.code || error.message), "err");
     } finally {
       button.disabled = false;
-      button.innerHTML = '<span class="material-symbols-rounded">confirmation_number</span>Generate breakfast passes';
+      button.innerHTML = '<span class="material-symbols-rounded">confirmation_number</span>Generate room QR pass';
     }
   }
   async function viewBookingCoupons(id) {
@@ -331,7 +331,7 @@ export function createBreakfastModule(deps) {
     } catch (error) {
       console.error("Breakfast redemption failed", error);
       const message = error.message || "Could not validate this pass.";
-      if (message.startsWith("DUPLICATE|")) setResult("duplicate", "ALREADY REDEEMED TODAY", "This guest's breakfast was already redeemed at " + message.split("|")[1] + ". The same QR can be used again on the next eligible date.");
+      if (message.startsWith("ROOM_FULL|")) setResult("duplicate", "ROOM GUEST LIMIT REACHED", "All " + message.split("|")[2] + " guests in this room have already redeemed breakfast today. This same QR works again on the next eligible date.");
       else setResult("error", "REDEMPTION REJECTED", message);
     }
   }
