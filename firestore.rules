@@ -332,7 +332,8 @@ service cloud.firestore {
     // Create and read are restricted to managers; authorised field staff can perform
     // only the one-way active -> checked_in transition. No public token lookup.
     match /golf_passes/{id} {
-      allow read: if golfStaff();
+      allow get: if golfStaff();
+      allow list: if golfManagers();
       allow create: if golfManagers()
         && request.resource.data.keys().hasOnly([
           'passRef', 'golferName', 'phone', 'category', 'playDate', 'amountReceived',
