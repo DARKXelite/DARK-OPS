@@ -2235,15 +2235,16 @@ const VIEWS = {
   radar: ["Course Map", "Live fleet tracking & geofences", "my_location", "Fleet Ops"],
   fnb: ["F&B Operations", "Ordering, receivables & consumption analysis", "restaurant", "F&B"],
   breakfast: ["Breakfast Pass", "Guest breakfast entitlements & QR redemption", "qr_code_2", "Guest Services"],
+  breakfastscan: ["Breakfast Scanner", "Dedicated restaurant QR redemption", "qr_code_scanner", "Guest Services"],
   golfpass: ["Golf Pass", "Golfer registration, entry validation & reconciliation", "golf_course", "Guest Services"]
 };
-const RENDER = { overview: renderOverview, fleet: renderFleet, fuel: () => renderLedger(), shifts: () => renderShifts(), records: () => renderRecords(), radar: renderRadarPanel, zones: renderZonePanel, registry: renderRegistry, expenses: renderLocalExpenseLedger, users: renderUsersMaster, incidents: renderIncidents, turfcare: renderTurfCare, fnb: () => fnbModule.render(), breakfast: () => breakfastModule?.render(), golfpass: () => golfPassModule?.render() };
+const RENDER = { overview: renderOverview, fleet: renderFleet, fuel: () => renderLedger(), shifts: () => renderShifts(), records: () => renderRecords(), radar: renderRadarPanel, zones: renderZonePanel, registry: renderRegistry, expenses: renderLocalExpenseLedger, users: renderUsersMaster, incidents: renderIncidents, turfcare: renderTurfCare, fnb: () => fnbModule.render(), breakfast: () => breakfastModule?.render(), breakfastscan: () => breakfastModule?.renderScanner(), golfpass: () => golfPassModule?.render() };
 const NAV_GROUPS = {
   fleetops: { label: 'Fleet Ops', icon: 'precision_manufacturing', view: 'fleet', pages: [['fleet','Fleet'],['shifts','Run logs'],['records','Maintenance & records'],['radar','Course map']] },
   turfops: { label: 'Turf Ops', icon: 'eco', view: 'turfcare', pages: [] },
   masters: { label: 'Store & Ledgers', icon: 'inventory_2', view: 'fuel', pages: [['fuel','Fuel ledger'],['registry','Inventory'],['expenses','Local Expenses'],['users','Users']] },
   fnb: { label: 'F&B', icon: 'restaurant', view: 'fnb', pages: [] },
-  breakfast: { label: 'Breakfast Pass', icon: 'qr_code_2', view: 'breakfast', pages: [] },
+  breakfast: { label: 'Guest Services', icon: 'qr_code_2', view: 'breakfast', pages: [['breakfast','Bookings & passes'],['breakfastscan','Breakfast scanner']] },
   golfpass: { label: 'Golf Pass', icon: 'golf_course', view: 'golfpass', pages: [] }
 };
 let activeNavGroup = 'insights';
@@ -2279,7 +2280,7 @@ function updateBadges(changedCollection = null) {
 function switchView(v) {
   if (!VIEWS[v]) v = 'overview';
   if (RBAC.session.authenticated && !RBAC.can(permissionForView(v))) { toast("Your role does not have access to this section.", "err"); v = "overview"; }
-  if (v !== "breakfast") breakfastModule?.stop();
+  if (v !== "breakfast" && v !== "breakfastscan") breakfastModule?.stop();
   if (v !== "golfpass") golfPassModule?.stop();
   cur = v;
   if (listenersStarted) syncListenersForView();
