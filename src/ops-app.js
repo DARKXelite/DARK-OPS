@@ -1,8 +1,9 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.19.0/firebase-app.js";
-import { getFirestore, collection, addDoc, deleteDoc, doc, updateDoc, setDoc, getDoc, increment, onSnapshot, getDocs, writeBatch, runTransaction, serverTimestamp, query, where, orderBy } from "https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore.js";
+import { getFirestore, collection, addDoc, deleteDoc, doc, updateDoc, setDoc, getDoc, increment, onSnapshot, getDocs, writeBatch, runTransaction, serverTimestamp, query, where, orderBy, Timestamp } from "https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore.js";
 import { getAuth, onAuthStateChanged, signInWithPhoneNumber, RecaptchaVerifier, signOut } from "https://www.gstatic.com/firebasejs/12.19.0/firebase-auth.js";
 import { initializeAppCheck, ReCaptchaEnterpriseProvider } from "https://www.gstatic.com/firebasejs/12.19.0/firebase-app-check.js";
 import { createFnbModule } from "./modules/fnb/fnb-module.js";
+import { createBreakfastModule } from "./modules/breakfast/breakfast-module.js";
 import { inventoryOnHand } from "./domain/inventory-balance.js";
 import { ROLE_PERMISSIONS, ROLE_LABELS, canRole, permissionForAction, permissionForView, permissionForCollection } from "./modules/rbac.js";
 
@@ -2217,6 +2218,7 @@ const fnbModule = createFnbModule({
 });
 
 /* ================= NAV / RENDER LOOP ================= */
+let breakfastModule = null;
 const VIEWS = {
   overview: ["Insights", "AI-assisted operating intelligence", "query_stats", "Insights"],
   fleet: ["Fleet Directory", "Machines & cycles", "precision_manufacturing", "Fleet Ops"],
@@ -2229,14 +2231,16 @@ const VIEWS = {
   users: ["Users Master", "Workforce directory", "group", "Store & Ledgers"],
   records: ["Maintenance & Records", "Service, assignments & history", "folder_managed", "Fleet Ops"],
   radar: ["Course Map", "Live fleet tracking & geofences", "my_location", "Fleet Ops"],
-  fnb: ["F&B Operations", "Ordering, receivables & consumption analysis", "restaurant", "F&B"]
+  fnb: ["F&B Operations", "Ordering, receivables & consumption analysis", "restaurant", "F&B"],
+  breakfast: ["Breakfast Pass", "Guest breakfast entitlements & QR redemption", "qr_code_2", "Guest Services"]
 };
-const RENDER = { overview: renderOverview, fleet: renderFleet, fuel: () => renderLedger(), shifts: () => renderShifts(), records: () => renderRecords(), radar: renderRadarPanel, zones: renderZonePanel, registry: renderRegistry, expenses: renderLocalExpenseLedger, users: renderUsersMaster, incidents: renderIncidents, turfcare: renderTurfCare, fnb: () => fnbModule.render() };
+const RENDER = { overview: renderOverview, fleet: renderFleet, fuel: () => renderLedger(), shifts: () => renderShifts(), records: () => renderRecords(), radar: renderRadarPanel, zones: renderZonePanel, registry: renderRegistry, expenses: renderLocalExpenseLedger, users: renderUsersMaster, incidents: renderIncidents, turfcare: renderTurfCare, fnb: () => fnbModule.render(), breakfast: () => breakfastModule?.render() };
 const NAV_GROUPS = {
   fleetops: { label: 'Fleet Ops', icon: 'precision_manufacturing', view: 'fleet', pages: [['fleet','Fleet'],['shifts','Run logs'],['records','Maintenance & records'],['radar','Course map']] },
   turfops: { label: 'Turf Ops', icon: 'eco', view: 'turfcare', pages: [] },
   masters: { label: 'Store & Ledgers', icon: 'inventory_2', view: 'fuel', pages: [['fuel','Fuel ledger'],['registry','Inventory'],['expenses','Local Expenses'],['users','Users']] },
-  fnb: { label: 'F&B', icon: 'restaurant', view: 'fnb', pages: [] }
+  fnb: { label: 'F&B', icon: 'restaurant', view: 'fnb', pages: [] },
+  breakfast: { label: 'Breakfast Pass', icon: 'qr_code_2', view: 'breakfast', pages: [] }
 };
 let activeNavGroup = 'insights';
 function groupForView(v) { if (v === 'overview') return 'insights'; return Object.keys(NAV_GROUPS).find(k => NAV_GROUPS[k].view === v || NAV_GROUPS[k].pages.some(p => p[0] === v) || (k === 'fleetops' && v === 'zones')) || 'insights'; }
@@ -2388,6 +2392,7 @@ function startListeners() {
 }
 function stopListeners() {
   listenersStarted = false;
+  breakfastModule?.stop();
   [...unsubs.keys()].forEach(stopOneListener);
 }
 // Only the radar needs a timed refresh for stale/live age labels. The Insights dashboard is event-driven.
@@ -3015,6 +3020,10 @@ const RBAC = {
   session: { role: null, authenticated: false, uid: null, displayName: "" },
   can(permission) { return this.session.authenticated && canRole(this.session.role, permission); }
 };
+breakfastModule = createBreakfastModule({
+  db, auth, RBAC, collection, doc, getDocs, writeBatch, runTransaction,
+  query, where, orderBy, serverTimestamp, Timestamp, esc, today, addDays, toast
+});
 window.CLOVER_RBAC = RBAC;
 buildNav();
 
