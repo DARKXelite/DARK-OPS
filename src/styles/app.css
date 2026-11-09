@@ -1285,3 +1285,8 @@ body.turf-board-mode #v-turfcare .turf-weekly-card {
 .user-tools-extended .user-role-filter select{min-width:120px;max-width:160px}
 .user-module-cell{max-width:260px;white-space:normal;font-size:11px;color:var(--muted);line-height:1.5;text-transform:capitalize}
 @media(max-width:900px){.user-admin-summary{grid-template-columns:repeat(3,minmax(0,1fr))}}\n@media(max-width:700px){.user-admin-summary{grid-template-columns:repeat(2,minmax(0,1fr))}.user-admin-grid,.access-module-grid{grid-template-columns:1fr}.modal.user-admin{width:100%}.user-tools-extended .user-role-filter{flex:1 1 42%}.user-tools-extended .user-role-filter select{max-width:none;width:100%}}
+
+.user-activation-code{padding:18px;border:1px solid var(--border);border-radius:12px;background:var(--surface)}
+.user-activation-code label{display:block;margin-bottom:8px;font-size:12px;font-weight:800;color:var(--muted)}
+.user-activation-code input{width:100%;padding:14px;border:1px solid var(--border);border-radius:9px;background:var(--surface-2);font:700 15px ui-monospace,monospace;letter-spacing:.06em}
+.user-activation-code p{margin:10px 0 0;color:var(--muted);font-size:12px;line-height:1.5}
