@@ -143,3 +143,52 @@ Implement Android consumption of this exact contract:
 ## Shared implementation source
 
 The canonical enums, module catalog, profile builder and validation are in `src/modules/user-management.js`. Import these constants rather than duplicating role/module strings in either client.
+
+## Trusted provisioning implementation
+
+The Web project now has a Firebase Functions backend in `functions/` (Node.js 22, region `asia-south1`).
+
+### Android activation and sign-in
+
+1. An administrator creates an Android staff profile. It remains `pending`.
+2. The Web User & Access Management screen calls `provisionAndroidStaff`.
+3. The callable verifies the administrator, validates the profile and module catalog, creates a separate Firebase Auth email/password identity, links `users/{staffProfileId}` and `app_roles/{authUid}`, and returns a cryptographically random one-time activation code.
+4. The code expires after 30 minutes, is stored only as a SHA-256 hash, and allows at most five incorrect attempts. The client cannot read `android_invites`.
+5. Android calls `redeemAndroidInvite` with the registered mobile number, activation code and a new password of at least 12 characters. The callable consumes the invite, sets the password and returns a Firebase custom token.
+6. Android signs in with `signInWithCustomToken`. Future logins use email/password with the deterministic internal email alias:
+   - Normalize mobile to E.164.
+   - Compute SHA-256 of the normalized mobile number and take the first 32 lowercase hexadecimal characters.
+   - Email is `android-{hash}@android.clovergreens.invalid`.
+   - The alias is not an email inbox and must never be displayed as a contact address.
+7. Android must read its own `app_roles/{authUid}` and `users/{staffProfileId}` records after sign-in and verify platform, active state, linked UID, role and matching module grants before showing operational screens.
+
+The Android Auth identity deliberately has no phone number attached. The staff mobile remains in the staff profile and is used only to locate the one-time activation invite. This avoids Firebase's one-phone-number-per-project limitation while preserving a separate UID.
+
+### Web OTP identity linking
+
+1. The staff member completes the existing Web phone OTP flow once. If no role exists yet, the Web app signs out; the Firebase Auth identity remains created.
+2. An administrator copies that user's UID from Firebase Authentication and uses **Link OTP UID** on the pending Web profile.
+3. `linkWebStaffIdentity` verifies that the Auth user's verified phone number matches the profile mobile number and refuses to overwrite an existing `app_roles` identity.
+4. The backend links the profile and creates the Web `app_roles` record.
+
+### Updating and suspending linked staff
+
+- `updateStaffAccess` synchronizes the staff profile and authorization record in one Firestore batch.
+- A suspended identity has `app_roles.active = false` and its Firebase Auth account is disabled.
+- Re-activating the profile re-enables the Auth identity and updates the authorization record.
+- Mobile number changes after linking are intentionally blocked; use a separately verified identity migration.
+- `reissueAndroidInvite` replaces an expired or lost Android activation code.
+
+### Firestore authorization
+
+New platform-linked `app_roles` documents must match their staff profile's platform, role, status, UID and module list. Module grants are checked at the collection boundary. Legacy role documents without platform fields retain their existing policy for backward compatibility. `other_modules` is not a wildcard; `fnb_ops` is not in the approved module catalog and therefore platform-linked accounts do not gain F&B order access through it.
+
+### Deployment requirements
+
+- Firebase project: `clover-greens-ops`.
+- Cloud Functions region: `asia-south1`.
+- Cloud Functions require the Firebase project to use the Blaze billing plan.
+- Deploy backend and rules only after the emulator suite and production build pass:
+  `firebase deploy --only functions,firestore:rules --project clover-greens-ops`.
+- Do not deploy rules before the Android app is updated to use the new separate identity flow. The backend and rules are additive for legacy role documents, but platform-linked records require the linked profile fields.
+- No deployment is performed by this PR automatically.
