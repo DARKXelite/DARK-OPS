@@ -270,7 +270,7 @@ export function createBreakfastModule(deps) {
       new window.QRCode(host,{text:pass.qrToken,width:420,height:420,colorDark:"#000000",colorLight:"#FFFFFF",correctLevel:window.QRCode.CorrectLevel.H});
       const src=host.querySelector("canvas")?.toDataURL("image/png")||host.querySelector("img")?.src;
       const valid=(pass.breakfastDates||[]).join(", ");
-      const message="Hello "+pass.guestName+",\n\nYour Clover Greens breakfast pass for Room "+pass.roomNumber+" is ready.\nGuests: "+pass.guestCount+"\\nValid breakfast dates: "+valid+"\\nBreakfast service: 7:00 AM–10:00 AM.\n\nPlease show the attached QR once for each guest. Each guest can redeem once per eligible date.";
+      const message="Hello "+pass.guestName+",\n\nYour Clover Greens breakfast pass for Room "+pass.roomNumber+" is ready.\nGuests: "+pass.guestCount+"\nValid breakfast dates: "+valid+"\nBreakfast service: 7:00 AM–10:00 AM.\n\nPlease show the attached QR once for each guest. Each guest can redeem once per eligible date.";
       const result=await printer.shareQrOnWhatsApp(src,"breakfast-room-"+pass.roomNumber+".png",pass.guestPhone,message);
       toast(result==="shared"?"QR image shared. Choose WhatsApp and send it.":"QR downloaded. Attach it in the WhatsApp chat that opened.","ok");
     } catch(error) { toast(error.message||"Could not share breakfast QR.","err"); }
