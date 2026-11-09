@@ -3188,10 +3188,12 @@ const PLATFORM_ROLE_PERMISSIONS = Object.freeze({
   marshal: ["dashboard.read", "golf.read", "golf.scan"],
   foe: ["dashboard.read", "breakfast.read", "breakfast.redeem"],
   workshop_manager: ["dashboard.read", "fleet.read", "maintenance.read", "maintenance.write", "assignments.read"],
+  golf_superintendent: ["dashboard.read", "fleet.read", "shifts.read", "shifts.write", "turf.read", "turf.write", "turf.issue", "inventory.read", "maintenance.read", "assignments.read", "reports.read"],
   user: ["dashboard.read"]
 });
 const PERMISSION_MODULE = Object.freeze({
   "fuel.read": "fuel_fertilizer_dashboard", "fuel.write": "fuel_fertilizer_dashboard", "fuel.delete": "fuel_fertilizer_dashboard",
+  "fnb.read": "fnb_ops", "fnb.write": "fnb_ops", "fnb.receive": "fnb_ops", "fnb.delete": "fnb_ops",
   "inventory.read": "inventory", "inventory.write": "inventory", "inventory.receipts.read": "inventory",
   "fleet.read": "fleet_ops", "fleet.write": "fleet_ops", "shifts.read": "fleet_ops", "shifts.write": "fleet_ops",
   "incidents.write": "fleet_ops", "incidents.delete": "fleet_ops", "assignments.read": "fleet_ops", "assignments.write": "fleet_ops",
@@ -3277,6 +3279,19 @@ onAuthStateChanged(auth, async user => {
       roleSnap = await getDoc(doc(db, "app_roles", user.uid));
     }
     const roleData = roleSnap.exists() ? roleSnap.data() : null;
+    if (roleData?.platform) {
+      const linkedProfile = roleData.staffProfileId ? await getDoc(doc(db, "users", roleData.staffProfileId)) : null;
+      const profile = linkedProfile?.exists() ? linkedProfile.data() : null;
+      const sameModules = Array.isArray(profile?.moduleAccess) && Array.isArray(roleData.moduleAccess)
+        && JSON.stringify(profile.moduleAccess) === JSON.stringify(roleData.moduleAccess);
+      if (roleData.platform !== "web" || !profile || profile.status !== "active"
+        || profile.authUid !== user.uid || profile.platform !== "web"
+        || profile.platformRole !== roleData.platformRole || !sameModules) {
+        await signOut(auth);
+        if (error) error.textContent = "This account is not linked to an active Web App staff profile. Ask an administrator to verify the platform assignment.";
+        return;
+      }
+    }
     if (!roleData || roleData.active !== true || !ROLE_PERMISSIONS[roleData.role]) {
       await signOut(auth);
       if (error) error.textContent = "This account has no active application role. Ask an administrator to assign access.";
