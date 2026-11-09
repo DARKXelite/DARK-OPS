@@ -191,10 +191,18 @@ exports.linkWebStaffIdentity = onCall({ region: REGION, maxInstances: 5 }, async
   if (duplicates.size !== 1 || duplicates.docs[0].id !== staffProfileId) {
     throw new HttpsError("failed-precondition", "Mobile number must belong to exactly one staff profile.");
   }
-  const existingRole = await db.doc("app_roles/" + authUid).get();
-  if (existingRole.exists) throw new HttpsError("already-exists", "This Firebase Auth identity already has an application role. Do not overwrite an existing account.");
+  const roleRef = db.doc("app_roles/" + authUid);
+  const existingRole = await roleRef.get();
+  if (existingRole.exists) {
+    const existingData = existingRole.data();
+    // Upgrade only a legacy, non-administrative workforce role. Never overwrite
+    // an admin/manager or an identity already assigned to another platform.
+    if (existingData.platform || !["operator", "storekeeper"].includes(existingData.role)) {
+      throw new HttpsError("already-exists", "This Firebase Auth identity already has a protected application role and cannot be linked through staff migration.");
+    }
+  }
   const batch = db.batch();
-  batch.set(db.doc("app_roles/" + authUid), {
+  batch.set(roleRef, {
     role: authRoleForPlatformRole(profile.platformRole),
     active: true,
     displayName: profile.fullName,
