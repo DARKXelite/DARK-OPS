@@ -263,8 +263,10 @@ exports.updateStaffAccess = onCall({ region: REGION, maxInstances: 5 }, async re
     updatedBy: request.auth.uid
   });
   try {
-    await auth.updateUser(profile.authUid, { displayName: fullName, disabled: status !== "active" });
+    // Commit the deny/allow decision first. If Auth propagation fails, Firestore
+    // still denies suspended users and an administrator can safely retry activation.
     await batch.commit();
+    await auth.updateUser(profile.authUid, { displayName: fullName, disabled: status !== "active" });
   } catch (error) {
     throw callableError(error);
   }
