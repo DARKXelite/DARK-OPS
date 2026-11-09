@@ -844,3 +844,99 @@ button.secondary, .btn-secondary,
   #login .login-assurance { flex-wrap:wrap;white-space:normal; }
   #login .login-footer { flex-direction:column;gap:5px; }
 }
+
+
+/* USER ACCESS MANAGEMENT CONTRAST FIX: remove legacy pale olive rows/cards from the directory only. */
+#v-users,
+#v-users .card,
+#v-users .panel,
+#v-users .section-card,
+#v-users .table-wrap,
+#v-users .table-container,
+#v-users .user-tools,
+#v-users .user-search,
+#v-users .user-role-filter,
+#v-users .kpi,
+#v-users .kpi-card,
+#v-users .stat-card,
+#v-users .summary-card,
+#v-users .users-summary,
+#v-users .user-summary,
+#v-users .directory-summary {
+  background-color:#192116 !important;
+  color:#E9EDDC !important;
+  border-color:#465338 !important;
+}
+#v-users table,
+#v-users table tbody,
+#v-users table tbody tr,
+#v-users table tbody tr:nth-child(odd),
+#v-users table tbody tr:nth-child(even),
+#v-users table tbody tr:hover,
+#v-users table tbody td {
+  background:#192116 !important;
+  background-color:#192116 !important;
+  color:#E9EDDC !important;
+  border-color:#39482D !important;
+}
+#v-users table thead tr,
+#v-users table thead th {
+  background:#26331D !important;
+  background-color:#26331D !important;
+  color:#F3F4E8 !important;
+  border-color:#465338 !important;
+}
+#v-users table td b,
+#v-users table td strong,
+#v-users table td span,
+#v-users table td small,
+#v-users .user-count,
+#v-users .user-role-filter,
+#v-users label,
+#v-users .muted {
+  color:#C1C8AE !important;
+}
+#v-users table td .btn,
+#v-users table td button,
+#v-users .user-search input,
+#v-users .user-role-filter select,
+#v-users input,
+#v-users select {
+  background-color:#202B1B !important;
+  color:#F3F4E8 !important;
+  border-color:#536244 !important;
+}
+#v-users .user-search { background:#151C12 !important; }
+#v-users .user-search input { background:transparent !important; }
+#v-users table td .btn-primary,
+#v-users button.btn-primary {
+  background:#465A30 !important;
+  color:#FFFFFF !important;
+  border-color:#829653 !important;
+}
+#v-users table td .btn-danger {
+  background:#40221D !important;
+  color:#FFB8AD !important;
+  border-color:#8D4940 !important;
+}
+#v-users .badge,
+#v-users .status-pill {
+  background:#29351F !important;
+  color:#D7DF91 !important;
+  border-color:#536244 !important;
+}
+#v-users .badge.warn,
+#v-users .status-pill.warning {
+  background:#3B3018 !important;
+  color:#F0D184 !important;
+  border-color:#7C6533 !important;
+}
+#v-users .badge.error,
+#v-users .status-pill.error {
+  background:#40221D !important;
+  color:#FFB8AD !important;
+  border-color:#8D4940 !important;
+}
+#v-users .user-search input::placeholder { color:#89957B !important; }
+#v-users table tbody tr:hover,
+#v-users table tbody tr:hover td { background:#202B1B !important; }
