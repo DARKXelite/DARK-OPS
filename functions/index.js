@@ -187,6 +187,10 @@ exports.linkWebStaffIdentity = onCall({ region: REGION, maxInstances: 5 }, async
   if (normalizeMobile(authUser.phoneNumber) !== normalizeMobile(profile.mobileNumber)) {
     throw new HttpsError("failed-precondition", "The Firebase Auth phone number does not match the staff profile mobile number.");
   }
+  const duplicates = await db.collection("users").where("mobileNumber", "==", profile.mobileNumber).get();
+  if (duplicates.size !== 1 || duplicates.docs[0].id !== staffProfileId) {
+    throw new HttpsError("failed-precondition", "Mobile number must belong to exactly one staff profile.");
+  }
   const existingRole = await db.doc("app_roles/" + authUid).get();
   if (existingRole.exists) throw new HttpsError("already-exists", "This Firebase Auth identity already has an application role. Do not overwrite an existing account.");
   const batch = db.batch();
