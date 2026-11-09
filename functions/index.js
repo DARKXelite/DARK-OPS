@@ -118,7 +118,7 @@ exports.redeemAndroidInvite = onCall({ region: REGION, maxInstances: 10 }, async
   const mobileNumber = normalizeMobile(request.data?.mobileNumber);
   const inviteCode = String(request.data?.activationCode || "");
   const newPassword = String(request.data?.newPassword || "");
-  if (!/^\\+[1-9]\\d{7,14}$/.test(mobileNumber) || inviteCode.length < 24 || inviteCode.length > 80) {
+  if (!/^\+[1-9]\d{7,14}$/.test(mobileNumber) || inviteCode.length < 24 || inviteCode.length > 80) {
     throw new HttpsError("invalid-argument", "Enter the registered mobile number and activation code.");
   }
   if (newPassword.length < 12 || newPassword.length > 128) {
