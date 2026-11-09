@@ -2045,8 +2045,8 @@ function openUserManagementForm(userId=null) {
     ${fld('Platform role',`<select id="umRole" required>${initial.roleOptions}</select>`)}
     <div class="user-access-heading"><div><b>Module access</b><span>Grant only the modules this person needs.</span></div><span id="umModuleCount" class="badge gold">0 selected</span></div>
     <div id="umModules" class="access-module-grid">${initial.moduleOptions}</div>
-    ${fld('Account status',`<select id="umStatus">${statuses}</select>`,'New profiles remain pending until a separate Firebase identity and authorization record are provisioned.')}
-    <div class="user-admin-notice"><span class="material-symbols-rounded">lock</span><span>Saving this profile does not create login credentials or grant Firebase access. Authentication provisioning and Firestore enforcement are separate steps.</span></div>`;
+    ${fld('Profile status',`<select id="umStatus">${statuses}</select>`,'New profiles remain pending until a separate Firebase identity and authorization record are provisioned.')}
+    <div class="user-admin-notice"><span class="material-symbols-rounded">lock</span><span>Platform, module grants and profile status are configuration only at this stage. They do not provision credentials, enforce module-level Firestore access or revoke an existing app_roles login. Trusted provisioning and rules enforcement are separate steps.</span></div>`;
   openForm({
     title:existing?'Manage staff access':'Create staff profile',
     sub:existing?'Update platform assignment and module permissions.':'Create a staff directory record and configure platform access.',
