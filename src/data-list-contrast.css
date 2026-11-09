@@ -1,0 +1,110 @@
+/* Global readable data-list surfaces
+   Loaded after every module stylesheet so local table rules cannot restore pale rows. */
+:root {
+  --data-list-bg: #0D1913;
+  --data-list-row: #101F17;
+  --data-list-row-alt: #14251B;
+  --data-list-row-hover: #1B3325;
+  --data-list-head: #20392B;
+  --data-list-text: #E8F0EA;
+  --data-list-muted: #B9C9BE;
+  --data-list-border: rgba(190, 211, 196, .16);
+}
+
+/* Native data tables across every module, including generated reconciliation tables. */
+main.content table,
+main.content table tbody,
+main.content table tfoot,
+main.content table tr,
+main.content table td,
+main.content table th,
+.modal table,
+.drawer table,
+.table-wrap table {
+  color: var(--data-list-text);
+}
+
+main.content table,
+.modal table,
+.drawer table,
+.table-wrap table {
+  background: var(--data-list-bg) !important;
+  border-color: var(--data-list-border) !important;
+}
+
+main.content table thead th,
+main.content table th,
+.modal table thead th,
+.modal table th,
+.drawer table thead th,
+.drawer table th,
+.table-wrap table thead th,
+.table-wrap table th {
+  background: var(--data-list-head) !important;
+  color: #F1F5F2 !important;
+  border-bottom: 1px solid var(--data-list-border) !important;
+}
+
+main.content table tbody tr,
+main.content table tbody tr td,
+.modal table tbody tr,
+.modal table tbody tr td,
+.drawer table tbody tr,
+.drawer table tbody tr td,
+.table-wrap table tbody tr,
+.table-wrap table tbody tr td {
+  background-color: var(--data-list-row) !important;
+  color: var(--data-list-text);
+  border-bottom: 1px solid var(--data-list-border) !important;
+}
+
+main.content table tbody tr:nth-child(even),
+main.content table tbody tr:nth-child(even) td,
+.modal table tbody tr:nth-child(even),
+.modal table tbody tr:nth-child(even) td,
+.drawer table tbody tr:nth-child(even),
+.drawer table tbody tr:nth-child(even) td,
+.table-wrap table tbody tr:nth-child(even),
+.table-wrap table tbody tr:nth-child(even) td {
+  background-color: var(--data-list-row-alt) !important;
+}
+
+main.content table tbody tr:hover,
+main.content table tbody tr:hover td,
+.modal table tbody tr:hover,
+.modal table tbody tr:hover td,
+.drawer table tbody tr:hover,
+.drawer table tbody tr:hover td,
+.table-wrap table tbody tr:hover,
+.table-wrap table tbody tr:hover td {
+  background-color: var(--data-list-row-hover) !important;
+  color: #FFFFFF;
+}
+
+main.content table tfoot td,
+.modal table tfoot td,
+.drawer table tfoot td,
+.table-wrap table tfoot td {
+  background: #1A3022 !important;
+  color: #F1F5F2 !important;
+  border-top: 1px solid var(--data-list-border) !important;
+}
+
+/* Keep links and controls readable inside dense registers. */
+main.content table a,
+.modal table a,
+.drawer table a,
+.table-wrap table a {
+  color: #D8C18F;
+}
+main.content table input,
+main.content table select,
+main.content table textarea,
+.modal table input,
+.modal table select,
+.drawer table input,
+.drawer table select {
+  background: #0B1711 !important;
+  color: #F1F5F2 !important;
+  border-color: rgba(190, 211, 196, .25) !important;
+}
