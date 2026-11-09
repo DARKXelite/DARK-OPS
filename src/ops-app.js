@@ -2004,13 +2004,13 @@ function renderUsersMaster() {
   const webCount=all.filter(u=>u.platform==='web').length;
   const androidCount=all.filter(u=>u.platform==='android').length;
   const loginReady=all.filter(u=>u.status==='active'&&!!u.authUid).length;
-  const pendingSetup=all.length-loginReady;
+  const awaitingOtp=all.filter(u=>u.status==='active'&&!u.authUid).length;
   setHTML($('#usersTbl'), `<div class="user-admin-summary" aria-label="Staff access summary">
     <div class="user-admin-stat"><span>Total staff</span><b>${all.length}</b><small>All directory records</small></div>
     <div class="user-admin-stat"><span>Web profiles</span><b>${webCount}</b><small>Web App assignment</small></div>
     <div class="user-admin-stat"><span>Android profiles</span><b>${androidCount}</b><small>Android App assignment</small></div>
     <div class="user-admin-stat"><span>Login-ready</span><b>${loginReady}</b><small>Linked identity + active</small></div>
-    <div class="user-admin-stat"><span>Setup required</span><b>${pendingSetup}</b><small>Pending or legacy records</small></div>
+    <div class="user-admin-stat"><span>Awaiting first OTP</span><b>${awaitingOtp}</b><small>Active profiles not yet claimed</small></div>
   </div><div class="user-tools user-tools-extended">
     <label class="user-search"><span class="material-symbols-rounded">search</span><input id="usersSearch" value="${esc(usersSearchText)}" placeholder="Search name, mobile, role or module" aria-label="Search users"></label>
     <label class="user-role-filter">Platform<select id="usersPlatformFilter"><option value="all">All platforms</option><option value="web" ${usersPlatformFilter==='web'?'selected':''}>Web App</option><option value="android" ${usersPlatformFilter==='android'?'selected':''}>Android App</option><option value="legacy" ${usersPlatformFilter==='legacy'?'selected':''}>Legacy / unassigned</option></select></label>
