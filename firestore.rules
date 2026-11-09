@@ -295,7 +295,10 @@ service cloud.firestore {
       // First OTP sign-in can create only the caller's own role, atomically claiming
       // the active staff profile whose mobile matches Firebase's verified phone.
       allow create: if (
-          admin()
+          (admin()
+            && request.resource.data.keys().hasOnly(['role', 'active', 'updatedAt', 'updatedBy', 'displayName'])
+            && request.resource.data.role in ['admin', 'manager', 'storekeeper', 'operator']
+            && request.resource.data.active is bool)
           || (signedIn()
             && request.auth.uid == uid
             && request.auth.uid == 'C1l8ArB3GlSaAQr6iw4O9RKGGik1'
@@ -306,9 +309,7 @@ service cloud.firestore {
             'role', 'active', 'updatedAt', 'updatedBy', 'displayName',
             'platform', 'staffProfileId', 'platformRole', 'moduleAccess'
           ]) && validStaffClaim(uid))
-        )
-        && request.resource.data.role in ['admin', 'manager', 'storekeeper', 'operator']
-        && request.resource.data.active is bool;
+        );
       allow update: if admin()
         && (
           (request.resource.data.keys().hasOnly(['role', 'active', 'updatedAt', 'updatedBy', 'displayName'])
