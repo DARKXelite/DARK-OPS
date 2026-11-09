@@ -108,6 +108,78 @@ test("missing or explicitly disabled roles cannot read protected data", async ()
   await assertFails(getDoc(doc(missingDb, "machines", "machine-1")));
 });
 
+test("platform-linked identity is restricted to its assigned modules and own profile", async () => {
+  await seed(
+    ["users/android-staff-1", {
+      fullName: "Android Operator",
+      mobileNumber: "+919876543210",
+      platform: "android",
+      platformRole: "operator",
+      moduleAccess: ["inventory"],
+      status: "active",
+      authUid: "android-user-1"
+    }],
+    ["app_roles/android-user-1", {
+      ...role("operator"),
+      platform: "android",
+      staffProfileId: "android-staff-1",
+      platformRole: "operator",
+      moduleAccess: ["inventory"]
+    }],
+    ["inventory/item-1", { partName: "Sand", stockQuantity: 10 }],
+    ["machines/machine-1", { assetName: "Utility Cart", status: "Active" }],
+    ["users/other-staff", { fullName: "Other Staff", authUid: "someone-else", platform: "android", status: "active" }]
+  );
+  const db = testEnv.authenticatedContext("android-user-1").firestore();
+  await assertSucceeds(getDoc(doc(db, "inventory", "item-1")));
+  await assertFails(getDoc(doc(db, "machines", "machine-1")));
+  await assertSucceeds(getDoc(doc(db, "users", "android-staff-1")));
+  await assertFails(getDoc(doc(db, "users", "other-staff")));
+});
+
+test("platform identity is denied when profile is suspended or grants do not match", async () => {
+  await seed(
+    ["users/suspended-staff", {
+      fullName: "Suspended Operator",
+      mobileNumber: "+919876543211",
+      platform: "android",
+      platformRole: "operator",
+      moduleAccess: ["inventory"],
+      status: "suspended",
+      authUid: "suspended-user"
+    }],
+    ["app_roles/suspended-user", {
+      ...role("operator"),
+      platform: "android",
+      staffProfileId: "suspended-staff",
+      platformRole: "operator",
+      moduleAccess: ["inventory"]
+    }],
+    ["users/mismatched-staff", {
+      fullName: "Mismatched Operator",
+      mobileNumber: "+919876543212",
+      platform: "android",
+      platformRole: "operator",
+      moduleAccess: ["fleet_ops"],
+      status: "active",
+      authUid: "mismatched-user"
+    }],
+    ["app_roles/mismatched-user", {
+      ...role("operator"),
+      platform: "android",
+      staffProfileId: "mismatched-staff",
+      platformRole: "operator",
+      moduleAccess: ["inventory"]
+    }],
+    ["inventory/item-1", { partName: "Sand", stockQuantity: 10 }]
+  );
+  const suspendedDb = testEnv.authenticatedContext("suspended-user").firestore();
+  const mismatchedDb = testEnv.authenticatedContext("mismatched-user").firestore();
+  await assertFails(getDoc(doc(suspendedDb, "inventory", "item-1")));
+  await assertFails(getDoc(doc(mismatchedDb, "inventory", "item-1")));
+});
+
+
 test("operators can only decrease stock and cannot edit machine master data", async () => {
   await seed(
     ["app_roles/operator-1", role("operator")],
