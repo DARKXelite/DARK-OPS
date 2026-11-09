@@ -14,7 +14,8 @@ service cloud.firestore {
       let role = roleData();
       let profilePath = /databases/$(database)/documents/users/$(role.staffProfileId);
       return !role.keys().hasAny(['platform'])
-        || (role.platform in ['web', 'android']
+        || (role.active == true
+          && role.platform in ['web', 'android']
           && role.staffProfileId is string
           && role.platformRole is string
           && role.moduleAccess is list
