@@ -31,40 +31,32 @@ export function createBreakfastModule(deps) {
     for(let date=first,n=0;date<=last&&n<32;date=addDays(date,1),n++) if(checkInAt<=date+"T10:00"&&checkOutAt>date+"T07:00") dates.push(date);
     return dates;
   }
-  function shell(scannerOnly = false) {
+  function shell() {
     const el = root();
     if (!el) return;
-    const manager = canManage() && !scannerOnly;
+    const manager = canManage();
     el.innerHTML =
       '<div class="bf-page">' +
-        '<header class="bf-header"><div><div class="bf-eyebrow">GUEST SERVICES · DIGITAL ENTITLEMENTS</div><h2>Breakfast Pass</h2><p>One QR per room booking · one redemption per guest per eligible day.</p></div><div class="bf-header-mark"><span class="material-symbols-rounded">qr_code_2</span><span>7 AM – 10 AM</span></div></header>' +
+        '<header class="bf-header"><div><div class="bf-eyebrow">GUEST SERVICES / RECEPTION</div><h2>Breakfast Pass Register</h2><p>Create room entitlements, issue QR passes and manage guest bookings.</p></div><div class="bf-header-mark"><span class="material-symbols-rounded">restaurant</span><span>SERVICE 07:00–10:00</span></div></header>' +
         '<section class="bf-kpis" aria-label="Today breakfast summary">' +
-          '<article class="bf-kpi"><span>EXPECTED TODAY</span><strong id="bfExpected">—</strong><small>Eligible guests</small></article>' +
-          '<article class="bf-kpi"><span>REDEEMED</span><strong id="bfRedeemed">—</strong><small>Guests checked in</small></article>' +
-          '<article class="bf-kpi"><span>REMAINING</span><strong id="bfRemaining">—</strong><small>Guests remaining</small></article>' +
+          '<article class="bf-kpi"><span>EXPECTED GUESTS</span><strong id="bfExpected">—</strong><small>Eligible for today</small></article>' +
+          '<article class="bf-kpi"><span>REDEEMED</span><strong id="bfRedeemed">—</strong><small>Recorded guest entries</small></article>' +
+          '<article class="bf-kpi"><span>OUTSTANDING</span><strong id="bfRemaining">—</strong><small>Guests yet to redeem</small></article>' +
         '</section>' +
-        '<div class="bf-workspace">' +
-          (manager ? '<section class="bf-panel bf-booking-panel"><div class="bf-panel-head"><div><span class="bf-step">01 / RECEPTION</span><h3>Add guest booking</h3><p>Enter the room booking, guest count and one WhatsApp contact.</p></div><span class="material-symbols-rounded">hotel</span></div>' +
-            '<form id="bfBookingForm" class="bf-form" novalidate>' +
-              '<label>Lead guest name<input id="bfGuestName" name="guestName" required maxlength="100" placeholder="Guest full name" autocomplete="name"></label>' +
-              '<div class="bf-form-row"><label>Room number<input id="bfRoom" name="roomNumber" required maxlength="20" placeholder="e.g. 204"></label><label>Guest count<input id="bfGuestCount" name="guestCount" type="number" min="1" max="12" step="1" value="2" required inputmode="numeric"></label></div>' +
-              '<label>Booking WhatsApp number<input id="bfPhone" name="guestPhone" type="tel" maxlength="18" required placeholder="+91 98765 43210" autocomplete="tel"></label>' +
-              '<div class="bf-form-row"><label>Check-in date<input id="bfCheckIn" name="checkInAt" type="datetime-local" required></label><label>Checkout date<input id="bfCheckOut" name="checkOutAt" type="datetime-local" required></label></div>' +
-              '<div class="bf-date-preview" id="bfDatePreview">Enter stay date/time to preview breakfast eligibility.</div>' +
-              '<button class="bf-primary" type="submit" id="bfCreateButton"><span class="material-symbols-rounded">confirmation_number</span>Generate room QR pass</button>' +
-              '<p class="bf-form-note">One QR covers every guest in this room. Send the room QR image manually through WhatsApp.</p>' +
-            '</form></section>' : '') +
-          '<section class="bf-panel bf-scanner-panel"><div class="bf-panel-head"><div><span class="bf-step">02 / RESTAURANT</span><h3>Redeem breakfast</h3><p>Scan the same room QR once for each guest in the booking.</p></div><span class="material-symbols-rounded">qr_code_scanner</span></div>' +
-            '<div class="bf-scanner-frame"><div id="breakfastQrReader" class="bf-reader"></div><div class="bf-scanner-placeholder" id="bfScannerPlaceholder"><span class="material-symbols-rounded">photo_camera</span><b>Camera scanner ready</b><small>Use the rear camera on a phone or tablet.</small></div></div>' +
-            '<div class="bf-scan-actions"><button class="bf-primary" id="bfStartScanner" type="button" ' + (!canRedeem() ? 'disabled' : '') + '><span class="material-symbols-rounded">photo_camera</span>Start camera</button><button class="bf-secondary" id="bfStopScanner" type="button" disabled><span class="material-symbols-rounded">stop_circle</span>Stop</button></div>' +
-            '<div class="bf-manual-scan"><label for="bfManualToken">Manual token entry</label><div><input id="bfManualToken" autocomplete="off" placeholder="Paste pass token"><button class="bf-secondary" id="bfRedeemManual" type="button" ' + (!canRedeem() ? 'disabled' : '') + '>Verify</button></div></div>' +
-            '<div id="bfScanResult" class="bf-scan-result" aria-live="polite">' + (canRedeem() ? 'Ready to validate a breakfast pass.' : 'Your role does not have redemption access.') + '</div>' +
-            '<p class="bf-form-note">Scan the room QR once for each guest. The same QR can be scanned up to the room guest count per eligible date, including after 10 AM.</p>' +
-          '</section>' +
-        '</div>' +
-        (manager ? '<section class="bf-panel bf-bookings-panel"><div class="bf-panel-head bf-bookings-head"><div><span class="bf-step">03 / RECEPTION RECORDS</span><h3>Guest bookings</h3><p>One shared room QR, one booking WhatsApp number, and daily guest redemption counts.</p></div><button class="bf-secondary" id="bfRefresh" type="button"><span class="material-symbols-rounded">refresh</span>Refresh</button></div><div class="bf-date-filter"><label for="bfGuestDate">Breakfast date</label><input id="bfGuestDate" type="date" value="' + today() + '"><span id="bfGuestCountLabel"></span></div><div id="bfBookingsList" class="bf-bookings-list"><div class="bf-empty">Loading room guest list…</div></div></section>' : '') +
-        '<section class="bf-panel bf-coupons-panel" id="bfCouponsPanel" hidden><div class="bf-panel-head bf-bookings-head"><div><span class="bf-step">GENERATED PASSES</span><h3 id="bfCouponsTitle">Room QR pass</h3><p>The same room QR works for every guest on every eligible breakfast date.</p></div><button class="bf-secondary" id="bfCloseCoupons" type="button">Close</button></div><div id="bfCouponGrid" class="bf-coupon-grid"></div></section>' +
-        '<div class="bf-footer-note"><span class="material-symbols-rounded">verified_user</span> Secure single-use passes · Staff access controlled · Redemption history retained</div>' +
+        (manager ? '<section class="bf-panel bf-booking-panel"><div class="bf-panel-head"><div><span class="bf-step">01 / NEW ENTITLEMENT</span><h3>Create room booking</h3><p>Enter the lead guest, room details and stay period. One QR is issued per room.</p></div><span class="material-symbols-rounded">hotel</span></div>' +
+          '<form id="bfBookingForm" class="bf-form" novalidate>' +
+            '<label>Lead guest name<input id="bfGuestName" name="guestName" required maxlength="100" placeholder="Guest full name" autocomplete="name"></label>' +
+            '<label>Room number<input id="bfRoom" name="roomNumber" required maxlength="20" placeholder="e.g. 204"></label>' +
+            '<label>Guest count<input id="bfGuestCount" name="guestCount" type="number" min="1" max="12" step="1" value="2" required inputmode="numeric"></label>' +
+            '<label>Booking WhatsApp number<input id="bfPhone" name="guestPhone" type="tel" maxlength="18" required placeholder="+91 98765 43210" autocomplete="tel"></label>' +
+            '<label>Check-in date & time<input id="bfCheckIn" name="checkInAt" type="datetime-local" required></label>' +
+            '<label>Checkout date & time<input id="bfCheckOut" name="checkOutAt" type="datetime-local" required></label>' +
+            '<div class="bf-date-preview bf-form-wide" id="bfDatePreview">Enter stay date/time to preview breakfast eligibility.</div>' +
+            '<div class="bf-form-actions bf-form-wide"><button class="bf-primary" type="submit" id="bfCreateButton"><span class="material-symbols-rounded">confirmation_number</span>Generate room QR pass</button><p class="bf-form-note">The QR image can be sent manually through WhatsApp or printed as an 80mm receipt.</p></div>' +
+          '</form></section>' : '') +
+        (manager ? '<section class="bf-panel bf-bookings-panel"><div class="bf-panel-head bf-bookings-head"><div><span class="bf-step">02 / REGISTER</span><h3>Guest booking register</h3><p>Daily eligibility, redemption progress and pass actions.</p></div><button class="bf-secondary" id="bfRefresh" type="button"><span class="material-symbols-rounded">refresh</span>Refresh data</button></div><div class="bf-date-filter"><label for="bfGuestDate">Service date</label><input id="bfGuestDate" type="date" value="' + today() + '"><span id="bfGuestCountLabel"></span></div><div id="bfBookingsList" class="bf-bookings-list"><div class="bf-empty">Loading room guest list…</div></div></section>' : '') +
+        '<section class="bf-panel bf-coupons-panel" id="bfCouponsPanel" hidden><div class="bf-panel-head bf-bookings-head"><div><span class="bf-step">ISSUED ENTITLEMENTS</span><h3 id="bfCouponsTitle">Room QR pass</h3><p>Download, share or print the active room pass.</p></div><button class="bf-secondary" id="bfCloseCoupons" type="button">Close</button></div><div id="bfCouponGrid" class="bf-coupon-grid"></div></section>' +
+        '<div class="bf-footer-note"><span class="material-symbols-rounded">verified_user</span> Role-controlled reception register · QR redemption records retained</div>' +
       '</div>';
     bind();
     updateDatePreview();
@@ -385,18 +377,18 @@ export function createBreakfastModule(deps) {
       if (button.dataset.bfAct === "whatsapp-coupon") sendRoomWhatsApp(couponRows[Number(button.dataset.index)]);
     });
   }
-  function mountLayout(scannerOnly) {
+  function mountLayout() {
     const oldRoot = root();
     if (!oldRoot) return;
     const freshRoot = oldRoot.cloneNode(false);
     oldRoot.replaceWith(freshRoot);
-    shell(scannerOnly);
+    shell();
     freshRoot.dataset.initialized = "true";
-    freshRoot.dataset.layout = scannerOnly ? "scanner" : "full";
+    freshRoot.dataset.layout = "full";
   }
   function render() {
     if (!root()) return;
-    if (!root().dataset.initialized || root().dataset.layout !== "full") mountLayout(false);
+    if (!root().dataset.initialized) mountLayout();
     if (canManage()) loadData();
     else {
       document.getElementById("bfExpected").textContent = "—";
@@ -404,10 +396,6 @@ export function createBreakfastModule(deps) {
       document.getElementById("bfRemaining").textContent = "—";
     }
   }
-  function renderScanner() {
-    if (!root()) return;
-    if (!root().dataset.initialized || root().dataset.layout !== "scanner") mountLayout(true);
-  }
   function stop() { stopScanner(); }
-  return { render, renderScanner, stop };
+  return { render, stop };
 }
