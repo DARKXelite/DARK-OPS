@@ -2074,7 +2074,7 @@ function openUserManagementForm(userId=null) {
       const name=$('#umName').value.trim(), mobile=normMobile($('#umMobile').value), selectedPlatform=$('#umPlatform').value;
       const selectedRole=$('#umRole').value, moduleAccess=$$('input[name="userModuleAccess"]:checked').map(input=>input.value), status=$('#umStatus').value;
       if(!name){toast('Full name is required.','err');return false;}
-      if(!/^\\+\\d{10,14}$/.test(mobile)){toast('Enter a valid mobile number.','err');return false;}
+      if(!/^\+\d{10,14}$/.test(mobile)){toast('Enter a valid mobile number.','err');return false;}
       if(S.users.some(item=>item.id!==existing?.id&&normMobile(item.mobileNumber)===mobile)){toast('This mobile number already belongs to another staff profile.','err');return false;}
       if(status==='active'&&!canRetainActive){toast('A profile cannot be activated until its platform identity is provisioned.','err');return false;}
       if(existing&&existing.platform&&existing.platform!==selectedPlatform&&existing.authUid){toast('Platform cannot be changed after an authentication identity is linked. Use a reviewed identity migration.','err');return false;}
