@@ -2073,7 +2073,8 @@ function openUserManagementForm(userId=null) {
       payload.updatedAt=serverTimestamp();payload.updatedBy=RBAC.session.uid;
       if(existing?.authUid){
         const batch=writeBatch(db);
-        batch.update(doc(db,CONFIG.COL.users,existing.id),{...payload,createdAt:existing.createdAt,createdBy:existing.createdBy});
+        const {createdAt,createdBy,...profileUpdate}=payload;
+        batch.update(doc(db,CONFIG.COL.users,existing.id),profileUpdate);
         batch.set(doc(db,'app_roles',existing.authUid),{
           role:selectedRole==='storekeeper'?'storekeeper':'operator',
           active:status==='active',displayName:name,platform:selectedPlatform,
