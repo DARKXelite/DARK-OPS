@@ -61,7 +61,7 @@ export function validateUserProfile(input) {
   const moduleAccess = Array.isArray(input?.moduleAccess) ? input.moduleAccess : [];
 
   if (!name) errors.push("Full name is required.");
-  if (!/^\\+\\d{10,14}$/.test(mobile)) errors.push("Mobile number must be normalized to international format.");
+  if (!/^\+\d{10,14}$/.test(mobile)) errors.push("Mobile number must be normalized to international format.");
   if (!Object.hasOwn(PLATFORM_ROLES, platform)) errors.push("Select exactly one supported platform.");
   if (Object.hasOwn(PLATFORM_ROLES, platform) && !PLATFORM_ROLES[platform].some(item => item.id === role)) {
     errors.push("The selected role is not available on the selected platform.");
