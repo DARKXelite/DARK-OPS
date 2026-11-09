@@ -316,3 +316,38 @@ exports.reissueAndroidInvite = onCall({ region: REGION, maxInstances: 5 }, async
   });
   return { success: true, staffProfileId, activationCode: inviteCode, expiresAt: expiresAt.toDate().toISOString() };
 });
+
+
+// Golf Pass QR recovery: raw QR tokens are never stored in Firestore.
+// Managers can issue a replacement for an active pass; the previous token is invalidated atomically.
+exports.reissueGolfPassQr = onCall({ region: REGION, maxInstances: 5 }, async request => {
+  if (!request.auth) throw new HttpsError("unauthenticated", "Manager sign-in is required.");
+  await requireStaffAdmin(request.auth.uid);
+  const passRef = String(request.data?.passRef || "").trim();
+  if (!/^GP-[0-9]{8}-[A-F0-9]{6}$/.test(passRef)) {
+    throw new HttpsError("invalid-argument", "A valid golf pass reference is required.");
+  }
+  const matches = await db.collection("golf_passes").where("passRef", "==", passRef).limit(2).get();
+  if (matches.size !== 1) throw new HttpsError(matches.empty ? "not-found" : "failed-precondition", "The golf pass could not be uniquely identified.");
+  const oldRef = matches.docs[0].ref;
+  const qrToken = crypto.randomBytes(32).toString("hex");
+  const tokenHash = crypto.createHash("sha256").update(qrToken).digest("hex");
+  const newRef = db.collection("golf_passes").doc(tokenHash);
+  await db.runTransaction(async tx => {
+    const current = await tx.get(oldRef);
+    if (!current.exists) throw new HttpsError("not-found", "The golf pass no longer exists.");
+    const data = current.data();
+    if (data.passRef !== passRef || data.status !== "active") {
+      throw new HttpsError("failed-precondition", "Only an active, unused pass can receive a replacement QR.");
+    }
+    tx.create(newRef, {
+      ...data,
+      tokenHash,
+      qrIssuedAt: FieldValue.serverTimestamp(),
+      qrIssuedBy: request.auth.uid
+    });
+    tx.delete(oldRef);
+  });
+  logger.info("Golf Pass QR reissued", { passRef, actor: request.auth.uid });
+  return { success: true, passRef, qrToken };
+});
