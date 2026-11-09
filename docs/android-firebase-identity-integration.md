@@ -1,92 +1,65 @@
-# Android Firebase Identity Integration
+# Android Phone OTP and Staff Access
 
-This contract targets the Clover Greens Ops native Android app (Kotlin + Jetpack Compose).
+The Android app uses the same Firebase Authentication Phone provider and the same Firebase Auth identity as the Web app. There are no activation codes, passwords, custom tokens, internal email aliases, or provisioning Cloud Functions.
 
-## Firebase dependencies
+## Sign-in flow
 
-Use the same Firebase project `clover-greens-ops` and add the Firebase Auth, Cloud Functions and Firestore Android SDKs through the Firebase BoM. Add `kotlinx-coroutines-play-services` for `.await()` support. Callable Functions region is `asia-south1`.
+1. Collect the employee's mobile number in E.164 format (for India, `9876543210` becomes `+919876543210`).
+2. Complete Firebase Phone Authentication using SMS OTP.
+3. Read `FirebaseAuth.getInstance().currentUser`. Require a non-null, verified `phoneNumber`.
+4. Query `users` with `whereEqualTo("mobileNumber", currentUser.phoneNumber)`. Firestore Rules allow this staff lookup only when the query is restricted to the authenticated user's verified phone number.
+5. Require exactly one result. Validate:
+   - `platform == "android"`
+   - `status == "active"`
+   - `platformRole` is present and valid for Android
+   - `moduleAccess` is a list of known Android module IDs
+   - `authUid` is null or equals `currentUser.uid`
+6. In one Firestore batch, set `users/{staffProfileId}.authUid = currentUser.uid` and create `app_roles/{currentUser.uid}` from the profile:
+   - `role = "storekeeper"` only for Storekeeper; otherwise `"operator"`
+   - `active = true`
+   - `platform = "android"`
+   - `staffProfileId`, `platformRole`, and `moduleAccess` copied exactly from the profile
+   - `updatedBy = currentUser.uid`
+7. Read `app_roles/{currentUser.uid}` and the linked profile again. Require the role and profile to match exactly before opening the app.
+8. Route to the role's landing screen and show only the modules in `moduleAccess`.
 
-Do not use Phone Auth in the Android app. Web Phone OTP and Android credentials are separate identities in the same Firebase project.
+The batch is protected by Firestore Rules. The profile's mobile number must match Firebase's verified `phone_number` token claim, and the role document must match the profile. A client cannot claim another employee's profile or grant itself additional modules.
 
-## Activation screen
+## Role and module behavior
 
-Collect:
-- Registered staff mobile number, normalized to E.164.
-- One-time activation code supplied by an administrator.
-- New password (minimum 12 characters).
-
-Call `redeemAndroidInvite` with:
-```kotlin
-mapOf(
-    "mobileNumber" to normalizedMobile,
-    "activationCode" to activationCode,
-    "newPassword" to newPassword
-)
-```
-
-The callable returns `customToken` and `loginEmail`. Immediately sign in with:
-```kotlin
-FirebaseAuth.getInstance().signInWithCustomToken(customToken).await()
-```
-
-Never log, persist, or send the activation code to analytics. It is single-use, expires after 30 minutes and is limited to five failed attempts. If it expires, the administrator uses **New code** in Web User Management.
-
-## Subsequent sign-in
-
-The server creates an internal Firebase Auth email alias from the staff mobile number. Android must reproduce this algorithm exactly:
-
-1. Normalize the mobile number to E.164 (for India, `9876543210` becomes `+919876543210`).
-2. SHA-256 the UTF-8 E.164 string.
-3. Take the first 32 lowercase hexadecimal characters.
-4. Prefix `android-` and append `@android.clovergreens.invalid`.
-
-Then call `signInWithEmailAndPassword(loginEmailAlias, password)`. The alias is a private Firebase Auth username, not a deliverable email address. Do not display it to users.
-
-## Mandatory post-login authorization check
-
-After either custom-token activation or email/password sign-in:
-
-1. Read `app_roles/{currentUser.uid}`.
-2. Require `active == true` and `platform == "android"`.
-3. Read `users/{staffProfileId}` using the ID from the role document.
-4. Require profile `status == "active"`, `platform == "android"`, `authUid == currentUser.uid`, and exact equality of `platformRole` and `moduleAccess` between the two documents.
-5. If any check fails, sign out and show an access-disabled message.
-6. Gate each screen by both the platform role and the exact module ID. A module grant does not automatically authorize every write action in that module.
-
-Firestore Rules repeat the linked-identity and module checks. Do not create or update `app_roles`, `users`, or `android_invites` from the Android client.
-
-## Role behavior
-
-| Android role | Intended workflow |
+| Android role | Expected landing/workflow |
 |---|---|
 | Operator | Assigned machine, shift and field reporting |
 | Storekeeper | Inventory, inward and issue |
-| Captain | Breakfast QR scanning, only with `breakfast_qr` |
-| Marshal | Golf QR scanning, only with `golf_qr` |
-| Workshop Manager | Workshop and maintenance, only with `workshop_ops`; fleet visibility additionally requires `fleet_ops` |
+| Captain | Breakfast QR, only with `breakfast_qr` |
+| Marshal | Golf QR, only with `golf_qr` |
+| Workshop Manager | Workshop and maintenance with `workshop_ops`; fleet visibility also requires `fleet_ops` |
 
-Allowed Android module IDs are `inventory`, `breakfast_qr`, `golf_qr`, `turf_ops`, `fleet_ops`, `workshop_ops`, and `other_modules`. The `other_modules` marker is not a wildcard.
+Allowed Android module IDs: `inventory`, `breakfast_qr`, `golf_qr`, `turf_ops`, `fleet_ops`, `workshop_ops`, `other_modules`. The `other_modules` marker is not a wildcard.
 
-## Password and account lifecycle
+## Account behavior
 
-- Store no password in Firestore or local preferences.
-- Use Firebase Auth's password reset/update APIs for a signed-in user.
-- If the user forgets the password, an administrator reissues an activation code. Redeeming the new code sets a new password and returns a new custom token.
-- If an administrator suspends the profile, `app_roles.active` becomes false and the Firebase Auth account is disabled. The app must sign out on the next authorization refresh or denied operation.
-- Never fall back to Phone Auth, anonymous Auth, a hard-coded UID, or a default role when validation fails.
+- Admin adds the staff profile in Web User & Access Management: name, mobile, platform, role, module checklist and status.
+- New profiles are active immediately but cannot enter an app until they complete OTP and claim their matching profile.
+- Admin can suspend a profile. Its linked `app_roles.active` value is set false; Firestore Rules deny protected operations.
+- A suspended or mismatched profile must sign out and show an access-denied message.
+- Do not fall back to a hard-coded UID, default role, anonymous authentication, email/password, custom tokens, or activation codes.
+- Do not write operational data until the post-login role/profile validation succeeds.
 
-## Build and test checklist
+## Important platform boundary
 
-- [ ] Activation succeeds with a valid one-time code.
-- [ ] Reusing an activation code fails.
-- [ ] Expired code fails.
-- [ ] Wrong mobile number fails.
-- [ ] Password shorter than 12 characters is rejected.
-- [ ] Subsequent email/password sign-in works after app restart.
-- [ ] Android identity cannot sign in through Web Phone OTP.
-- [ ] Web identity cannot pass the Android platform check.
-- [ ] Captain cannot access Golf QR without `golf_qr`.
-- [ ] Marshal cannot access Breakfast QR without `breakfast_qr`.
-- [ ] Missing module grant denies the module.
-- [ ] Suspended account is denied.
-- [ ] Existing machine, turf, inventory and QR transactions still work with their existing Firestore schemas.
+Both apps use the same Auth UID. Each app must reject a profile whose `platform` does not match that app. Firestore Rules independently enforce the active linked identity and exact module grants, but Firestore Rules do not inherently know whether a request originated from the Web or Android client. Do not treat hidden navigation as a substitute for module-level rules.
+
+## Device test checklist
+
+- [ ] Android OTP succeeds for an active Android profile.
+- [ ] Web profile is rejected by Android after OTP.
+- [ ] Suspended profile is rejected.
+- [ ] Unknown phone number is rejected.
+- [ ] Duplicate staff profiles for one phone number are rejected.
+- [ ] First OTP login claims the profile and creates the matching `app_roles` record.
+- [ ] Subsequent OTP login reads the existing linked role.
+- [ ] Captain cannot open Golf QR without `golf_qr`.
+- [ ] Marshal cannot open Breakfast QR without `breakfast_qr`.
+- [ ] Missing module grant is denied by Firestore Rules.
+- [ ] Existing machine, turf, inventory and QR transactions retain their current schemas.
