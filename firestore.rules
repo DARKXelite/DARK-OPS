@@ -284,11 +284,6 @@ service cloud.firestore {
         );
     }
 
-    // Activation codes are server-only. Clients never read or write invite hashes.
-    match /android_invites/{staffProfileId} {
-      allow read, write: if false;
-    }
-
     match /app_roles/{uid} {
       allow get: if signedIn() && (request.auth.uid == uid || admin());
       allow list: if admin();
