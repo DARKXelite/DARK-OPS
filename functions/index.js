@@ -197,7 +197,7 @@ exports.linkWebStaffIdentity = onCall({ region: REGION, maxInstances: 5 }, async
     const existingData = existingRole.data();
     // Upgrade only a legacy, non-administrative workforce role. Never overwrite
     // an admin/manager or an identity already assigned to another platform.
-    if (existingData.platform || !["operator", "storekeeper"].includes(existingData.role)) {
+    if (existingData.platform || !["operator", "storekeeper", "manager"].includes(existingData.role)) {
       throw new HttpsError("already-exists", "This Firebase Auth identity already has a protected application role and cannot be linked through staff migration.");
     }
   }
