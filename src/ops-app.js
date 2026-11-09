@@ -2,6 +2,7 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/12.19.0/fireba
 import { getFirestore, collection, addDoc, deleteDoc, doc, updateDoc, setDoc, getDoc, increment, onSnapshot, getDocs, writeBatch, runTransaction, serverTimestamp, query, where, orderBy, Timestamp } from "https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore.js";
 import { getAuth, onAuthStateChanged, signInWithPhoneNumber, RecaptchaVerifier, signOut } from "https://www.gstatic.com/firebasejs/12.19.0/firebase-auth.js";
 import { initializeAppCheck, ReCaptchaEnterpriseProvider } from "https://www.gstatic.com/firebasejs/12.19.0/firebase-app-check.js";
+import { getFunctions, httpsCallable } from "https://www.gstatic.com/firebasejs/12.19.0/firebase-functions.js";
 import { createFnbModule } from "./modules/fnb/fnb-module.js";
 import { createBreakfastModule } from "./modules/breakfast/breakfast-module.js";
 import { createGolfPassModule } from "./modules/golf-pass/golf-pass-module.js";
@@ -52,6 +53,11 @@ if (appCheckSiteKey) {
 }
 const db = getFirestore(app);
 const auth = getAuth(app);
+const functions = getFunctions(app, "asia-south1");
+const provisionAndroidStaff = httpsCallable(functions, "provisionAndroidStaff");
+const reissueAndroidInvite = httpsCallable(functions, "reissueAndroidInvite");
+const linkWebStaffIdentity = httpsCallable(functions, "linkWebStaffIdentity");
+const updateStaffAccess = httpsCallable(functions, "updateStaffAccess");
 
 /* ================= HELPERS ================= */
 const $ = (s, r=document) => r.querySelector(s);
@@ -2028,7 +2034,7 @@ function renderUsersMaster() {
       <td><b>${esc((u.platformRole||u.role||'Unassigned').replaceAll('_',' '))}</b></td>
       <td class="user-module-cell">${u.moduleAccess?.length?esc(moduleLabels(u.moduleAccess)):'<span class="muted">No modules assigned</span>'}</td>
       <td><span class="badge ${statusClass}">${esc(userStatusLabel(status))}</span></td>
-      <td class="right" style="white-space:nowrap"><button class="btn btn-sm" data-act="edit-user" data-id="${esc(u.id)}">Manage</button> <button class="btn btn-danger btn-sm" data-act="del" data-col="users" data-id="${esc(u.id)}" data-label="${esc(u.fullName||'this user')}"><span class="material-symbols-rounded">delete</span></button></td></tr>`;
+      <td class="right" style="white-space:nowrap"><button class="btn btn-sm" data-act="edit-user" data-id="${esc(u.id)}">Manage</button> ${!u.authUid&&status==='pending'&&platform==='android'?'<button class="btn btn-sm btn-primary" data-act="provision-android-user" data-id="'+esc(u.id)+'">Provision</button>':''} ${!u.authUid&&status==='pending'&&platform==='web'?'<button class="btn btn-sm" data-act="link-web-user" data-id="'+esc(u.id)+'">Link OTP UID</button>':''} ${u.authUid&&platform==='android'&&status==='active'?'<button class="btn btn-sm" data-act="reissue-android-user" data-id="'+esc(u.id)+'">New code</button>':''} <button class="btn btn-danger btn-sm" data-act="del" data-col="users" data-id="${esc(u.id)}" data-label="${esc(u.fullName||'this user')}"><span class="material-symbols-rounded">delete</span></button></td></tr>`;
     }).join(''):`<tr><td colspan="6" class="empty">${all.length?'No profiles match these filters.':'No users yet. Add a staff profile to begin.'}</td></tr>`}</tbody></table></div>`);
   const search=$('#usersSearch'); if(search&&document.activeElement?.id==='usersSearch'){search.focus();search.setSelectionRange(search.value.length,search.value.length);}
 }
@@ -2047,9 +2053,10 @@ function openUserManagementForm(userId=null) {
   let platform=existing?.platform==='android'?'android':'web';
   let role=existing?.platformRole||(existing?.platform?existing.role:'');
   let selectedModules=Array.isArray(existing?.moduleAccess)?[...existing.moduleAccess]:[];
-  const canRetainActive=existing?.status==='active'&&!!existing?.authUid;
+  const hasLinkedIdentity=!!existing?.authUid;
+  const canRetainActive=hasLinkedIdentity;
   const initial=userEditorOptions(platform,role,selectedModules);
-  const statuses='<option value="pending">Pending · identity not provisioned</option><option value="suspended">Suspended</option>'+(canRetainActive?'<option value="active">Active · provisioned</option>':'');
+  const statuses=hasLinkedIdentity?'<option value="active">Active · provisioned</option><option value="suspended">Suspended</option>':'<option value="pending">Pending · identity not provisioned</option><option value="suspended">Suspended</option>';
   const html=`
     <div class="user-admin-intro"><span class="material-symbols-rounded">admin_panel_settings</span><div><b>One staff profile, one platform</b><p>Choose Web App or Android App. Roles and modules are filtered to match.</p></div></div>
     <div class="user-admin-grid">${fld('Full name','<input id="umName" required maxlength="100" placeholder="e.g. Rajesh Kumar" autocomplete="name">')}${fld('Mobile number','<input id="umMobile" required inputmode="tel" maxlength="18" placeholder="+91 98765 43210" autocomplete="tel">')}</div>
@@ -2058,7 +2065,7 @@ function openUserManagementForm(userId=null) {
     <div class="user-access-heading"><div><b>Module access</b><span>Grant only the modules this person needs.</span></div><span id="umModuleCount" class="badge gold">0 selected</span></div>
     <div id="umModules" class="access-module-grid">${initial.moduleOptions}</div>
     ${fld('Profile status',`<select id="umStatus">${statuses}</select>`,'New profiles remain pending until a separate Firebase identity and authorization record are provisioned.')}
-    <div class="user-admin-notice"><span class="material-symbols-rounded">lock</span><span>Platform, module grants and profile status are configuration only at this stage. They do not provision credentials, enforce module-level Firestore access or revoke an existing app_roles login. Trusted provisioning and rules enforcement are separate steps.</span></div>`;
+    <div class="user-admin-notice"><span class="material-symbols-rounded">verified_user</span><span>Pending Android profiles can be provisioned here with a one-time activation code. Web profiles must first complete phone OTP once, then be linked to their existing Firebase Auth UID. Linked role, module and suspension changes are synchronized by the trusted backend.</span></div>`;
   openForm({
     title:existing?'Manage staff access':'Create staff profile',
     sub:existing?'Update platform assignment and module permissions.':'Create a staff directory record and configure platform access.',
@@ -2071,18 +2078,22 @@ function openUserManagementForm(userId=null) {
       if(S.users.some(item=>item.id!==existing?.id&&normMobile(item.mobileNumber)===mobile)){toast('This mobile number already belongs to another staff profile.','err');return false;}
       if(status==='active'&&!canRetainActive){toast('A profile cannot be activated until its platform identity is provisioned.','err');return false;}
       if(existing&&existing.platform&&existing.platform!==selectedPlatform&&existing.authUid){toast('Platform cannot be changed after an authentication identity is linked. Use a reviewed identity migration.','err');return false;}
+      if(existing?.authUid&&mobile!==normMobile(existing.mobileNumber)){toast('Mobile number cannot be changed after identity linking. Use a verified identity migration.','err');return false;}
       const payload=buildUserProfile({fullName:name,mobileNumber:mobile,platform:selectedPlatform,platformRole:selectedRole,moduleAccess,status});
       payload.authUid=existing?.authUid||null;
       payload.updatedAt=serverTimestamp();payload.updatedBy=RBAC.session.uid;
-      if(existing){
+      if(existing?.authUid){
+        await updateStaffAccess({staffProfileId:existing.id,fullName:name,platformRole:selectedRole,moduleAccess,status});
+        toast('Staff profile, Auth role and module grants synchronized.');
+      }else if(existing){
         delete payload.createdAt;
         delete payload.createdBy;
         await updateDoc(doc(db,CONFIG.COL.users,existing.id),payload);
-        toast('Staff profile and module access updated.');
+        toast('Pending staff profile updated.');
       }else{
         payload.createdAt=serverTimestamp();payload.createdBy=RBAC.session.uid;
         await addDoc(collection(db,CONFIG.COL.users),payload);
-        toast('Pending staff profile created. Login access is not active yet.');
+        toast('Pending staff profile created. Provision the platform identity to enable sign-in.');
       }
     }
   });
@@ -2990,6 +3001,52 @@ const H = {
   'export-inwards': () => downloadCSV('goods_inwards.csv',[['Date','Invoice','Supplier','Category','Item','Unit','Qty','Rate','GST %','Taxable','GST amount','Total'],...S.inwards.map(r=>[r.receiptDate,r.invoiceNumber,r.supplier,r.category,r.itemName,r.unit,r.quantity,r.rate,r.gstPercent,r.taxableAmount,r.gstAmount,r.total])]),
   'edit-user': d => openUserManagementForm(d.id),
   'add-user': () => openUserManagementForm(),
+  'provision-android-user': async d => {
+    try {
+      const response = await provisionAndroidStaff({ staffProfileId: d.id });
+      const code = response.data.activationCode;
+      openModal({
+        title: 'Android activation code',
+        sub: 'Share this one-time code with the staff member. It expires in 30 minutes and is shown only once.',
+        body: '<div class="user-activation-code"><label for="androidActivationCode">One-time activation code</label><input id="androidActivationCode" readonly value="'+esc(code)+'"><p>They must enter their registered mobile number, this code and a new password in the Android app.</p></div>',
+        footer: '<button class="btn" data-act="copy-android-code">Copy code</button><button class="btn btn-primary" data-act="close-modal">Done</button>'
+      });
+      renderUsersMaster();
+    } catch (error) { console.error(error); toast(error.message || 'Android identity provisioning failed.','err'); }
+  },
+  'reissue-android-user': async d => {
+    try {
+      const response = await reissueAndroidInvite({ staffProfileId: d.id });
+      openModal({
+        title: 'Replacement Android activation code',
+        sub: 'The previous code is replaced. This new code expires in 30 minutes.',
+        body: '<div class="user-activation-code"><label for="androidActivationCode">One-time activation code</label><input id="androidActivationCode" readonly value="'+esc(response.data.activationCode)+'"><p>Share it privately with the staff member.</p></div>',
+        footer: '<button class="btn" data-act="copy-android-code">Copy code</button><button class="btn btn-primary" data-act="close-modal">Done</button>'
+      });
+    } catch (error) { console.error(error); toast(error.message || 'Could not issue a replacement code.','err'); }
+  },
+  'link-web-user': d => {
+    const profile = S.users.find(item => item.id === d.id);
+    if (!profile) return toast('Staff profile not found. Refresh and retry.','err');
+    openForm({
+      title: 'Link existing Web OTP identity',
+      sub: 'The staff member must have completed phone OTP at least once. Copy their UID from Firebase Authentication.',
+      submit: 'Verify and link identity',
+      html: fld('Firebase Auth UID','<input id="webStaffAuthUid" required maxlength="128" autocomplete="off" placeholder="Paste the exact Firebase Auth UID">')+'<p class="muted sm">The backend verifies that this Auth account phone number exactly matches '+esc(profile.mobileNumber)+'. Existing role identities cannot be overwritten.</p>',
+      onSubmit: async () => {
+        const authUid=$('#webStaffAuthUid').value.trim();
+        if(!authUid||authUid.includes('/')){toast('Enter a valid Firebase Auth UID.','err');return false;}
+        await linkWebStaffIdentity({staffProfileId:d.id,authUid});
+        toast('Web OTP identity verified and linked.');
+      }
+    });
+  },
+  'copy-android-code': async () => {
+    const field=$('#androidActivationCode');
+    if(!field)return;
+    try { await navigator.clipboard.writeText(field.value); toast('Activation code copied.'); }
+    catch (_) { field.select(); toast('Select and copy the activation code.'); }
+  },
   'add-local-expense': () => { openForm({title:'Add local bill',submit:'Save bill',size:'md',html:
     `<div class="row3">${fld('Date','<input id="exDate" type="date" value="'+today()+'">')}${fld('Paid by','<select id="exPaidBy"><option value="me">Me · to claim from office</option><option value="accounts">Accounts · paid by office</option></select>')}${fld('Shop / bill ref (optional)','<input id="exVendor" placeholder="e.g. Sri Hardware, #123" autocomplete="off">')}</div>`+
     '<div class="exp-rows-head"><span>Item name</span><span>Qty</span><span>Rate ₹</span><span>Amount ₹</span><span></span></div><div id="exRows">'+exRowHTML()+exRowHTML()+'</div>'+
@@ -3126,10 +3183,37 @@ let turfProductCategory = 'All categories';
 $('#dateChip').textContent = new Date().toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' });
 toggleDock(false); renderWeather(); loadWeather(); setInterval(loadWeather, 30 * 60 * 1000);
 
+const PLATFORM_ROLE_PERMISSIONS = Object.freeze({
+  captain: ["dashboard.read", "breakfast.read", "breakfast.redeem"],
+  marshal: ["dashboard.read", "golf.read", "golf.scan"],
+  foe: ["dashboard.read", "breakfast.read", "breakfast.redeem"],
+  workshop_manager: ["dashboard.read", "fleet.read", "maintenance.read", "maintenance.write", "assignments.read"],
+  user: ["dashboard.read"]
+});
+const PERMISSION_MODULE = Object.freeze({
+  "fuel.read": "fuel_fertilizer_dashboard", "fuel.write": "fuel_fertilizer_dashboard", "fuel.delete": "fuel_fertilizer_dashboard",
+  "inventory.read": "inventory", "inventory.write": "inventory", "inventory.receipts.read": "inventory",
+  "fleet.read": "fleet_ops", "fleet.write": "fleet_ops", "shifts.read": "fleet_ops", "shifts.write": "fleet_ops",
+  "incidents.write": "fleet_ops", "incidents.delete": "fleet_ops", "assignments.read": "fleet_ops", "assignments.write": "fleet_ops",
+  "turf.read": "turf_ops", "turf.write": "turf_ops", "turf.issue": "turf_ops",
+  "maintenance.read": "workshop_ops", "maintenance.write": "workshop_ops",
+  "breakfast.read": "breakfast_qr", "breakfast.manage": "breakfast_qr", "breakfast.redeem": "breakfast_qr",
+  "golf.read": "golf_qr", "golf.manage": "golf_qr", "golf.scan": "golf_qr",
+  "reports.read": "reports", "expenses.read": "reports", "expenses.write": "reports"
+});
 const RBAC = {
   roles: ROLE_PERMISSIONS,
-  session: { role: null, authenticated: false, uid: null, displayName: "" },
-  can(permission) { return this.session.authenticated && canRole(this.session.role, permission); }
+  session: { role: null, authenticated: false, uid: null, displayName: "", platform: null, platformRole: null, moduleAccess: [] },
+  can(permission) {
+    const session = this.session;
+    if (!session.authenticated) return false;
+    if (!session.platform) return canRole(session.role, permission);
+    const moduleId = PERMISSION_MODULE[permission];
+    if (moduleId && !session.moduleAccess.includes(moduleId)) return false;
+    const rolePermissions = PLATFORM_ROLE_PERMISSIONS[session.platformRole];
+    if (rolePermissions) return rolePermissions.includes(permission);
+    return canRole(session.role, permission);
+  }
 };
 golfPassModule = createGolfPassModule({ db, auth, RBAC, collection, doc, setDoc, getDocs, query, where, runTransaction, serverTimestamp, esc, today, toast });
 breakfastModule = createBreakfastModule({
@@ -3167,7 +3251,7 @@ let confirmationResult = null;
 let recaptchaVerifier = null;
 onAuthStateChanged(auth, async user => {
   stopListeners();
-  RBAC.session.role = null; RBAC.session.authenticated = false; RBAC.session.uid = null; RBAC.session.displayName = "";
+  RBAC.session.role = null; RBAC.session.authenticated = false; RBAC.session.uid = null; RBAC.session.displayName = ""; RBAC.session.platform = null; RBAC.session.platformRole = null; RBAC.session.moduleAccess = [];
   const login = $("#login"), gate = $("#pinGate"), error = $("#loginErr");
   if (gate) gate.hidden = true;
   if (!user) {
@@ -3202,6 +3286,9 @@ onAuthStateChanged(auth, async user => {
     RBAC.session.authenticated = true;
     RBAC.session.uid = user.uid;
     RBAC.session.displayName = roleData.displayName || user.email || "";
+    RBAC.session.platform = roleData.platform || null;
+    RBAC.session.platformRole = roleData.platformRole || null;
+    RBAC.session.moduleAccess = Array.isArray(roleData.moduleAccess) ? roleData.moduleAccess : [];
     if (login) login.hidden = true;
     if ($("#signoutBtn")) $("#signoutBtn").hidden = false;
     document.body.classList.remove("auth-locked");
