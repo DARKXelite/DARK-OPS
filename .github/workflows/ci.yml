@@ -37,6 +37,15 @@ jobs:
       - name: Install dependencies
         id: install
         run: npm install --no-fund
+      - name: Install Cloud Functions dependencies
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+        run: npm install --prefix functions --no-fund
+      - name: Audit Cloud Functions dependencies
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+        run: npm audit --prefix functions --audit-level=high
+      - name: Check Cloud Functions syntax
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+        run: node --check functions/index.js && node --check functions/src/user-provisioning.js
       - name: Run unit and security regression tests
         if: ${{ !cancelled() && steps.install.outcome == 'success' }}
         run: npm test
