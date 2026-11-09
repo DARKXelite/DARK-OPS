@@ -125,12 +125,12 @@ exports.redeemAndroidInvite = onCall({ region: REGION, maxInstances: 10 }, async
     throw new HttpsError("invalid-argument", "Choose a password between 12 and 128 characters.");
   }
 
-  const matches = await db.collection("users")
-    .where("mobileNumber", "==", mobileNumber)
-    .where("platform", "==", "android")
-    .limit(2).get();
-  if (matches.size !== 1) throw new HttpsError("not-found", "No unique Android staff profile matches this mobile number.");
-  const profileDoc = matches.docs[0];
+  const matches = await db.collection("users").where("mobileNumber", "==", mobileNumber).limit(2).get();
+  const androidProfiles = matches.docs.filter(item => item.data().platform === "android");
+  if (androidProfiles.length !== 1 || matches.size !== 1) {
+    throw new HttpsError("not-found", "No unique Android staff profile matches this mobile number.");
+  }
+  const profileDoc = androidProfiles[0];
   const profile = profileDoc.data();
   if (profile.status !== "active" || !profile.authUid) throw new HttpsError("failed-precondition", "This Android profile is not active.");
 
