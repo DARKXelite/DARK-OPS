@@ -140,9 +140,30 @@ export function createGolfPassModule({db,auth,RBAC,collection,doc,setDoc,onSnaps
     }
   }
   async function printEntry(p,src){
-    const qr=src?'<img class="qr" src="'+src+'">':'<div class="used">CHECKED IN · QR CONSUMED</div>';
-    const body='<main><div class="brand">CLOVER GREENS</div><div class="sub">GOLF PASS · ENTRY TICKET</div><div class="ref">'+esc(p.passRef)+'</div>'+qr+'<h2>'+esc(p.golferName)+'</h2><p>'+esc(p.category)+' · '+esc(p.playDate)+'</p><p>'+esc(p.phone)+'</p><div class="foot">'+(src?"Present this QR at the golf entry":"Entry recorded. This is an audit copy, not a valid entry QR.")+'</div></main>';
-    const html='<!doctype html><html><head><meta charset="utf-8"><title>'+esc(p.passRef)+'</title><style>@page{size:80mm auto;margin:3mm}*{box-sizing:border-box}html,body{width:74mm;margin:0;padding:0;font:10pt Arial;color:#111;text-align:center}.brand{font-weight:900;font-size:16pt}.sub{font-size:9pt;letter-spacing:1px;margin:2mm}.ref{font-weight:800;border-block:1px dashed #777;padding:3mm}.qr{display:block;width:43mm;height:43mm;object-fit:contain;margin:3mm auto}.used{padding:8mm;margin:5mm 0;background:#eee;font-weight:800}h2{font-size:13pt;margin:3mm 0 1mm}.foot{border-top:1px dashed #777;margin-top:4mm;padding-top:3mm;font-size:8pt}</style></head><body>'+body+'</body></html>';
+    const qr=src?'<img class="qr" src="'+src+'" alt="Golf pass QR">':'<div class="used">CHECKED IN · QR CONSUMED</div>';
+    const body='<main class="receipt"><header class="brand-head"><svg class="brand-mark" viewBox="0 0 200 200" role="img" aria-label="Clover Greens Golfscapes"><circle cx="100" cy="100" r="94" fill="none" stroke="#183d2b" stroke-width="3"/><circle cx="100" cy="100" r="62" fill="none" stroke="#183d2b" stroke-width="2"/><defs><path id="cg-top" d="M 25,100 A 75,75 0 0,1 175,100"/><path id="cg-bottom" d="M 25,100 A 75,75 0 0,0 175,100"/></defs><text fill="#183d2b" font-size="17" font-weight="800" letter-spacing="3"><textPath href="#cg-top" startOffset="50%" text-anchor="middle">CLOVER GREENS</textPath></text><text fill="#183d2b" font-size="16" font-weight="800" letter-spacing="3"><textPath href="#cg-bottom" startOffset="50%" text-anchor="middle">GOLFSCAPES</textPath></text><g fill="#183d2b"><circle cx="100" cy="100" r="24" fill="none" stroke="#183d2b" stroke-width="2"/><ellipse cx="100" cy="86" rx="8" ry="15"/><ellipse cx="114" cy="100" rx="15" ry="8"/><ellipse cx="100" cy="114" rx="8" ry="15"/><ellipse cx="86" cy="100" rx="15" ry="8"/></g></svg><div class="brand-name">CLOVER GREENS</div><div class="brand-sub">GOLFSCAPES · RESORT &amp; GOLF</div></header><div class="pass-title">GOLF ENTRY PASS</div><div class="ref"><span>PASS REF</span><b>'+esc(p.passRef)+'</b></div>'+qr+'<section class="details"><div><span>GOLFER</span><b>'+esc(p.golferName)+'</b></div><div><span>CATEGORY</span><b>'+esc(p.category)+'</b></div><div><span>PLAY DATE</span><b>'+esc(p.playDate)+'</b></div><div><span>MOBILE</span><b>'+esc(p.phone)+'</b></div></section><div class="foot">'+(src?"Present this QR at the golf entry checkpoint.":"Entry recorded. This audit copy is not a valid entry QR.")+'</div><div class="venue">CLOVER GREENS RESORT &amp; GOLF</div></main>';
+    const html='<!doctype html><html><head><meta charset="utf-8"><title>'+esc(p.passRef)+'</title><style>
+      @page{size:80mm auto;margin:2.5mm}
+      *{box-sizing:border-box}
+      html,body{width:75mm;margin:0;padding:0;background:#fff;color:#111;font-family:Arial,sans-serif}
+      body{font-size:8.5pt;line-height:1.22}
+      .receipt{width:75mm;padding:0;text-align:center}
+      .brand-head{padding:0 0 1.5mm;border-bottom:1px solid #183d2b}
+      .brand-mark{display:block;width:19mm;height:19mm;margin:0 auto 1mm}
+      .brand-name{font-size:13pt;font-weight:900;letter-spacing:1.1px;color:#183d2b}
+      .brand-sub{font-size:6.5pt;font-weight:700;letter-spacing:1.5px;margin-top:.5mm}
+      .pass-title{font-size:10pt;font-weight:900;letter-spacing:1px;margin:2mm 0}
+      .ref{display:flex;justify-content:space-between;gap:2mm;border-block:1px dashed #555;padding:2mm 1mm;font-size:8pt}
+      .ref span,.details span{font-size:7pt;font-weight:700;letter-spacing:.4px;color:#444}
+      .qr{display:block;width:37mm;height:37mm;object-fit:contain;margin:2mm auto}
+      .details{border-top:1px solid #aaa;padding-top:1mm;text-align:left}
+      .details div{display:flex;align-items:flex-start;gap:2mm;padding:1.1mm 0;border-bottom:1px dotted #bbb}
+      .details span{flex:0 0 22mm}
+      .details b{flex:1;min-width:0;overflow-wrap:anywhere;text-align:right;font-size:8.5pt}
+      .used{padding:7mm 2mm;margin:3mm 0;background:#eee;font-weight:900}
+      .foot{border-top:1px dashed #777;margin-top:2mm;padding-top:2mm;font-size:7pt}
+      .venue{font-size:6.5pt;font-weight:800;letter-spacing:.5px;margin-top:1.5mm}
+    </style></head><body>'+body+'</body></html>';
     await printer.printHtml(html,"Golf pass "+p.passRef);
   }
   function passByRef(ref){return rows.find(p=>p.passRef===ref);}
