@@ -41,7 +41,7 @@ const env = await initializeTestEnvironment({
 });
 
 try {
-  const adminCredential = await createUserWithEmailAndPassword(auth, "admin@clover-test.invalid", "Admin-test-password-123!");
+  const adminCredential = await createUserWithEmailAndPassword(auth, "admin@example.com", "Admin-test-password-123!");
   const adminUid = adminCredential.user.uid;
   const staffProfileId = "android-staff-integration-test";
   await env.withSecurityRulesDisabled(async context => {
@@ -114,7 +114,7 @@ try {
   assert.equal(auth.currentUser.uid, profileAfterProvision.data().authUid);
 
   await signOut(auth);
-  await signInWithEmailAndPassword(auth, "admin@clover-test.invalid", "Admin-test-password-123!");
+  await signInWithEmailAndPassword(auth, "admin@example.com", "Admin-test-password-123!");
   const updateAccess = httpsCallable(functions, "updateStaffAccess");
   await updateAccess({
     staffProfileId,
