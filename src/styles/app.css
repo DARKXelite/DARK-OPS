@@ -1251,3 +1251,56 @@ body.turf-board-mode #v-turfcare .turf-weekly-card {
   #overlay #modal:has(#tpContainer) #mBody.m-body { padding: 6px !important; }
   #overlay #modal:has(#tpContainer) #mFoot.m-foot { padding: 7px 8px !important; }
 }
+
+
+/* User & platform access management */
+.user-admin-summary{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:10px;margin:14px 0 4px}
+.user-admin-stat{min-width:0;padding:13px 14px;border:1px solid var(--border);border-radius:12px;background:var(--surface)}
+.user-admin-stat span{display:block;color:var(--muted);font-size:11px;font-weight:700}
+.user-admin-stat b{display:block;margin-top:5px;font-size:24px;line-height:1.1;font-variant-numeric:tabular-nums}
+.user-admin-stat small{display:block;margin-top:5px;color:var(--muted);font-size:10px}
+
+.modal.user-admin{width:min(820px,100%)}
+.user-admin-intro{display:flex;gap:12px;align-items:flex-start;padding:13px 15px;margin-bottom:16px;border:1px solid var(--border);border-radius:12px;background:var(--surface)}
+.user-admin-intro>.material-symbols-rounded{font-size:24px;color:var(--gold)}
+.user-admin-intro b,.user-access-heading b{display:block;font-size:13px}
+.user-admin-intro p{margin:3px 0 0;color:var(--muted);font-size:12px}
+.user-admin-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.user-admin .field{margin-bottom:13px}
+.user-admin .field label{display:block;margin-bottom:6px;font-size:12px;font-weight:700;color:var(--muted)}
+.user-admin .field input,.user-admin .field select{width:100%;min-width:0}
+.user-access-heading{display:flex;justify-content:space-between;align-items:center;gap:12px;margin:18px 0 10px}
+.user-access-heading span:not(.badge){display:block;margin-top:3px;color:var(--muted);font-size:11px}
+.access-module-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-bottom:16px}
+.access-module-option{display:flex;gap:9px;align-items:flex-start;padding:10px;border:1px solid var(--border);border-radius:10px;background:var(--surface-2);cursor:pointer}
+.access-module-option:has(input:checked){border-color:var(--gold);background:var(--brand-soft)}
+.access-module-option input{margin:2px 0 0;accent-color:var(--gold)}
+.access-module-option b{display:block;font-size:12px;text-transform:capitalize}
+.access-module-option small{display:block;margin-top:2px;color:var(--muted);font-size:10px}
+.user-admin-notice{display:flex;gap:9px;align-items:flex-start;padding:11px 12px;border-radius:10px;background:var(--warn-soft);color:var(--muted);font-size:11px;line-height:1.5}
+.user-admin-notice .material-symbols-rounded{color:var(--warn);font-size:18px}
+.user-tools-extended{display:flex;flex-wrap:wrap;gap:10px;align-items:end;padding:12px 0}
+.user-tools-extended .user-search{flex:1 1 220px}
+.user-tools-extended .user-role-filter{display:flex;flex-direction:column;gap:4px;font-size:11px;color:var(--muted)}
+.user-tools-extended .user-role-filter select{min-width:120px;max-width:160px}
+.user-module-cell{max-width:260px;white-space:normal;font-size:11px;color:var(--muted);line-height:1.5;text-transform:capitalize}
+@media(max-width:900px){.user-admin-summary{grid-template-columns:repeat(3,minmax(0,1fr))}}\n@media(max-width:700px){.user-admin-summary{grid-template-columns:repeat(2,minmax(0,1fr))}.user-admin-grid,.access-module-grid{grid-template-columns:1fr}.modal.user-admin{width:100%}.user-tools-extended .user-role-filter{flex:1 1 42%}.user-tools-extended .user-role-filter select{max-width:none;width:100%}}
+
+.user-activation-code{padding:18px;border:1px solid var(--border);border-radius:12px;background:var(--surface)}
+.user-activation-code label{display:block;margin-bottom:8px;font-size:12px;font-weight:800;color:var(--muted)}
+.user-activation-code input{width:100%;padding:14px;border:1px solid var(--border);border-radius:9px;background:var(--surface-2);font:700 15px ui-monospace,monospace;letter-spacing:.06em}
+.user-activation-code p{margin:10px 0 0;color:var(--muted);font-size:12px;line-height:1.5}
+
+/* Staff directory and access editor: dark, legible surfaces (avoid browser cream defaults). */
+#usersTbl .table-wrap,
+#usersTbl table{background:#0B1711;color:#F1F5F2}
+#usersTbl thead th{background:#14251C;color:#C7D3CB}
+#usersTbl tbody tr{background:#0F1C16}
+#usersTbl tbody tr:nth-child(even){background:#122219}
+#usersTbl tbody tr:hover{background:#1A3325}
+#usersTbl tbody td{color:#E7EEE9;border-bottom-color:rgba(199,211,203,.12)}
+#usersTbl tbody td .muted,
+#usersTbl .user-module-cell{color:#B8C7BD}
+.user-admin .access-module-option{background:#13231A;color:#E7EEE9}
+.user-admin .access-module-option:has(input:checked){background:#1B3828;border-color:#8FAF79}
+select option{background:#0F1C16;color:#F1F5F2}

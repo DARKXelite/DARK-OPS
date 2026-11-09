@@ -2,11 +2,13 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/12.19.0/fireba
 import { getFirestore, collection, addDoc, deleteDoc, doc, updateDoc, setDoc, getDoc, increment, onSnapshot, getDocs, writeBatch, runTransaction, serverTimestamp, query, where, orderBy, Timestamp } from "https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore.js";
 import { getAuth, onAuthStateChanged, signInWithPhoneNumber, RecaptchaVerifier, signOut } from "https://www.gstatic.com/firebasejs/12.19.0/firebase-auth.js";
 import { initializeAppCheck, ReCaptchaEnterpriseProvider } from "https://www.gstatic.com/firebasejs/12.19.0/firebase-app-check.js";
+import { getFunctions, httpsCallable } from "https://www.gstatic.com/firebasejs/12.19.0/firebase-functions.js";
 import { createFnbModule } from "./modules/fnb/fnb-module.js";
 import { createBreakfastModule } from "./modules/breakfast/breakfast-module.js";
 import { createGolfPassModule } from "./modules/golf-pass/golf-pass-module.js";
 import { inventoryOnHand } from "./domain/inventory-balance.js";
 import { ROLE_PERMISSIONS, ROLE_LABELS, canRole, permissionForAction, permissionForView, permissionForCollection } from "./modules/rbac.js";
+import { buildUserProfile, rolesForPlatform, modulesForPlatform } from "./modules/user-management.js";
 
 
 const FUEL_RATE = 92.50; // Legacy reference rate; operational costing is managed in the local cost model.
@@ -51,6 +53,11 @@ if (appCheckSiteKey) {
 }
 const db = getFirestore(app);
 const auth = getAuth(app);
+const functions = getFunctions(app, "asia-south1");
+const provisionAndroidStaff = httpsCallable(functions, "provisionAndroidStaff");
+const reissueAndroidInvite = httpsCallable(functions, "reissueAndroidInvite");
+const linkWebStaffIdentity = httpsCallable(functions, "linkWebStaffIdentity");
+const updateStaffAccess = httpsCallable(functions, "updateStaffAccess");
 
 /* ================= HELPERS ================= */
 const $ = (s, r=document) => r.querySelector(s);
@@ -236,9 +243,9 @@ function openModal({ title, sub = '', body = '', footer = '', size = '' }) {
   $('#overlay').classList.add('open');
 }
 function closeModal() { $('#overlay').classList.remove('open'); curModalRender = null; }
-function openForm({ title, html, submit = 'Save', danger = false, onSubmit }) {
+function openForm({ title, html, submit = 'Save', danger = false, size = 'sm', onSubmit }) {
   curModalRender = null;
-  openModal({ title, size: 'sm', body: html, footer: `<button class="btn" data-act="close-modal">Cancel</button><button class="btn ${danger ? 'btn-danger fill' : 'btn-primary'}" id="mSubmit">${esc(submit)}</button>` });
+  openModal({ title, size, body: html, footer: `<button class="btn" data-act="close-modal">Cancel</button><button class="btn ${danger ? 'btn-danger fill' : 'btn-primary'}" id="mSubmit">${esc(submit)}</button>` });
   const btn = $('#mSubmit');
   btn.onclick = async () => { btn.disabled = true; try { const ok = await onSubmit(); if (ok !== false) closeModal(); } catch (e) { console.error(e); toast(e.message || 'Something went wrong', 'err'); } btn.disabled = false; };
   const first = $('#mBody input,#mBody select'); if (first) setTimeout(() => first.focus(), 30);
@@ -1985,14 +1992,124 @@ function normMobile(raw) {
   if (!plus && d.length === 10) return '+91' + d; if (!plus && d.length === 12 && d.startsWith('91')) return '+' + d; if (!plus && d.length === 11 && d.startsWith('0')) return '+91' + d.slice(1);
   return (plus ? '+' : '') + d;
 }
-let usersSearchText = '', usersRoleFilter = 'all';
+let usersSearchText = '', usersRoleFilter = 'all', usersPlatformFilter = 'all', usersStatusFilter = 'all';
+const userPlatformLabel = platform => platform === 'web' ? 'Web App' : platform === 'android' ? 'Android App' : 'Legacy / unassigned';
+const userStatusLabel = status => status === 'active' ? 'Active' : status === 'suspended' ? 'Suspended' : status === 'legacy' ? 'Legacy' : 'Pending';
 function renderUsersMaster() {
   const q = usersSearchText.trim().toLowerCase();
-  const all = [...(S.users || [])].sort((a, b) => (a.fullName || a.username || '').localeCompare(b.fullName || b.username || ''));
-  const rows = all.filter(u => (!q || [u.fullName,u.username,u.mobileNumber,u.role].some(v => String(v||'').toLowerCase().includes(q))) && (usersRoleFilter === 'all' || String(u.role||'') === usersRoleFilter));
-  const roles = [...new Set(all.map(u=>String(u.role||'').trim()).filter(Boolean))].sort();
-  setHTML($('#usersTbl'), `<div class="user-tools"><label class="user-search"><span class="material-symbols-rounded">search</span><input id="usersSearch" value="${esc(usersSearchText)}" placeholder="Search name, mobile or role" aria-label="Search users"></label><label class="user-role-filter">Role<select id="usersRoleFilter"><option value="all">All roles</option>${roles.map(r=>`<option value="${esc(r)}" ${usersRoleFilter===r?'selected':''}>${esc(r)}</option>`).join('')}</select></label><span class="muted sm user-count">${rows.length} of ${all.length} users</span>${RBAC.can('access.manage') ? '<button class="btn btn-sm" data-act="open-role-admin">Manage app access</button>' : ''}</div><div class="table-wrap"><table><thead><tr><th>Name</th><th>Mobile</th><th>Role</th><th>Record ID</th><th class="right">Actions</th></tr></thead><tbody>${!LOADED.users ? '<tr><td colspan="5"><div class="skeleton" style="height:80px"></div></td></tr>' : rows.length ? rows.map(u => `<tr><td><b>${esc(u.fullName || u.username || 'Staff')}</b><div class="muted sm">${u.username && u.username!==u.fullName ? esc(u.username) : 'Workforce profile'}</div></td><td>${esc(u.mobileNumber || '—')}</td><td><span class="badge ${u.role === 'incharge' ? 'gold' : String(u.role||'').startsWith('storekeeper') ? 'warn' : 'ok'}">${esc(u.role || '—')}</span></td><td><code>${esc(u.id)}</code></td><td class="right" style="white-space:nowrap"><button class="btn btn-sm" data-act="edit-user" data-id="${esc(u.id)}">Edit</button> <button class="btn btn-danger btn-sm" data-act="del" data-col="users" data-id="${esc(u.id)}" data-label="${esc(u.fullName || 'this user')}"><span class="material-symbols-rounded">delete</span></button></td></tr>`).join('') : `<tr><td colspan="5" class="empty">${all.length?'No users match these filters.':'No users yet. Add a workforce member to begin.'}</td></tr>`}</tbody></table></div>`);
-  const search = $('#usersSearch'); if (search && document.activeElement?.id === 'usersSearch') { search.focus(); search.setSelectionRange(search.value.length, search.value.length); }
+  const all = [...(S.users || [])].sort((a,b)=>(a.fullName||a.username||'').localeCompare(b.fullName||b.username||''));
+  const rows = all.filter(u => {
+    const searchable = [u.fullName,u.username,u.mobileNumber,u.role,u.platform,u.platformRole,(u.moduleAccess||[]).join(' ')].some(v=>String(v||'').toLowerCase().includes(q));
+    return (!q || searchable)
+      && (usersRoleFilter==='all' || String(u.platformRole||u.role||'')===usersRoleFilter)
+      && (usersPlatformFilter==='all' || String(u.platform||'legacy')===usersPlatformFilter)
+      && (usersStatusFilter==='all' || String(u.status||'legacy')===usersStatusFilter);
+  });
+  const roles=[...new Set(all.map(u=>String(u.platformRole||u.role||'').trim()).filter(Boolean))].sort();
+  const moduleLabels=ids=>(Array.isArray(ids)?ids:[]).map(id=>id.replaceAll('_',' ')).join(', ');
+  const webCount=all.filter(u=>u.platform==='web').length;
+  const androidCount=all.filter(u=>u.platform==='android').length;
+  const loginReady=all.filter(u=>u.status==='active'&&!!u.authUid).length;
+  const pendingSetup=all.length-loginReady;
+  setHTML($('#usersTbl'), `<div class="user-admin-summary" aria-label="Staff access summary">
+    <div class="user-admin-stat"><span>Total staff</span><b>${all.length}</b><small>All directory records</small></div>
+    <div class="user-admin-stat"><span>Web profiles</span><b>${webCount}</b><small>Web App assignment</small></div>
+    <div class="user-admin-stat"><span>Android profiles</span><b>${androidCount}</b><small>Android App assignment</small></div>
+    <div class="user-admin-stat"><span>Login-ready</span><b>${loginReady}</b><small>Linked identity + active</small></div>
+    <div class="user-admin-stat"><span>Setup required</span><b>${pendingSetup}</b><small>Pending or legacy records</small></div>
+  </div><div class="user-tools user-tools-extended">
+    <label class="user-search"><span class="material-symbols-rounded">search</span><input id="usersSearch" value="${esc(usersSearchText)}" placeholder="Search name, mobile, role or module" aria-label="Search users"></label>
+    <label class="user-role-filter">Platform<select id="usersPlatformFilter"><option value="all">All platforms</option><option value="web" ${usersPlatformFilter==='web'?'selected':''}>Web App</option><option value="android" ${usersPlatformFilter==='android'?'selected':''}>Android App</option><option value="legacy" ${usersPlatformFilter==='legacy'?'selected':''}>Legacy / unassigned</option></select></label>
+    <label class="user-role-filter">Role<select id="usersRoleFilter"><option value="all">All roles</option>${roles.map(r=>`<option value="${esc(r)}" ${usersRoleFilter===r?'selected':''}>${esc(r.replaceAll('_',' '))}</option>`).join('')}</select></label>
+    <label class="user-role-filter">Status<select id="usersStatusFilter"><option value="all">All statuses</option><option value="pending" ${usersStatusFilter==='pending'?'selected':''}>Pending</option><option value="active" ${usersStatusFilter==='active'?'selected':''}>Active</option><option value="suspended" ${usersStatusFilter==='suspended'?'selected':''}>Suspended</option><option value="legacy" ${usersStatusFilter==='legacy'?'selected':''}>Legacy</option></select></label>
+    <span class="muted sm user-count">${rows.length} of ${all.length} profiles</span></div>
+    <div class="table-wrap"><table><thead><tr><th>Staff member</th><th>Platform</th><th>Role</th><th>Module access</th><th>Status</th><th class="right">Actions</th></tr></thead><tbody>
+    ${!LOADED.users?'<tr><td colspan="6"><div class="skeleton" style="height:80px"></div></td></tr>':rows.length?rows.map(u=>{
+      const rawStatus=u.status||'legacy', platform=u.platform||'legacy';
+      // Never present a profile as login-ready unless it has a linked Auth identity.
+      const status=rawStatus==='active'&&!u.authUid?'pending':rawStatus;
+      const statusClass=status==='active'?'ok':status==='suspended'?'bad':'warn';
+      return `<tr><td><b>${esc(u.fullName||u.username||'Staff')}</b><div class="muted sm">${esc(u.mobileNumber||'No mobile')} · <code>${esc(u.id)}</code></div></td>
+      <td><span class="badge ${platform==='legacy'?'warn':'gold'}">${esc(userPlatformLabel(platform))}</span></td>
+      <td><b>${esc((u.platformRole||u.role||'Unassigned').replaceAll('_',' '))}</b></td>
+      <td class="user-module-cell">${u.moduleAccess?.length?esc(moduleLabels(u.moduleAccess)):'<span class="muted">No modules assigned</span>'}</td>
+      <td><span class="badge ${statusClass}">${esc(userStatusLabel(status))}</span></td>
+      <td class="right" style="white-space:nowrap"><button class="btn btn-sm" data-act="edit-user" data-id="${esc(u.id)}">Manage</button> ${!u.authUid&&status==='pending'&&platform==='android'?'<button class="btn btn-sm btn-primary" data-act="provision-android-user" data-id="'+esc(u.id)+'">Provision</button>':''} ${!u.authUid&&status==='pending'&&platform==='web'?'<button class="btn btn-sm" data-act="link-web-user" data-id="'+esc(u.id)+'">Link OTP UID</button>':''} ${u.authUid&&platform==='android'&&status==='active'?'<button class="btn btn-sm" data-act="reissue-android-user" data-id="'+esc(u.id)+'">New code</button>':''} <button class="btn btn-danger btn-sm" data-act="del" data-col="users" data-id="${esc(u.id)}" data-label="${esc(u.fullName||'this user')}"><span class="material-symbols-rounded">delete</span></button></td></tr>`;
+    }).join(''):`<tr><td colspan="6" class="empty">${all.length?'No profiles match these filters.':'No users yet. Add a staff profile to begin.'}</td></tr>`}</tbody></table></div>`);
+  const search=$('#usersSearch'); if(search&&document.activeElement?.id==='usersSearch'){search.focus();search.setSelectionRange(search.value.length,search.value.length);}
+}
+function userEditorOptions(platform, selectedRole, selectedModules) {
+  const roles=rolesForPlatform(platform), modules=modulesForPlatform(platform);
+  const roleIsValid=roles.some(item=>item.id===selectedRole);
+  return {
+    roleOptions: `<option value="" disabled ${roleIsValid?'':'selected'}>Select a role</option>`+roles.map(item=>`<option value="${esc(item.id)}" ${selectedRole===item.id?'selected':''}>${esc(item.label)}</option>`).join(''),
+    moduleOptions: modules.map(item=>`<label class="access-module-option"><input type="checkbox" name="userModuleAccess" value="${esc(item.id)}" ${selectedModules.includes(item.id)?'checked':''}><span><b>${esc(item.label)}</b><small>${esc(item.id)}</small></span></label>`).join('')
+  };
+}
+function openUserManagementForm(userId=null) {
+  if(!RBAC.can('users.manage')){toast('You do not have permission to manage staff profiles.','err');return;}
+  const existing=userId?S.users.find(item=>item.id===userId):null;
+  if(userId&&!existing){toast('User profile not found. Refresh and retry.','err');return;}
+  let platform=existing?.platform==='android'?'android':'web';
+  let role=existing?.platformRole||(existing?.platform?existing.role:'');
+  let selectedModules=Array.isArray(existing?.moduleAccess)?[...existing.moduleAccess]:[];
+  const hasLinkedIdentity=!!existing?.authUid;
+  const canRetainActive=hasLinkedIdentity;
+  const initial=userEditorOptions(platform,role,selectedModules);
+  const statuses=hasLinkedIdentity?'<option value="active">Active · provisioned</option><option value="suspended">Suspended</option>':'<option value="pending">Pending · identity not provisioned</option><option value="suspended">Suspended</option>';
+  const html=`
+    <div class="user-admin-intro"><span class="material-symbols-rounded">admin_panel_settings</span><div><b>One staff profile, one platform</b><p>Choose Web App or Android App. Roles and modules are filtered to match.</p></div></div>
+    <div class="user-admin-grid">${fld('Full name','<input id="umName" required maxlength="100" placeholder="e.g. Rajesh Kumar" autocomplete="name">')}${fld('Mobile number','<input id="umMobile" required inputmode="tel" maxlength="18" placeholder="+91 98765 43210" autocomplete="tel">')}</div>
+    ${fld('Platform','<select id="umPlatform" required><option value="web">Web App</option><option value="android">Android App</option></select>','A staff profile cannot be assigned to both platforms.')}
+    ${fld('Platform role',`<select id="umRole" required>${initial.roleOptions}</select>`)}
+    <div class="user-access-heading"><div><b>Module access</b><span>Grant only the modules this person needs.</span></div><span id="umModuleCount" class="badge gold">0 selected</span></div>
+    <div id="umModules" class="access-module-grid">${initial.moduleOptions}</div>
+    ${fld('Profile status',`<select id="umStatus">${statuses}</select>`,'New profiles remain pending until a separate Firebase identity and authorization record are provisioned.')}
+    <div class="user-admin-notice"><span class="material-symbols-rounded">verified_user</span><span>Pending Android profiles can be provisioned here with a one-time activation code. Web profiles must first complete phone OTP once, then be linked to their existing Firebase Auth UID. Linked role, module and suspension changes are synchronized by the trusted backend.</span></div>`;
+  openForm({
+    title:existing?'Manage staff access':'Create staff profile',
+    sub:existing?'Update platform assignment and module permissions.':'Create a staff directory record and configure platform access.',
+    size:'user-admin',html,submit:existing?'Save user access':'Create pending profile',
+    onSubmit:async()=>{
+      const name=$('#umName').value.trim(), mobile=normMobile($('#umMobile').value), selectedPlatform=$('#umPlatform').value;
+      const selectedRole=$('#umRole').value, moduleAccess=$$('input[name="userModuleAccess"]:checked').map(input=>input.value), status=$('#umStatus').value;
+      if(!name){toast('Full name is required.','err');return false;}
+      if(!/^\+\d{10,14}$/.test(mobile)){toast('Enter a valid mobile number.','err');return false;}
+      if(S.users.some(item=>item.id!==existing?.id&&normMobile(item.mobileNumber)===mobile)){toast('This mobile number already belongs to another staff profile.','err');return false;}
+      if(status==='active'&&!canRetainActive){toast('A profile cannot be activated until its platform identity is provisioned.','err');return false;}
+      if(existing&&existing.platform&&existing.platform!==selectedPlatform&&existing.authUid){toast('Platform cannot be changed after an authentication identity is linked. Use a reviewed identity migration.','err');return false;}
+      if(existing?.authUid&&mobile!==normMobile(existing.mobileNumber)){toast('Mobile number cannot be changed after identity linking. Use a verified identity migration.','err');return false;}
+      const payload=buildUserProfile({fullName:name,mobileNumber:mobile,platform:selectedPlatform,platformRole:selectedRole,moduleAccess,status});
+      payload.authUid=existing?.authUid||null;
+      payload.updatedAt=serverTimestamp();payload.updatedBy=RBAC.session.uid;
+      if(existing?.authUid){
+        await updateStaffAccess({staffProfileId:existing.id,fullName:name,platformRole:selectedRole,moduleAccess,status});
+        toast('Staff profile, Auth role and module grants synchronized.');
+      }else if(existing){
+        delete payload.createdAt;
+        delete payload.createdBy;
+        await updateDoc(doc(db,CONFIG.COL.users,existing.id),payload);
+        toast('Pending staff profile updated.');
+      }else{
+        payload.createdAt=serverTimestamp();payload.createdBy=RBAC.session.uid;
+        await addDoc(collection(db,CONFIG.COL.users),payload);
+        toast('Pending staff profile created. Provision the platform identity to enable sign-in.');
+      }
+    }
+  });
+  $('#umName').value=existing?.fullName||existing?.username||'';
+  $('#umMobile').value=existing?.mobileNumber||'';
+  $('#umPlatform').value=platform;
+  $('#umStatus').value=hasLinkedIdentity?(existing?.status==='suspended'?'suspended':'active'):(existing?.status==='suspended'?'suspended':'pending');
+  const syncCount=()=>{const badge=$('#umModuleCount');if(badge)badge.textContent=`${$$('input[name="userModuleAccess"]:checked').length} selected`;};
+  $('#umPlatform').addEventListener('change',()=>{
+    const next=$('#umPlatform').value, opts=userEditorOptions(next,'',[]);
+    $('#umRole').innerHTML=opts.roleOptions;
+    $('#umModules').innerHTML=opts.moduleOptions||'<p class="muted sm">No modules available.</p>';
+    syncCount();
+  });
+  $('#umModules').addEventListener('change',syncCount);
+  syncCount();
 }
 const STORE_CATS = ['Fuel','Fertilizers','Pesticides','Turf Enhancements','Spare Parts','Tools','F&B','Other'];
 const itemName = i => i.partName || i.itemName || i.name || i.productName || 'Unnamed item';
@@ -2882,10 +2999,54 @@ const H = {
   'add-inward': () => openInward(),
   'export-stock': () => downloadCSV('inventory_stock.csv',[['Category','Item','Unit','Stock','Auto reorder at','Rate basis','Unit rate'],...S.inventory.map(i=>[i.category,itemName(i),i.unit||'Nos',inventoryOnHand(i),effectiveReorderLevel(i),autoReorderDetails(i).method,i.unitCost])]),
   'export-inwards': () => downloadCSV('goods_inwards.csv',[['Date','Invoice','Supplier','Category','Item','Unit','Qty','Rate','GST %','Taxable','GST amount','Total'],...S.inwards.map(r=>[r.receiptDate,r.invoiceNumber,r.supplier,r.category,r.itemName,r.unit,r.quantity,r.rate,r.gstPercent,r.taxableAmount,r.gstAmount,r.total])]),
-  'edit-user': d => { const u=S.users.find(x=>x.id===d.id); if(!u) return toast('User record not found','err'); openForm({title:'Edit workforce member',submit:'Save changes',html:fld('Full name','<input id="euName" required>')+fld('Mobile number','<input id="euMob" inputmode="tel" required>','Saved in normalized +91 format where applicable.')+fld('Role','<select id="euRole"><option value="operator">Operator</option><option value="incharge">Incharge</option><option value="storekeeper">Storekeeper (Fuel Ledger)</option><option value="storekeeper_fertilizer">Storekeeper (Fertilizers & Pesticides)</option></select>'),onSubmit:async()=>{const name=$('#euName').value.trim(), mob=normMobile($('#euMob').value), role=$('#euRole').value;if(!name){toast('Name is required','err');return false;}if(!/^\+\d{10,14}$/.test(mob)){toast('Enter a valid mobile number','err');return false;}if(S.users.some(x=>x.id!==u.id&&x.mobileNumber===mob)){toast('This mobile number is already registered','err');return false;}await updateDoc(doc(db,CONFIG.COL.users,u.id),{fullName:name,username:name,mobileNumber:mob,role});toast('User profile updated');}});setTimeout(()=>{if($('#euName'))$('#euName').value=u.fullName||u.username||'';if($('#euMob'))$('#euMob').value=u.mobileNumber||'';if($('#euRole'))$('#euRole').value=u.role||'operator';},0); },
-  'add-user': () => openForm({ title: 'Register workforce member', submit: 'Add user',
-    html: fld('Full name', '<input id="uName" placeholder="e.g. Rajesh Kumar">') + fld('Mobile number', '<input id="uMob" inputmode="tel" placeholder="98765 43210">', 'Saved as +91XXXXXXXXXX so the app login can match it.') + fld('Role', '<select id="uRole"><option value="operator">Operator</option><option value="incharge">Incharge</option><option value="storekeeper">Storekeeper (Fuel Ledger)</option><option value="storekeeper_fertilizer">Storekeeper (Fertilizers & Pesticides)</option></select>'),
-    onSubmit: async () => { const name = $('#uName').value.trim(), mob = normMobile($('#uMob').value); if (!name) { toast('Name is required', 'err'); return false; } if (!/^\+\d{10,14}$/.test(mob)) { toast('Enter a valid mobile number', 'err'); return false; } if (S.users.some(u => u.mobileNumber === mob)) { toast('This mobile number is already registered', 'err'); return false; } await addDoc(collection(db, CONFIG.COL.users), { fullName: name, mobileNumber: mob, role: $('#uRole').value, username: name }); toast('User registered for mobile login'); } }),
+  'edit-user': d => openUserManagementForm(d.id),
+  'add-user': () => openUserManagementForm(),
+  'provision-android-user': async d => {
+    try {
+      const response = await provisionAndroidStaff({ staffProfileId: d.id });
+      const code = response.data.activationCode;
+      openModal({
+        title: 'Android activation code',
+        sub: 'Share this one-time code with the staff member. It expires in 30 minutes and is shown only once.',
+        body: '<div class="user-activation-code"><label for="androidActivationCode">One-time activation code</label><input id="androidActivationCode" readonly value="'+esc(code)+'"><p>They must enter their registered mobile number, this code and a new password in the Android app.</p></div>',
+        footer: '<button class="btn" data-act="copy-android-code">Copy code</button><button class="btn btn-primary" data-act="close-modal">Done</button>'
+      });
+      renderUsersMaster();
+    } catch (error) { console.error(error); toast(error.message || 'Android identity provisioning failed.','err'); }
+  },
+  'reissue-android-user': async d => {
+    try {
+      const response = await reissueAndroidInvite({ staffProfileId: d.id });
+      openModal({
+        title: 'Replacement Android activation code',
+        sub: 'The previous code is replaced. This new code expires in 30 minutes.',
+        body: '<div class="user-activation-code"><label for="androidActivationCode">One-time activation code</label><input id="androidActivationCode" readonly value="'+esc(response.data.activationCode)+'"><p>Share it privately with the staff member.</p></div>',
+        footer: '<button class="btn" data-act="copy-android-code">Copy code</button><button class="btn btn-primary" data-act="close-modal">Done</button>'
+      });
+    } catch (error) { console.error(error); toast(error.message || 'Could not issue a replacement code.','err'); }
+  },
+  'link-web-user': d => {
+    const profile = S.users.find(item => item.id === d.id);
+    if (!profile) return toast('Staff profile not found. Refresh and retry.','err');
+    openForm({
+      title: 'Link existing Web OTP identity',
+      sub: 'The staff member must have completed phone OTP at least once. Copy their UID from Firebase Authentication.',
+      submit: 'Verify and link identity',
+      html: fld('Firebase Auth UID','<input id="webStaffAuthUid" required maxlength="128" autocomplete="off" placeholder="Paste the exact Firebase Auth UID">')+'<p class="muted sm">The backend verifies that this Auth account phone number exactly matches '+esc(profile.mobileNumber)+'. Existing role identities cannot be overwritten.</p>',
+      onSubmit: async () => {
+        const authUid=$('#webStaffAuthUid').value.trim();
+        if(!authUid||authUid.includes('/')){toast('Enter a valid Firebase Auth UID.','err');return false;}
+        await linkWebStaffIdentity({staffProfileId:d.id,authUid});
+        toast('Web OTP identity verified and linked.');
+      }
+    });
+  },
+  'copy-android-code': async () => {
+    const field=$('#androidActivationCode');
+    if(!field)return;
+    try { await navigator.clipboard.writeText(field.value); toast('Activation code copied.'); }
+    catch (_) { field.select(); toast('Select and copy the activation code.'); }
+  },
   'add-local-expense': () => { openForm({title:'Add local bill',submit:'Save bill',size:'md',html:
     `<div class="row3">${fld('Date','<input id="exDate" type="date" value="'+today()+'">')}${fld('Paid by','<select id="exPaidBy"><option value="me">Me · to claim from office</option><option value="accounts">Accounts · paid by office</option></select>')}${fld('Shop / bill ref (optional)','<input id="exVendor" placeholder="e.g. Sri Hardware, #123" autocomplete="off">')}</div>`+
     '<div class="exp-rows-head"><span>Item name</span><span>Qty</span><span>Rate ₹</span><span>Amount ₹</span><span></span></div><div id="exRows">'+exRowHTML()+exRowHTML()+'</div>'+
@@ -2971,7 +3132,7 @@ const C = {
   'part-category': v => { const w = $('#pModelWrap'); if (w) w.hidden = v !== 'Spare Parts'; const unit = $('#pUnit'); if (unit && v === 'Fuel') unit.value = 'Litre'; }
 };
 document.addEventListener('input', e => { if (e.target?.id === 'usersSearch') { const pos=e.target.selectionStart; usersSearchText=e.target.value||''; renderUsersMaster(); const next=$('#usersSearch'); if(next){next.focus();try{next.setSelectionRange(pos,pos)}catch(_){}} } });
-document.addEventListener('change', e => { if (e.target?.id === 'usersRoleFilter') { usersRoleFilter=e.target.value||'all'; renderUsersMaster(); } });
+document.addEventListener('change', e => { if (e.target?.id === 'usersRoleFilter') { usersRoleFilter=e.target.value||'all'; renderUsersMaster(); } if (e.target?.id === 'usersPlatformFilter') { usersPlatformFilter=e.target.value||'all'; renderUsersMaster(); } if (e.target?.id === 'usersStatusFilter') { usersStatusFilter=e.target.value||'all'; renderUsersMaster(); } });
 document.addEventListener('click', e => {
   const el = e.target.closest('[data-act]');
   if (!el) { $$('.kmenu.open').forEach(x => x.classList.remove('open')); return; }
@@ -3022,10 +3183,39 @@ let turfProductCategory = 'All categories';
 $('#dateChip').textContent = new Date().toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' });
 toggleDock(false); renderWeather(); loadWeather(); setInterval(loadWeather, 30 * 60 * 1000);
 
+const PLATFORM_ROLE_PERMISSIONS = Object.freeze({
+  captain: ["dashboard.read", "breakfast.read", "breakfast.redeem"],
+  marshal: ["dashboard.read", "golf.read", "golf.scan"],
+  foe: ["dashboard.read", "breakfast.read", "breakfast.redeem"],
+  workshop_manager: ["dashboard.read", "fleet.read", "maintenance.read", "maintenance.write", "assignments.read"],
+  golf_superintendent: ["dashboard.read", "fleet.read", "shifts.read", "shifts.write", "turf.read", "turf.write", "turf.issue", "inventory.read", "maintenance.read", "assignments.read", "reports.read"],
+  user: ["dashboard.read"]
+});
+const PERMISSION_MODULE = Object.freeze({
+  "fuel.read": "fuel_fertilizer_dashboard", "fuel.write": "fuel_fertilizer_dashboard", "fuel.delete": "fuel_fertilizer_dashboard",
+  "fnb.read": "fnb_ops", "fnb.write": "fnb_ops", "fnb.receive": "fnb_ops", "fnb.delete": "fnb_ops",
+  "inventory.read": "inventory", "inventory.write": "inventory", "inventory.receipts.read": "inventory",
+  "fleet.read": "fleet_ops", "fleet.write": "fleet_ops", "shifts.read": "fleet_ops", "shifts.write": "fleet_ops",
+  "incidents.write": "fleet_ops", "incidents.delete": "fleet_ops", "assignments.read": "fleet_ops", "assignments.write": "fleet_ops",
+  "turf.read": "turf_ops", "turf.write": "turf_ops", "turf.issue": "turf_ops",
+  "maintenance.read": "workshop_ops", "maintenance.write": "workshop_ops",
+  "breakfast.read": "breakfast_qr", "breakfast.manage": "breakfast_qr", "breakfast.redeem": "breakfast_qr",
+  "golf.read": "golf_qr", "golf.manage": "golf_qr", "golf.scan": "golf_qr",
+  "reports.read": "reports", "expenses.read": "reports", "expenses.write": "reports"
+});
 const RBAC = {
   roles: ROLE_PERMISSIONS,
-  session: { role: null, authenticated: false, uid: null, displayName: "" },
-  can(permission) { return this.session.authenticated && canRole(this.session.role, permission); }
+  session: { role: null, authenticated: false, uid: null, displayName: "", platform: null, platformRole: null, moduleAccess: [] },
+  can(permission) {
+    const session = this.session;
+    if (!session.authenticated) return false;
+    if (!session.platform) return canRole(session.role, permission);
+    const moduleId = PERMISSION_MODULE[permission];
+    if (moduleId && !session.moduleAccess.includes(moduleId)) return false;
+    const rolePermissions = PLATFORM_ROLE_PERMISSIONS[session.platformRole];
+    if (rolePermissions) return rolePermissions.includes(permission);
+    return canRole(session.role, permission);
+  }
 };
 golfPassModule = createGolfPassModule({ db, auth, RBAC, collection, doc, setDoc, getDocs, query, where, runTransaction, serverTimestamp, esc, today, toast });
 breakfastModule = createBreakfastModule({
@@ -3063,7 +3253,7 @@ let confirmationResult = null;
 let recaptchaVerifier = null;
 onAuthStateChanged(auth, async user => {
   stopListeners();
-  RBAC.session.role = null; RBAC.session.authenticated = false; RBAC.session.uid = null; RBAC.session.displayName = "";
+  RBAC.session.role = null; RBAC.session.authenticated = false; RBAC.session.uid = null; RBAC.session.displayName = ""; RBAC.session.platform = null; RBAC.session.platformRole = null; RBAC.session.moduleAccess = [];
   const login = $("#login"), gate = $("#pinGate"), error = $("#loginErr");
   if (gate) gate.hidden = true;
   if (!user) {
@@ -3089,6 +3279,19 @@ onAuthStateChanged(auth, async user => {
       roleSnap = await getDoc(doc(db, "app_roles", user.uid));
     }
     const roleData = roleSnap.exists() ? roleSnap.data() : null;
+    if (roleData?.platform) {
+      const linkedProfile = roleData.staffProfileId ? await getDoc(doc(db, "users", roleData.staffProfileId)) : null;
+      const profile = linkedProfile?.exists() ? linkedProfile.data() : null;
+      const sameModules = Array.isArray(profile?.moduleAccess) && Array.isArray(roleData.moduleAccess)
+        && JSON.stringify(profile.moduleAccess) === JSON.stringify(roleData.moduleAccess);
+      if (roleData.platform !== "web" || !profile || profile.status !== "active"
+        || profile.authUid !== user.uid || profile.platform !== "web"
+        || profile.platformRole !== roleData.platformRole || !sameModules) {
+        await signOut(auth);
+        if (error) error.textContent = "This account is not linked to an active Web App staff profile. Ask an administrator to verify the platform assignment.";
+        return;
+      }
+    }
     if (!roleData || roleData.active !== true || !ROLE_PERMISSIONS[roleData.role]) {
       await signOut(auth);
       if (error) error.textContent = "This account has no active application role. Ask an administrator to assign access.";
@@ -3098,6 +3301,9 @@ onAuthStateChanged(auth, async user => {
     RBAC.session.authenticated = true;
     RBAC.session.uid = user.uid;
     RBAC.session.displayName = roleData.displayName || user.email || "";
+    RBAC.session.platform = roleData.platform || null;
+    RBAC.session.platformRole = roleData.platformRole || null;
+    RBAC.session.moduleAccess = Array.isArray(roleData.moduleAccess) ? roleData.moduleAccess : [];
     if (login) login.hidden = true;
     if ($("#signoutBtn")) $("#signoutBtn").hidden = false;
     document.body.classList.remove("auth-locked");

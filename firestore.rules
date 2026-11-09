@@ -4,21 +4,64 @@ service cloud.firestore {
     function signedIn() {
       return request.auth != null;
     }
+    function rolePath() {
+      return /databases/$(database)/documents/app_roles/$(request.auth.uid);
+    }
+    function roleData() {
+      return get(rolePath()).data;
+    }
+    function platformIdentityValid() {
+      let role = roleData();
+      let profilePath = /databases/$(database)/documents/users/$(role.staffProfileId);
+      return !role.keys().hasAny(['platform'])
+        || (role.active == true
+          && role.platform in ['web', 'android']
+          && role.staffProfileId is string
+          && role.platformRole is string
+          && role.moduleAccess is list
+          && exists(profilePath)
+          && get(profilePath).data.platform == role.platform
+          && get(profilePath).data.platformRole == role.platformRole
+          && get(profilePath).data.moduleAccess == role.moduleAccess
+          && get(profilePath).data.status == 'active'
+          && get(profilePath).data.authUid == request.auth.uid);
+    }
     function hasRole(allowed) {
       return signedIn()
-        && exists(/databases/$(database)/documents/app_roles/$(request.auth.uid))
-        && get(/databases/$(database)/documents/app_roles/$(request.auth.uid)).data.active == true
-        && get(/databases/$(database)/documents/app_roles/$(request.auth.uid)).data.role in allowed;
+        && exists(rolePath())
+        && roleData().active == true
+        && roleData().role in allowed
+        && platformIdentityValid();
+    }
+    // Legacy role documents retain their existing access. New platform-linked identities
+    // must also hold the exact module grant on their staff profile and app_roles record.
+    function hasModuleAccess(moduleId) {
+      return hasRole(['admin', 'manager', 'storekeeper', 'operator'])
+        && (!roleData().keys().hasAny(['platform'])
+          || (roleData().moduleAccess is list && roleData().moduleAccess.hasAny([moduleId])));
+    }
+    function platformRoleIs(platformRole) {
+      return signedIn() && exists(rolePath()) && platformIdentityValid()
+        && roleData().platformRole == platformRole;
     }
     function admin() { return hasRole(['admin']); }
     function manager() { return hasRole(['admin', 'manager']); }
-    function storeTeam() { return hasRole(['admin', 'manager', 'storekeeper']); }
-    function opsTeam() { return hasRole(['admin', 'manager', 'operator']); }
-    function fnbTeam() { return hasRole(['admin', 'manager', 'storekeeper']); }
-    function breakfastStaff() { return hasRole(['admin', 'manager', 'storekeeper', 'operator']); }
-    function breakfastManagers() { return hasRole(['admin', 'manager']); }
-    function golfStaff() { return hasRole(['admin', 'manager', 'storekeeper', 'operator']); }
-    function golfManagers() { return hasRole(['admin', 'manager']); }
+    function storeTeam() { return hasRole(['admin', 'manager', 'storekeeper']) && hasModuleAccess('inventory'); }
+    function fuelTeam() { return hasRole(['admin', 'manager', 'storekeeper']) && hasModuleAccess('fuel_fertilizer_dashboard'); }
+    function opsTeam() { return hasRole(['admin', 'manager', 'operator']) && hasModuleAccess('fleet_ops'); }
+    function workshopTeam() {
+      return manager() || (hasRole(['operator', 'storekeeper'])
+        && platformRoleIs('workshop_manager') && hasModuleAccess('workshop_ops'));
+    }
+    function turfTeam() {
+      return hasRole(['admin', 'manager', 'storekeeper', 'operator']) && hasModuleAccess('turf_ops');
+    }
+    function fnbTeam() { return hasRole(['admin', 'manager', 'storekeeper']) && hasModuleAccess('fnb_ops'); }
+    function reportsTeam() { return hasRole(['admin', 'manager', 'storekeeper', 'operator']) && hasModuleAccess('reports'); }
+    function breakfastStaff() { return hasRole(['admin', 'manager', 'storekeeper', 'operator']) && hasModuleAccess('breakfast_qr'); }
+    function breakfastManagers() { return hasRole(['admin', 'manager']) && hasModuleAccess('breakfast_qr'); }
+    function golfStaff() { return hasRole(['admin', 'manager', 'storekeeper', 'operator']) && hasModuleAccess('golf_qr'); }
+    function golfManagers() { return hasRole(['admin', 'manager']) && hasModuleAccess('golf_qr'); }
 
     function validFnbOrderCreate() {
       let d = request.resource.data;
@@ -204,6 +247,11 @@ service cloud.firestore {
         );
     }
 
+    // Activation codes are server-only. Clients never read or write invite hashes.
+    match /android_invites/{staffProfileId} {
+      allow read, write: if false;
+    }
+
     match /app_roles/{uid} {
       allow get: if signedIn() && (request.auth.uid == uid || admin());
       allow list: if admin();
@@ -228,7 +276,8 @@ service cloud.firestore {
       allow delete: if admin();
     }
     match /users/{id} {
-      allow read: if manager();
+      allow get: if manager() || (signedIn() && resource.data.authUid == request.auth.uid && platformIdentityValid());
+      allow list: if manager();
       allow create, update, delete: if manager();
     }
     // Assets are separate records; Fleet-linked machines keep their canonical /machines document.
@@ -249,7 +298,7 @@ service cloud.firestore {
       allow write: if manager();
     }
     match /fuel_logs/{id} {
-      allow read, create, update: if storeTeam();
+      allow read, create, update: if fuelTeam();
       allow delete: if manager();
     }
     match /shifts/{id} {
@@ -265,14 +314,15 @@ service cloud.firestore {
       allow write: if opsTeam();
     }
     match /inventory/{id} {
-      allow read: if signedIn() && hasRole(['admin', 'manager', 'storekeeper', 'operator']);
+      allow read: if signedIn() && hasRole(['admin', 'manager', 'storekeeper', 'operator']) && hasModuleAccess('inventory');
       allow create, delete: if storeTeam();
       allow update: if storeTeam()
         || (hasRole(['operator'])
           && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['stockQuantity', 'updatedAt'])
           && request.resource.data.stockQuantity is number
           && request.resource.data.stockQuantity >= 0
-          && request.resource.data.stockQuantity <= resource.data.stockQuantity);
+          && request.resource.data.stockQuantity <= resource.data.stockQuantity)
+        && hasModuleAccess('inventory');
     }
     match /logs/{id} {
       allow read: if opsTeam();
@@ -280,24 +330,24 @@ service cloud.firestore {
       allow update, delete: if manager();
     }
     match /maintenance_logs/{id} {
-      allow read: if opsTeam();
-      allow write: if manager();
+      allow read: if opsTeam() || workshopTeam();
+      allow write: if workshopTeam();
     }
     match /assignment_logs/{id} {
       allow read: if opsTeam();
       allow write: if manager();
     }
     match /turf_plans/{id} {
-      allow read: if opsTeam() || hasRole(['storekeeper']);
-      allow create, update: if opsTeam() || hasRole(['storekeeper']);
+      allow read: if turfTeam();
+      allow create, update: if turfTeam();
       allow delete: if manager();
     }
 
     // Native Android issues and Turf Ops cost reporting use this collection.
     // Keep the same role policy as turf_plans; never allow public access.
     match /daily_application_plans/{id} {
-      allow read: if opsTeam() || hasRole(['storekeeper']);
-      allow create, update: if opsTeam() || hasRole(['storekeeper']);
+      allow read: if turfTeam();
+      allow create, update: if turfTeam();
       allow delete: if manager();
     }
     match /store_inwards/{id} {
@@ -310,7 +360,7 @@ service cloud.firestore {
       allow delete: if storeTeam() && resource.data.transactionType != 'FNB_RECEIPT';
     }
     match /local_expenses/{id} {
-      allow read: if storeTeam();
+      allow read: if reportsTeam();
       allow create, update, delete: if manager();
     }
     match /fnb_orders/{id} {
