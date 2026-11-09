@@ -155,11 +155,13 @@ export function createGolfPassModule({db,auth,RBAC,collection,doc,setDoc,onSnaps
     if(action==="close-qr"){document.getElementById("gpQrModal")?.remove();return;}
     if(action==="export"){csv();return;}
     if(action==="download-created"&&lastPass){qrAction(lastPass,"download");return;}
-    if(action==="print-created"&&lastPass){qrAction(lastPass,"print");return;}\n    if(action==="whatsapp-created"&&lastPass){qrAction(lastPass,"whatsapp");return;}
+    if(action==="print-created"&&lastPass){qrAction(lastPass,"print");return;}
+    if(action==="whatsapp-created"&&lastPass){qrAction(lastPass,"whatsapp");return;}
     const p=passByRef(t.dataset.pass);if(!p)return;
     if(action==="view-qr")qrAction(p,"view");
     if(action==="download-qr")qrAction(p,"download");
-    if(action==="print")qrAction(p,"print");\n    if(action==="whatsapp")qrAction(p,"whatsapp");
+    if(action==="print")qrAction(p,"print");
+    if(action==="whatsapp")qrAction(p,"whatsapp");
   }
   function submit(e){if(e.target?.id==="gpRegistration")create(e).catch(err=>toast("Could not create pass: "+err.message,"err"));}
   function change(e){
