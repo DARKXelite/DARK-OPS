@@ -1291,16 +1291,23 @@ body.turf-board-mode #v-turfcare .turf-weekly-card {
 .user-activation-code input{width:100%;padding:14px;border:1px solid var(--border);border-radius:9px;background:var(--surface-2);font:700 15px ui-monospace,monospace;letter-spacing:.06em}
 .user-activation-code p{margin:10px 0 0;color:var(--muted);font-size:12px;line-height:1.5}
 
-/* Staff directory and access editor: dark, legible surfaces (avoid browser cream defaults). */
+/* Staff directory: force row AND cell surfaces so generic table rules cannot reintroduce pale zebra stripes. */
 #usersTbl .table-wrap,
-#usersTbl table{background:#0B1711;color:#F1F5F2}
-#usersTbl thead th{background:#14251C;color:#C7D3CB}
-#usersTbl tbody tr{background:#0F1C16}
-#usersTbl tbody tr:nth-child(even){background:#122219}
-#usersTbl tbody tr:hover{background:#1A3325}
-#usersTbl tbody td{color:#E7EEE9;border-bottom-color:rgba(199,211,203,.12)}
+#usersTbl table{background:#0B1711!important;color:#F1F5F2!important}
+#usersTbl thead th{background:#14251C!important;color:#D8E3DC!important}
+#usersTbl tbody tr,
+#usersTbl tbody tr td{background-color:#0F1C16!important;color:#E7EEE9!important}
+#usersTbl tbody tr:nth-child(even),
+#usersTbl tbody tr:nth-child(even) td{background-color:#122219!important;color:#E7EEE9!important}
+#usersTbl tbody tr:hover,
+#usersTbl tbody tr:hover td{background-color:#1A3325!important;color:#FFFFFF!important}
+#usersTbl tbody td{border-bottom:1px solid rgba(199,211,203,.12)!important}
 #usersTbl tbody td .muted,
-#usersTbl .user-module-cell{color:#B8C7BD}
-.user-admin .access-module-option{background:#13231A;color:#E7EEE9}
-.user-admin .access-module-option:has(input:checked){background:#1B3828;border-color:#8FAF79}
+#usersTbl .user-module-cell{color:#C0CEC5!important}
+#usersTbl tbody td code{color:#C0CEC5!important}
+#usersTbl tbody td .btn:not(.btn-danger){background:#1B3828!important;color:#F1F5F2!important;border-color:#65856F!important}
+#usersTbl tbody td .btn:not(.btn-danger):hover{background:#28513A!important}
+#usersTbl tbody td .btn-danger{background:#321719!important;color:#FF8585!important;border-color:#8D3D43!important}
+.user-admin .access-module-option{background:#13231A!important;color:#E7EEE9!important}
+.user-admin .access-module-option:has(input:checked){background:#1B3828!important;border-color:#8FAF79!important}
 select option{background:#0F1C16;color:#F1F5F2}
