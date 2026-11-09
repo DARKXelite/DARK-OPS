@@ -11,6 +11,9 @@ import {
   deleteDoc,
   doc,
   getDoc,
+  getDocs,
+  query,
+  where,
   runTransaction,
   serverTimestamp,
   setDoc,
@@ -216,6 +219,9 @@ test("verified phone OTP can claim only its own active staff profile", async () 
   );
   const uid = "phone-otp-uid";
   const db = testEnv.authenticatedContext(uid, { phone_number: "+919876543210" }).firestore();
+  const ownProfiles = await getDocs(query(collection(db, "users"), where("mobileNumber", "==", "+919876543210")));
+  assert.equal(ownProfiles.size, 1);
+  await assertFails(getDocs(collection(db, "users")));
   const batch = writeBatch(db);
   batch.update(doc(db, "users", "otp-staff"), {
     authUid: uid, updatedAt: serverTimestamp(), updatedBy: uid
@@ -246,6 +252,20 @@ test("phone OTP cannot claim another number's profile or invent a role", async (
     moduleAccess: ["inventory"], updatedAt: serverTimestamp(), updatedBy: uid
   });
   await assertFails(batch.commit());
+
+  // Even with the correct verified phone, the caller cannot turn their own
+  // profile into an administrator or alter the admin-assigned module grants.
+  const validPhoneDb = testEnv.authenticatedContext("role-tamper-uid", { phone_number: "+919876543210" }).firestore();
+  const tamper = writeBatch(validPhoneDb);
+  tamper.update(doc(validPhoneDb, "users", "otp-staff"), {
+    authUid: "role-tamper-uid", updatedAt: serverTimestamp(), updatedBy: "role-tamper-uid"
+  });
+  tamper.set(doc(validPhoneDb, "app_roles", "role-tamper-uid"), {
+    role: "admin", active: true, displayName: "Tampered",
+    platform: "android", staffProfileId: "otp-staff", platformRole: "operator",
+    moduleAccess: ["inventory"], updatedAt: serverTimestamp(), updatedBy: "role-tamper-uid"
+  });
+  await assertFails(tamper.commit());
 });
 
 test("platform identity is denied when profile is suspended or grants do not match", async () => {
