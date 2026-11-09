@@ -3217,7 +3217,8 @@ const RBAC = {
     return canRole(session.role, permission);
   }
 };
-golfPassModule = createGolfPassModule({ db, auth, RBAC, collection, doc, setDoc, getDocs, query, where, runTransaction, serverTimestamp, esc, today, toast });
+const reissueGolfPassQr = httpsCallable(functions, "reissueGolfPassQr");
+golfPassModule = createGolfPassModule({ db, auth, RBAC, collection, doc, setDoc, onSnapshot, serverTimestamp, esc, today, toast, reissueGolfPassQr });
 breakfastModule = createBreakfastModule({
   db, auth, RBAC, collection, doc, getDocs, writeBatch, runTransaction,
   query, where, orderBy, serverTimestamp, Timestamp, esc, today, addDays, toast
