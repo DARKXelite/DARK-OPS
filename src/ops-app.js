@@ -3027,7 +3027,7 @@ const RBAC = {
   session: { role: null, authenticated: false, uid: null, displayName: "" },
   can(permission) { return this.session.authenticated && canRole(this.session.role, permission); }
 };
-golfPassModule = createGolfPassModule({ db, auth, RBAC, collection, doc, getDocs, query, where, runTransaction, serverTimestamp, esc, today, toast });
+golfPassModule = createGolfPassModule({ db, auth, RBAC, collection, doc, setDoc, getDocs, query, where, runTransaction, serverTimestamp, esc, today, toast });
 breakfastModule = createBreakfastModule({
   db, auth, RBAC, collection, doc, getDocs, writeBatch, runTransaction,
   query, where, orderBy, serverTimestamp, Timestamp, esc, today, addDays, toast
