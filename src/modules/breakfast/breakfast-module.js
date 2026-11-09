@@ -1,7 +1,7 @@
 export function createBreakfastModule(deps) {
   const {
     db, auth, RBAC, collection, doc, getDocs, writeBatch, runTransaction,
-    query, where, orderBy, serverTimestamp, Timestamp, esc, today, addDays, toast
+    query, where, orderBy, serverTimestamp, Timestamp, esc, today, addDays, toast, printer
   } = deps;
   let bookings = [];
   let todayEntitlements = [];
@@ -160,11 +160,6 @@ export function createBreakfastModule(deps) {
     const qrData = qrCanvas?.toDataURL("image/png") || qrImage?.src;
     if (!qrData) throw new Error("Could not render the pass QR code.");
     const dates = (pass.breakfastDates || []).join(", ");
-    const frame = document.createElement("iframe");
-    frame.setAttribute("aria-hidden", "true");
-    frame.title = "Breakfast pass print job";
-    frame.style.cssText = "position:fixed;width:0;height:0;border:0;right:0;bottom:0;";
-    document.body.appendChild(frame);
     const html = `<!doctype html><html><head><meta charset="utf-8"><title>Breakfast Pass ${receiptEscape(pass.roomNumber)}</title>
       <style>
         @page { size: 80mm auto; margin: 3mm; }
@@ -195,23 +190,8 @@ export function createBreakfastModule(deps) {
         <div class="instruction">SCAN ONCE PER GUEST PER ELIGIBLE DAY</div>
         <div class="foot">Present this same pass at breakfast reception.</div>
       </main></body></html>`;
-    try {
-      const printWindow = frame.contentWindow;
-      const printDocument = printWindow.document;
-      printDocument.open();
-      printDocument.write(html);
-      printDocument.close();
-      await new Promise((resolve, reject) => {
-        const image = printDocument.querySelector(".qr");
-        const trigger = () => {
-          try { printWindow.focus(); printWindow.print(); resolve(); }
-          catch (error) { reject(error); }
-        };
-        if (image.complete) trigger();
-        else { image.onload = trigger; image.onerror = () => reject(new Error("QR image failed to load for printing.")); }
-      });
-      toast("Pass sent to the default 80 mm thermal printer. Check paper output.", "ok");
-    } finally { window.setTimeout(() => frame.remove(), 1500); }
+    await printer.printHtml(html, "Breakfast pass " + pass.roomNumber);
+    toast("Breakfast pass sent to the browser printer.", "ok");
   }
   async function createBooking(event) {
     event.preventDefault();
