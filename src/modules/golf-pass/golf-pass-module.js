@@ -41,21 +41,24 @@ export function createGolfPassModule({db,auth,RBAC,collection,doc,setDoc,getDocs
     w.document.write('<!doctype html><html><head><title>'+esc(p.passRef)+'</title><style>@page{size:'+width+'mm auto;margin:2mm}*{box-sizing:border-box}html,body{margin:0;padding:0;background:#fff;color:#000;font-family:Arial,sans-serif}.receipt{width:'+(width-4)+'mm;margin:0 auto;text-align:center;font-size:10pt;line-height:1.35;overflow-wrap:anywhere}.brand{font-weight:800;font-size:15pt;letter-spacing:1px}.sub{font-size:8pt;margin:2mm 0 4mm}.ref{font-weight:800;font-size:12pt;border-top:1px dashed #000;border-bottom:1px dashed #000;padding:2mm 0}.qr{display:block;width:42mm;height:42mm;object-fit:contain;margin:4mm auto}.name{font-size:12pt;font-weight:800;margin-top:2mm}.foot{border-top:1px dashed #000;margin-top:4mm;padding-top:3mm;font-size:8pt}@media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact}}</style></head><body>'+content+'<script>window.onload=()=>{setTimeout(()=>{window.print()},250)};<\\/script></body></html>');
     w.document.close();
   }
-  async function sendWhatsApp(){
+  function sendWhatsApp(){
     const p=lastPass,qr=qrCanvas();if(!p||!qr)return;
     const src=qr.tagName==="CANVAS"?qr.toDataURL("image/png"):qr.src;
     const message="Clover Greens Golf Pass: "+p.passRef+" for "+p.golferName+" on "+p.playDate+". Member type: "+p.category+". Please present this QR at the golf entry.";
+    const digits=p.phone.replace(/\\D/g,""),waPhone=digits.length===10?"91"+digits:digits;
+    const waUrl="https://wa.me/"+waPhone+"?text="+encodeURIComponent(message+" QR image downloaded separately. Please attach it before sending.");
     try{
-      const response=await fetch(src),blob=await response.blob();
-      const file=new File([blob],p.passRef+".png",{type:"image/png"});
-      if(navigator.canShare?.({files:[file]})&&navigator.share){
-        await navigator.share({files:[file],title:"Clover Greens Golf Pass",text:message});
-        return;
+      if(src.startsWith("data:image/png")&&navigator.share&&navigator.canShare){
+        const raw=atob(src.split(",")[1]),bytes=new Uint8Array(raw.length);
+        for(let i=0;i<raw.length;i++)bytes[i]=raw.charCodeAt(i);
+        const file=new File([bytes],p.passRef+".png",{type:"image/png"});
+        if(navigator.canShare({files:[file]})){
+          navigator.share({files:[file],title:"Clover Greens Golf Pass",text:message}).catch(err=>{if(err.name!=="AbortError")toast("Could not share QR. Use Download QR PNG and attach it in WhatsApp.","err");});
+          return;
+        }
       }
-    }catch(err){if(err.name==="AbortError")return;}
-    const digits=p.phone.replace(/\\D/g,"");
-    const waPhone=digits.length===10?"91"+digits:digits;
-    window.open("https://wa.me/"+waPhone+"?text="+encodeURIComponent(message+" QR image downloaded separately. Please attach it before sending."),"_blank","noopener");
+    }catch(err){}
+    window.open(waUrl,"_blank","noopener");
     const a=document.createElement("a");a.href=src;a.download=p.passRef+".png";a.click();
     toast("WhatsApp opened. Attach the downloaded QR image to the chat.");
   }
