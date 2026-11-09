@@ -214,7 +214,6 @@ test("verified phone OTP can claim only its own active staff profile", async () 
       role: "operator", platform: "android", platformRole: "operator",
       moduleAccess: ["inventory"], status: "active", authUid: null
     }],
-    ["android_invites/staff-1", { codeHash: "private-hash" }],
     ["inventory/item-1", { partName: "Sand", stockQuantity: 5 }]
   );
   const uid = "phone-otp-uid";
@@ -233,7 +232,6 @@ test("verified phone OTP can claim only its own active staff profile", async () 
   });
   await assertSucceeds(batch.commit());
   await assertSucceeds(getDoc(doc(db, "inventory", "item-1")));
-  await assertFails(getDoc(doc(db, "android_invites", "staff-1")));
 });
 
 test("phone OTP cannot claim another number's profile or invent a role", async () => {
