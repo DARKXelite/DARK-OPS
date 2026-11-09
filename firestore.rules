@@ -338,8 +338,7 @@ service cloud.firestore {
       allow list: if golfManagers();
       allow create: if golfManagers()
         && request.resource.data.keys().hasOnly([
-          'passRef', 'golferName', 'phone', 'category', 'playDate', 'amountReceived',
-          'paymentMethod', 'paymentReference', 'notes', 'tokenHash', 'status',
+          'passRef', 'golferName', 'phone', 'category', 'playDate', 'notes', 'tokenHash', 'status',
           'createdAt', 'createdBy'
         ])
         && request.resource.data.tokenHash == id
@@ -349,8 +348,6 @@ service cloud.firestore {
         && request.resource.data.phone is string
         && request.resource.data.playDate is string
         && request.resource.data.playDate.size() == 10
-        && request.resource.data.amountReceived is number
-        && request.resource.data.amountReceived >= 0
         && request.resource.data.createdBy == request.auth.uid
         && request.resource.data.createdAt == request.time;
       allow update: if golfStaff()
