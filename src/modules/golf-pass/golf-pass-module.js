@@ -1,7 +1,7 @@
-export function createGolfPassModule({db,auth,RBAC,collection,doc,getDocs,query,where,runTransaction,serverTimestamp,esc,today,toast}) {
+export function createGolfPassModule({db,auth,RBAC,collection,doc,setDoc,getDocs,query,where,runTransaction,serverTimestamp,esc,today,toast}) {
   const root=()=>document.getElementById("golfPassRoot");
   let tab="register", scanner=null, lastPass=null, rows=[];
-  const categories=["Member","Member Guest","Non-Member","Corporate","Complimentary","Tournament","Management/VIP","Staff/Authorised","Other"];
+  const categories=["Member","Non-Member","Complimentary"];
   const canManage=()=>RBAC.can("golf.manage"), canScan=()=>RBAC.can("golf.scan");
   const money=n=>"₹"+Number(n||0).toLocaleString("en-IN",{maximumFractionDigits:2});
   const field=(label,id,type="text",extra="")=>'<label class="bf-field"><span>'+label+'</span><input id="'+id+'" type="'+type+'" '+extra+'></label>';
@@ -24,7 +24,7 @@ export function createGolfPassModule({db,auth,RBAC,collection,doc,getDocs,query,
     if(!name||!phone||!/^\d{4}-\d{2}-\d{2}$/.test(date)||!Number.isFinite(amount)||amount<0){toast("Check golfer, mobile, date and amount.","err");return;}
     const token=randomToken(),tokenHash=await hash(token),passRef="GP-"+today().replaceAll("-","")+"-"+token.slice(0,6).toUpperCase();
     const payload={passRef,golferName:name,phone,category:document.getElementById("gpCategory").value,playDate:date,amountReceived:amount,paymentMethod:document.getElementById("gpMethod").value,paymentReference:document.getElementById("gpRef").value.trim(),notes:document.getElementById("gpNotes").value.trim(),tokenHash,status:"active",createdAt:serverTimestamp(),createdBy:auth.currentUser.uid};
-    await (await import("https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore.js")).setDoc(doc(db,"golf_passes",tokenHash),payload);
+    await setDoc(doc(db,"golf_passes",tokenHash),payload);
     lastPass={...payload,qrToken:token};showCreated(lastPass);toast("Golf pass created.");
   }
   function showCreated(p){const box=document.getElementById("golfCreated");if(!box)return;box.innerHTML='<div class="bf-card bf-pass-created"><div><b>'+esc(p.passRef)+'</b><p>'+esc(p.golferName)+' · '+esc(p.playDate)+' · '+money(p.amountReceived)+'</p></div><div id="golfPassQr" class="bf-qr"></div><div class="bf-actions"><button class="bf-btn" id="golfDownload">Download QR PNG</button><button class="bf-btn secondary" id="golfPrint">Print pass</button><button class="bf-btn secondary" id="golfWhatsApp">Share QR to WhatsApp</button></div><p class="bf-muted">QR contains a private one-time token. Do not share the QR publicly.</p></div>';if(window.QRCode)new QRCode(document.getElementById("golfPassQr"),{text:p.qrToken,width:220,height:220});}
