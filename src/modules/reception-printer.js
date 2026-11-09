@@ -19,6 +19,22 @@ export function createReceptionPrinter() {
       } catch (error) { cleanup(); reject(error); }
     });
   }
+  async function shareQrOnWhatsApp(dataUrl, filename, phone, message) {
+    if (!dataUrl || !dataUrl.startsWith("data:image/")) throw new Error("QR image is not ready.");
+    const digits = String(phone || "").replace(/\\D/g, "");
+    const normalized = digits.length === 10 ? "91" + digits : digits;
+    if (normalized.length < 10 || normalized.length > 13) throw new Error("Enter a valid WhatsApp mobile number.");
+    const blob = await (await fetch(dataUrl)).blob();
+    const file = new File([blob], filename, { type: "image/png" });
+    if (navigator.canShare?.({ files: [file] }) && navigator.share) {
+      await navigator.share({ files: [file], title: "Clover Greens pass", text: message });
+      return "shared";
+    }
+    const a = document.createElement("a");
+    a.href = dataUrl; a.download = filename; a.click();
+    window.open("https://wa.me/" + normalized + "?text=" + encodeURIComponent(message + "\\n\\nAttach the downloaded QR image before sending."), "_blank", "noopener");
+    return "downloaded";
+  }
   function showSetupPrompt() {
     if (localStorage.getItem(SETUP_KEY) === "1" || document.getElementById("receptionPrintSetup")) return;
     const overlay = document.createElement("div");
@@ -36,5 +52,5 @@ export function createReceptionPrinter() {
     });
     document.body.appendChild(overlay);
   }
-  return { printHtml, showSetupPrompt };
+  return { printHtml, shareQrOnWhatsApp, showSetupPrompt };
 }
