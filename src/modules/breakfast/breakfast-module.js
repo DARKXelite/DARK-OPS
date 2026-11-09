@@ -137,7 +137,7 @@ export function createBreakfastModule(deps) {
     document.getElementById("bfCouponsTitle").textContent = title || "Guest coupons";
     panel.hidden = false;
     grid.innerHTML = rows.map((c, i) =>
-      '<article class="bf-coupon-card"><div class="bf-coupon-top"><b>Room ' + esc(c.roomNumber) + ' · ' + esc(c.guestCount) + ' guests</b><span class="bf-coupon-status active">ROOM QR</span></div><div class="bf-qr-wrap"><div class="bf-qr-target" data-bf-qr="' + i + '"></div></div><strong>' + esc((c.breakfastDates || []).length) + ' eligible breakfast date(s)</strong><small>' + esc(c.guestName) + ' · ' + esc(c.bookingRef) + '</small><small>7:00–10:00 AM · one scan per guest</small><button class="bf-primary" type="button" data-bf-act="whatsapp-coupon" data-index="' + i + '"><span class="material-symbols-rounded">chat</span>Send WhatsApp</button><button class="bf-secondary" type="button" data-bf-act="share-coupon" data-index="' + i + '"><span class="material-symbols-rounded">download</span>Download QR</button></article>'
+      '<article class="bf-coupon-card"><div class="bf-coupon-top"><b>Room ' + esc(c.roomNumber) + ' · ' + esc(c.guestCount) + ' guests</b><span class="bf-coupon-status active">ROOM QR</span></div><div class="bf-qr-wrap"><div class="bf-qr-target" data-bf-qr="' + i + '"></div></div><strong>' + esc((c.breakfastDates || []).length) + ' eligible breakfast date(s)</strong><small>' + esc(c.guestName) + ' · ' + esc(c.bookingRef) + '</small><small>7:00–10:00 AM · one scan per guest</small><button class="bf-primary" type="button" data-bf-act="print-coupon" data-index="' + i + '"><span class="material-symbols-rounded">print</span>Print pass</button><button class="bf-secondary" type="button" data-bf-act="whatsapp-coupon" data-index="' + i + '"><span class="material-symbols-rounded">chat</span>Send WhatsApp</button><button class="bf-secondary" type="button" data-bf-act="share-coupon" data-index="' + i + '"><span class="material-symbols-rounded">download</span>Download QR</button></article>'
     ).join("");
     rows.forEach((pass,i)=>{
       const target=grid.querySelector('[data-bf-qr="'+i+'"]');
@@ -146,6 +146,72 @@ export function createBreakfastModule(deps) {
       catch(error){console.error("QR render failed",error);target.textContent="QR could not be rendered.";}
     });
     panel.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+  function receiptEscape(value) {
+    return String(value ?? "").replace(/[&<>"']/g, char => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[char]));
+  }
+  async function printBreakfastPass(pass) {
+    if (!pass?.qrToken) throw new Error("The saved pass QR token is unavailable.");
+    if (typeof window.QRCode !== "function") throw new Error("QR generator is unavailable. Reload DARK OPS and use Reprint.");
+    const qrHost = document.createElement("div");
+    new window.QRCode(qrHost, { text: pass.qrToken, width: 420, height: 420, colorDark: "#000000", colorLight: "#FFFFFF", correctLevel: window.QRCode.CorrectLevel.H });
+    const qrCanvas = qrHost.querySelector("canvas");
+    const qrImage = qrHost.querySelector("img");
+    const qrData = qrCanvas?.toDataURL("image/png") || qrImage?.src;
+    if (!qrData) throw new Error("Could not render the pass QR code.");
+    const dates = (pass.breakfastDates || []).join(", ");
+    const frame = document.createElement("iframe");
+    frame.setAttribute("aria-hidden", "true");
+    frame.title = "Breakfast pass print job";
+    frame.style.cssText = "position:fixed;width:0;height:0;border:0;right:0;bottom:0;";
+    document.body.appendChild(frame);
+    const html = `<!doctype html><html><head><meta charset="utf-8"><title>Breakfast Pass ${receiptEscape(pass.roomNumber)}</title>
+      <style>
+        @page { size: 80mm auto; margin: 3mm; }
+        * { box-sizing: border-box; }
+        html, body { width: 74mm; margin: 0; padding: 0; color: #000; background: #fff; font-family: Arial, sans-serif; }
+        body { font-size: 10pt; line-height: 1.3; }
+        .receipt { width: 74mm; padding: 0; text-align: center; }
+        .brand { font-size: 16pt; font-weight: 900; letter-spacing: .5px; }
+        .subtitle { margin-top: 1mm; font-size: 10pt; font-weight: 800; letter-spacing: 1px; }
+        .rule { border-top: 1px dashed #000; margin: 3mm 0; }
+        .qr { display: block; width: 43mm; height: 43mm; margin: 2mm auto; image-rendering: pixelated; }
+        .room { font-size: 19pt; font-weight: 900; margin: 1mm 0; }
+        .details { text-align: left; font-size: 10pt; }
+        .details div { margin: 1.2mm 0; overflow-wrap: anywhere; }
+        .instruction { font-size: 8pt; font-weight: 800; margin-top: 2mm; }
+        .foot { font-size: 7.5pt; margin-top: 2mm; }
+      </style></head><body><main class="receipt">
+        <div class="brand">CLOVER GREENS</div><div class="subtitle">BREAKFAST PASS</div><div class="rule"></div>
+        <img class="qr" src="${qrData}" alt="Breakfast entitlement QR">
+        <div class="room">ROOM ${receiptEscape(pass.roomNumber)}</div>
+        <div class="details">
+          <div><b>Lead guest:</b> ${receiptEscape(pass.guestName)}</div>
+          <div><b>Guests:</b> ${receiptEscape(pass.guestCount)}</div>
+          <div><b>Booking:</b> ${receiptEscape(pass.bookingRef)}</div>
+          <div><b>Valid dates:</b> ${receiptEscape(dates)}</div>
+          <div><b>Breakfast:</b> 7:00 AM – 10:00 AM</div>
+        </div><div class="rule"></div>
+        <div class="instruction">SCAN ONCE PER GUEST PER ELIGIBLE DAY</div>
+        <div class="foot">Present this same pass at breakfast reception.</div>
+      </main></body></html>`;
+    try {
+      const printWindow = frame.contentWindow;
+      const printDocument = printWindow.document;
+      printDocument.open();
+      printDocument.write(html);
+      printDocument.close();
+      await new Promise((resolve, reject) => {
+        const image = printDocument.querySelector(".qr");
+        const trigger = () => {
+          try { printWindow.focus(); printWindow.print(); resolve(); }
+          catch (error) { reject(error); }
+        };
+        if (image.complete) trigger();
+        else { image.onload = trigger; image.onerror = () => reject(new Error("QR image failed to load for printing.")); }
+      });
+      toast("Pass sent to the default 80 mm thermal printer. Check paper output.", "ok");
+    } finally { window.setTimeout(() => frame.remove(), 1500); }
   }
   async function createBooking(event) {
     event.preventDefault();
@@ -184,6 +250,8 @@ export function createBreakfastModule(deps) {
       updateDatePreview();
       await loadData();
       await renderCoupons([pass], "Room QR · " + bookingRef);
+      try { await printBreakfastPass(pass); }
+      catch (printError) { console.error("Breakfast pass print failed", printError); toast("Pass saved, but printing failed: " + (printError.message || "Check printer and use Reprint."), "err"); }
     } catch (error) {
       console.error("Breakfast booking creation failed", error);
       toast("Could not create breakfast passes: " + (error.code || error.message), "err");
@@ -332,6 +400,7 @@ export function createBreakfastModule(deps) {
       if (button.dataset.bfAct === "view-coupons") viewBookingCoupons(button.dataset.id);
       if (button.dataset.bfAct === "view-room" || button.dataset.bfAct === "whatsapp-room") { const p=todayEntitlements.find(x=>x.id===button.dataset.id); if(p){renderCoupons([p],"Room "+p.roomNumber+" · "+p.guestCount+" guests");if(button.dataset.bfAct==="whatsapp-room")sendRoomWhatsApp(p);} }
       if (button.dataset.bfAct === "share-coupon") shareCoupon(Number(button.dataset.index));
+      if (button.dataset.bfAct === "print-coupon") { const pass=couponRows[Number(button.dataset.index)]; if(pass) printBreakfastPass(pass).catch(error=>toast("Print failed: "+(error.message||"Check printer."),"err")); }
       if (button.dataset.bfAct === "whatsapp-coupon") sendRoomWhatsApp(couponRows[Number(button.dataset.index)]);
     });
   }
