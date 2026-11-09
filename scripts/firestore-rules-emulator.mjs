@@ -137,6 +137,91 @@ test("platform-linked identity is restricted to its assigned modules and own pro
   await assertFails(getDoc(doc(db, "users", "other-staff")));
 });
 
+
+test("Android role modules gate Breakfast, Golf and Workshop collections independently", async () => {
+  await seed(
+    ["users/captain-staff", {
+      fullName: "Captain",
+      mobileNumber: "+919876543213",
+      platform: "android",
+      platformRole: "captain",
+      moduleAccess: ["breakfast_qr"],
+      status: "active",
+      authUid: "captain-user"
+    }],
+    ["app_roles/captain-user", {
+      ...role("operator"),
+      platform: "android",
+      staffProfileId: "captain-staff",
+      platformRole: "captain",
+      moduleAccess: ["breakfast_qr"]
+    }],
+    ["breakfast_entitlements/entitlement-1", { status: "active", guestCount: 1 }],
+    ["golf_passes/pass-1", { status: "active" }],
+    ["users/marshal-staff", {
+      fullName: "Marshal",
+      mobileNumber: "+919876543214",
+      platform: "android",
+      platformRole: "marshal",
+      moduleAccess: ["golf_qr"],
+      status: "active",
+      authUid: "marshal-user"
+    }],
+    ["app_roles/marshal-user", {
+      ...role("operator"),
+      platform: "android",
+      staffProfileId: "marshal-staff",
+      platformRole: "marshal",
+      moduleAccess: ["golf_qr"]
+    }],
+    ["users/workshop-staff", {
+      fullName: "Workshop Manager",
+      mobileNumber: "+919876543215",
+      platform: "android",
+      platformRole: "workshop_manager",
+      moduleAccess: ["workshop_ops"],
+      status: "active",
+      authUid: "workshop-user"
+    }],
+    ["app_roles/workshop-user", {
+      ...role("operator"),
+      platform: "android",
+      staffProfileId: "workshop-staff",
+      platformRole: "workshop_manager",
+      moduleAccess: ["workshop_ops"]
+    }],
+    ["maintenance_logs/maintenance-1", { status: "Open" }]
+  );
+  const captainDb = testEnv.authenticatedContext("captain-user").firestore();
+  const marshalDb = testEnv.authenticatedContext("marshal-user").firestore();
+  const workshopDb = testEnv.authenticatedContext("workshop-user").firestore();
+  await assertSucceeds(getDoc(doc(captainDb, "breakfast_entitlements", "entitlement-1")));
+  await assertFails(getDoc(doc(captainDb, "golf_passes", "pass-1")));
+  await assertSucceeds(getDoc(doc(marshalDb, "golf_passes", "pass-1")));
+  await assertFails(getDoc(doc(marshalDb, "breakfast_entitlements", "entitlement-1")));
+  await assertSucceeds(updateDoc(doc(workshopDb, "maintenance_logs", "maintenance-1"), { status: "Serviced" }));
+  await assertFails(getDoc(doc(workshopDb, "machines", "machine-1")));
+});
+
+test("platform activation secrets and client-side platform role provisioning are denied", async () => {
+  await seed(
+    ["app_roles/admin-user", role("admin")],
+    ["android_invites/staff-1", { codeHash: "private-hash" }]
+  );
+  const adminDb = testEnv.authenticatedContext("admin-user").firestore();
+  await assertFails(getDoc(doc(adminDb, "android_invites", "staff-1")));
+  await assertFails(setDoc(doc(adminDb, "app_roles", "platform-user"), {
+    role: "operator",
+    active: true,
+    platform: "android",
+    staffProfileId: "staff-1",
+    platformRole: "operator",
+    moduleAccess: ["inventory"],
+    updatedAt: serverTimestamp(),
+    updatedBy: "admin-user"
+  }));
+});
+
 test("platform identity is denied when profile is suspended or grants do not match", async () => {
   await seed(
     ["users/suspended-staff", {
