@@ -1,0 +1,78 @@
+export function createGolfPassModule({db,auth,RBAC,collection,doc,setDoc,getDocs,query,where,runTransaction,serverTimestamp,esc,today,toast}) {
+  const root=()=>document.getElementById("golfPassRoot");
+  let tab="register", scanner=null, lastPass=null, rows=[];
+  const categories=["Member","Non-Member","Complimentary"];
+  const canManage=()=>RBAC.can("golf.manage"), canScan=()=>RBAC.can("golf.scan");
+  const field=(label,id,type="text",extra="")=>'<label class="bf-field"><span>'+label+'</span><input id="'+id+'" type="'+type+'" '+extra+'></label>';
+  function stop(){if(scanner){scanner.stop().catch(()=>{});scanner.clear().catch(()=>{});scanner=null;}}
+  function render(){
+    const el=root();if(!el)return;
+    const tabs=[...(canManage()?[["register","New registration"],["registers","Pass register"],["reconcile","Daily reconciliation"]]:[]),...(canScan()?[["scan","Golf scanner"]]:[])];
+    if(!tabs.some(x=>x[0]===tab))tab=tabs[0]?.[0]||"scan";
+    el.innerHTML='<section class="bf-shell"><header class="bf-head"><div><div class="bf-kicker">GOLF SERVICES · ENTRY CONTROL</div><h2>Golf Pass</h2><p>One golfer · one QR · one authorised entry</p></div><span class="bf-status">SEPARATE FROM BREAKFAST</span></header><nav class="bf-tabs">'+tabs.map(x=>'<button class="bf-tab '+(tab===x[0]?'active':'')+'" data-golf-tab="'+x[0]+'">'+x[1]+'</button>').join("")+'</nav><div id="golfPanel"></div></section>';
+    const panel=document.getElementById("golfPanel");
+    if(tab==="register") panel.innerHTML=registerForm();
+    if(tab==="registers") loadRegister(panel);
+    if(tab==="reconcile") loadReconcile(panel);
+    if(tab==="scan") panel.innerHTML='<div class="bf-card"><h3>Marshal scanner</h3><p class="bf-muted">Scan the golfer QR. Successful check-in is atomic and cannot be repeated.</p><div id="golfQrReader" style="max-width:520px"></div><div id="golfScanResult" class="bf-feedback">Camera permission is required.</div><button class="bf-btn" id="golfStartScan">Start camera</button><button class="bf-btn secondary" id="golfStopScan">Stop camera</button></div>';
+  }
+  function registerForm(){return '<div class="bf-card"><h3>Register golfer</h3><form id="golfRegistration" class="bf-form">'+field("Golfer name","gpName","text",'required maxlength="100"')+field("Mobile / WhatsApp","gpPhone","tel",'required inputmode="tel" maxlength="16"')+'<label class="bf-field"><span>Member type</span><select id="gpCategory">'+categories.map(x=>'<option>'+x+'</option>').join("")+'</select></label>'+field("Play date","gpDate","date",'required value="'+today()+'"')+'<label class="bf-field full"><span>Notes (optional)</span><textarea id="gpNotes" rows="2"></textarea></label><div class="full"><button class="bf-btn" type="submit">Create golf pass</button></div></form><div id="golfCreated"></div></div>';}
+  function randomToken(){const b=new Uint8Array(32);crypto.getRandomValues(b);return [...b].map(x=>x.toString(16).padStart(2,"0")).join("");}
+  async function hash(s){const d=await crypto.subtle.digest("SHA-256",new TextEncoder().encode(s));return [...new Uint8Array(d)].map(x=>x.toString(16).padStart(2,"0")).join("");}
+  async function create(e){e.preventDefault();if(!canManage())return;const name=document.getElementById("gpName").value.trim(),phone=document.getElementById("gpPhone").value.trim(),date=document.getElementById("gpDate").value;
+    const phoneDigits=phone.replace(/\\D/g,"");
+    if(!name||phoneDigits.length<10||phoneDigits.length>13||!/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/.test(date)){toast("Enter golfer name, a valid mobile number and play date.","err");return;}
+    const token=randomToken(),tokenHash=await hash(token),passRef="GP-"+today().replaceAll("-","")+"-"+token.slice(0,6).toUpperCase();
+    const payload={passRef,golferName:name,phone,category:document.getElementById("gpCategory").value,playDate:date,notes:document.getElementById("gpNotes").value.trim(),tokenHash,status:"active",createdAt:serverTimestamp(),createdBy:auth.currentUser.uid};
+    await setDoc(doc(db,"golf_passes",tokenHash),payload);
+    lastPass={...payload,qrToken:token};showCreated(lastPass);toast("Golf pass created.");
+  }
+  function showCreated(p){const box=document.getElementById("golfCreated");if(!box)return;box.innerHTML='<div class="bf-card bf-pass-created"><div><b>'+esc(p.passRef)+'</b><p>'+esc(p.golferName)+' · '+esc(p.playDate)+'</p></div><div id="golfPassQr" class="bf-qr"></div><div class="bf-actions"><button class="bf-btn" id="golfDownload">Download QR PNG</button><button class="bf-btn secondary" id="golfPrint58">Print 58mm POS</button><button class="bf-btn secondary" id="golfPrint80">Print 80mm POS</button><button class="bf-btn secondary" id="golfWhatsApp">Send QR on WhatsApp</button></div><p class="bf-muted">QR contains a private one-time token. Do not share the QR publicly.</p></div>';if(window.QRCode)new QRCode(document.getElementById("golfPassQr"),{text:p.qrToken,width:220,height:220});}
+  async function loadRegister(panel){panel.innerHTML='<div class="bf-card">Loading pass register…</div>';try{const snap=await getDocs(collection(db,"golf_passes"));rows=snap.docs.map(d=>({id:d.id,...d.data()}));panel.innerHTML='<div class="bf-card"><h3>Pass register</h3><div class="table-wrap"><table><thead><tr><th>Pass</th><th>Golfer</th><th>Member type</th><th>Play date</th><th>Status</th></tr></thead><tbody>'+rows.sort((a,b)=>(b.playDate||"").localeCompare(a.playDate||"")).map(p=>'<tr><td>'+esc(p.passRef)+'</td><td>'+esc(p.golferName)+'</td><td>'+esc(p.category)+'</td><td>'+esc(p.playDate)+'</td><td>'+esc(p.status)+'</td></tr>').join("")+'</tbody></table></div></div>';}catch(e){panel.innerHTML='<div class="bf-card">Could not load passes: '+esc(e.message)+'</div>';}}
+  async function loadReconcile(panel){panel.innerHTML='<div class="bf-card">Loading today’s reconciliation…</div>';try{const snap=await getDocs(query(collection(db,"golf_passes"),where("playDate","==",today())));const list=snap.docs.map(d=>d.data());const by={};list.forEach(p=>by[p.category]=(by[p.category]||0)+1);panel.innerHTML='<div class="bf-card"><h3>Daily reconciliation · '+today()+'</h3><div class="bf-stats"><div><small>Passes</small><b>'+list.length+'</b></div><div><small>Member types</small><b>'+Object.keys(by).length+'</b></div><div><small>Checked in</small><b>'+list.filter(p=>p.status==="checked_in").length+'</b></div></div><div class="table-wrap"><table><thead><tr><th>Member type</th><th>Passes</th></tr></thead><tbody>'+Object.keys(by).sort().map(k=>'<tr><td>'+esc(k)+'</td><td>'+by[k]+'</td></tr>').join("")+'</tbody></table></div><p class="bf-muted">Counts grouped by member type. No payment or amount is recorded.</p></div>';}catch(e){panel.innerHTML='<div class="bf-card">Could not load reconciliation: '+esc(e.message)+'</div>';}}
+  async function redeem(token){const result=document.getElementById("golfScanResult");try{const tokenHash=await hash(token),ref=doc(db,"golf_passes",tokenHash);let outcome="";await runTransaction(db,async tx=>{const snap=await tx.get(ref);if(!snap.exists()){outcome="INVALID";return;}const p=snap.data();if(p.playDate!==today()){outcome="WRONG DATE";return;}if(p.status!=="active"){outcome="ALREADY USED / REVOKED";return;}tx.update(ref,{status:"checked_in",checkedInAt:serverTimestamp(),checkedInBy:auth.currentUser.uid});outcome="AUTHORISED · "+p.golferName+" · "+p.passRef;});result.className="bf-feedback "+(outcome.startsWith("AUTHORISED")?"success":"error");result.textContent=outcome;}catch(e){result.className="bf-feedback error";result.textContent="Verification failed: "+e.message;}}
+  async function start(){if(!canScan()||!window.Html5Qrcode)return;stop();scanner=new Html5Qrcode("golfQrReader");try{await scanner.start({facingMode:"environment"},{fps:10,qrbox:{width:250,height:250}},(text)=>{stop();redeem(text);},()=>{});}catch(e){document.getElementById("golfScanResult").textContent="Camera unavailable: "+e.message;}}
+  function qrCanvas(){return document.querySelector("#golfPassQr canvas")||document.querySelector("#golfPassQr img");}
+  function printPos(width){
+    const p=lastPass,qr=qrCanvas();if(!p||!qr)return;
+    const src=qr.tagName==="CANVAS"?qr.toDataURL("image/png"):qr.src;
+    const w=window.open("","_blank","width=420,height=650");if(!w){toast("Allow pop-ups to print the pass.","err");return;}
+    const content='<div class="receipt"><div class="brand">CLOVER GREENS</div><div class="sub">GOLF PASS · ENTRY TICKET</div><div class="ref">'+esc(p.passRef)+'</div><img class="qr" src="'+src+'"><div class="name">'+esc(p.golferName)+'</div><div>'+esc(p.category)+'</div><div>Play date: '+esc(p.playDate)+'</div><div class="foot">Present this QR at the golf entry</div></div>';
+    w.document.write('<!doctype html><html><head><title>'+esc(p.passRef)+'</title><style>@page{size:'+width+'mm auto;margin:2mm}*{box-sizing:border-box}html,body{margin:0;padding:0;background:#fff;color:#000;font-family:Arial,sans-serif}.receipt{width:'+(width-4)+'mm;margin:0 auto;text-align:center;font-size:10pt;line-height:1.35;overflow-wrap:anywhere}.brand{font-weight:800;font-size:15pt;letter-spacing:1px}.sub{font-size:8pt;margin:2mm 0 4mm}.ref{font-weight:800;font-size:12pt;border-top:1px dashed #000;border-bottom:1px dashed #000;padding:2mm 0}.qr{display:block;width:42mm;height:42mm;object-fit:contain;margin:4mm auto}.name{font-size:12pt;font-weight:800;margin-top:2mm}.foot{border-top:1px dashed #000;margin-top:4mm;padding-top:3mm;font-size:8pt}@media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact}}</style></head><body>'+content+'<script>window.onload=()=>{setTimeout(()=>{window.print()},250)};<\\/script></body></html>');
+    w.document.close();
+  }
+  function sendWhatsApp(){
+    const p=lastPass,qr=qrCanvas();if(!p||!qr)return;
+    const src=qr.tagName==="CANVAS"?qr.toDataURL("image/png"):qr.src;
+    const message="Clover Greens Golf Pass: "+p.passRef+" for "+p.golferName+" on "+p.playDate+". Member type: "+p.category+". Please present this QR at the golf entry.";
+    const digits=p.phone.replace(/\\D/g,""),waPhone=digits.length===10?"91"+digits:digits;
+    const waUrl="https://wa.me/"+waPhone+"?text="+encodeURIComponent(message+" QR image downloaded separately. Please attach it before sending.");
+    try{
+      if(src.startsWith("data:image/png")&&navigator.share&&navigator.canShare){
+        const raw=atob(src.split(",")[1]),bytes=new Uint8Array(raw.length);
+        for(let i=0;i<raw.length;i++)bytes[i]=raw.charCodeAt(i);
+        const file=new File([bytes],p.passRef+".png",{type:"image/png"});
+        if(navigator.canShare({files:[file]})){
+          navigator.share({files:[file],title:"Clover Greens Golf Pass",text:message}).catch(err=>{if(err.name!=="AbortError")toast("Could not share QR. Use Download QR PNG and attach it in WhatsApp.","err");});
+          return;
+        }
+      }
+    }catch(err){}
+    window.open(waUrl,"_blank","noopener");
+    const a=document.createElement("a");a.href=src;a.download=p.passRef+".png";a.click();
+    toast("WhatsApp opened. Attach the downloaded QR image to the chat.");
+  }
+  function click(e){
+    const t=e.target.closest("[data-golf-tab],#golfStartScan,#golfStopScan,#golfDownload,#golfPrint58,#golfPrint80,#golfWhatsApp");if(!t)return;
+    if(t.dataset.golfTab){stop();tab=t.dataset.golfTab;render();}
+    else if(t.id==="golfStartScan")start();
+    else if(t.id==="golfStopScan")stop();
+    else if(t.id==="golfDownload"){const qr=qrCanvas();if(!qr)return;const a=document.createElement("a");a.href=qr.tagName==="CANVAS"?qr.toDataURL("image/png"):qr.src;a.download=(lastPass?.passRef||"golf-pass")+".png";a.click();}
+    else if(t.id==="golfPrint58")printPos(58);
+    else if(t.id==="golfPrint80")printPos(80);
+    else if(t.id==="golfWhatsApp")sendWhatsApp();
+  }
+  function submit(e){if(e.target?.id==="golfRegistration")create(e).catch(err=>toast("Could not create pass: "+err.message,"err"));}
+  const el=root();el?.addEventListener("click",click);el?.addEventListener("submit",submit);
+  return {render,stop};
+}

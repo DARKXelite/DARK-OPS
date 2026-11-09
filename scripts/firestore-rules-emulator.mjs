@@ -337,3 +337,91 @@ test("normal inward receipts and inventory increases must post atomically", asyn
     transactionType: "INWARD"
   }));
 });
+
+
+test("one room QR can redeem one guest per scan up to the room guest count", async () => {
+  const passId = "a".repeat(64);
+  const bookingId = "room-booking-1";
+  const validDate = "2026-11-07";
+  await seed(
+    ["app_roles/manager-1", role("manager")],
+    ["app_roles/storekeeper-1", role("storekeeper")]
+  );
+  const managerDb = testEnv.authenticatedContext("manager-1").firestore();
+  await assertSucceeds(setDoc(doc(managerDb, "breakfast_bookings", bookingId), {
+    bookingRef: "CG-ROOM-001",
+    guestName: "Lead Guest",
+    roomNumber: "204",
+    guestPhone: "+919876543210",
+    guestCount: 2,
+    checkIn: "2026-11-06",
+    checkOut: "2026-11-08",
+    checkInAt: "2026-11-06T14:00",
+    checkOutAt: "2026-11-08T11:00",
+    serviceWindowStart: "07:00",
+    serviceWindowEnd: "10:00",
+    breakfastDates: [validDate],
+    couponCount: 1,
+    status: "active",
+    createdAt: serverTimestamp(),
+    createdBy: "manager-1"
+  }));
+  await assertSucceeds(setDoc(doc(managerDb, "breakfast_entitlements", passId), {
+    id: passId,
+    bookingId,
+    bookingRef: "CG-ROOM-001",
+    guestName: "Lead Guest",
+    roomNumber: "204",
+    guestPhone: "+919876543210",
+    guestCount: 2,
+    checkInAt: "2026-11-06T14:00",
+    checkOutAt: "2026-11-08T11:00",
+    breakfastDates: [validDate],
+    serviceWindowStart: "07:00",
+    serviceWindowEnd: "10:00",
+    status: "active",
+    qrToken: "x".repeat(43),
+    createdAt: serverTimestamp(),
+    createdBy: "manager-1"
+  }));
+
+  const staffDb = testEnv.authenticatedContext("storekeeper-1").firestore();
+  const redemptionRef = doc(staffDb, "breakfast_redemptions", passId + "_" + validDate);
+  const base = {
+    passId,
+    bookingId,
+    bookingRef: "CG-ROOM-001",
+    roomNumber: "204",
+    guestName: "Lead Guest",
+    guestCount: 2,
+    validDate,
+    serviceWindowStart: "07:00",
+    serviceWindowEnd: "10:00"
+  };
+  await assertSucceeds(runTransaction(staffDb, async tx => {
+    tx.set(redemptionRef, {
+      ...base,
+      redeemedCount: 1,
+      redeemedAt: serverTimestamp(),
+      redeemedBy: "storekeeper-1",
+      lastRedeemedAt: serverTimestamp(),
+      lastRedeemedBy: "storekeeper-1"
+    });
+  }));
+  await assertSucceeds(runTransaction(staffDb, async tx => {
+    const current = await tx.get(redemptionRef);
+    tx.update(redemptionRef, {
+      redeemedCount: current.data().redeemedCount + 1,
+      lastRedeemedAt: serverTimestamp(),
+      lastRedeemedBy: "storekeeper-1"
+    });
+  }));
+  await assertFails(runTransaction(staffDb, async tx => {
+    const current = await tx.get(redemptionRef);
+    tx.update(redemptionRef, {
+      redeemedCount: current.data().redeemedCount + 1,
+      lastRedeemedAt: serverTimestamp(),
+      lastRedeemedBy: "storekeeper-1"
+    });
+  }));
+});

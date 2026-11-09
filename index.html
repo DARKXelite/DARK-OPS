@@ -13,6 +13,9 @@
 <link rel="stylesheet" href="/src/ops-app.css">
 <link rel="stylesheet" href="/src/rbac.css">
 <link rel="stylesheet" href="/src/olive-green-theme.css">
+<link rel="stylesheet" href="/src/modules/breakfast/breakfast.css">
+<link rel="stylesheet" href="/src/modules/golf-pass/golf-pass.css">
+<link rel="stylesheet" href="/src/mobile-responsive.css">
 
 
 
@@ -349,6 +352,12 @@
     <section class="view" id="v-fnb">
       <div id="fnbRoot"></div>
     </section>
+    <!-- GOLF PASS: isolated golfer entry QR system -->
+    <section class="view" id="v-golfpass"><div id="golfPassRoot"></div></section>
+    <!-- BREAKFAST PASS: manual guest entitlements and single-use QR redemption -->
+    <section class="view" id="v-breakfast">
+      <div id="breakfastRoot"></div>
+    </section>
   </main>
 </div>
 
@@ -376,6 +385,8 @@
 <div id="toasts"></div>
 
 <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 <script type="module" src="/src/ops-app.js"></script>
 <script type="module" src="/src/modules/assets/assets-module.js"></script>
 

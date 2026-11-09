@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#0A120E">
+  <meta name="robots" content="noindex,nofollow">
+  <title>Clover Greens · Breakfast Pass</title>
+  <style>
+    *{box-sizing:border-box}body{margin:0;min-height:100vh;display:grid;place-items:center;padding:24px;background:#0A120E;color:#F9F7F2;font:15px/1.5 system-ui,sans-serif}
+    main{width:min(100%,420px);padding:28px;border:1px solid #52624f;border-radius:22px;background:#111d16;text-align:center;box-shadow:0 20px 70px #0008}
+    .eyebrow{color:#E5C794;font-size:11px;font-weight:800;letter-spacing:.16em}h1{margin:8px 0;font-size:25px}p{color:#c2cbbf;font-size:13px}
+    #qr{display:grid;place-items:center;width:260px;height:260px;max-width:100%;margin:24px auto;padding:12px;background:#fff;border-radius:14px}
+    #qr img,#qr canvas{max-width:100%;height:auto}#status{min-height:24px;color:#E5C794;font-size:12px}
+    .note{margin-top:20px;padding-top:16px;border-top:1px solid #52624f;font-size:12px}
+  </style>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+</head>
+<body>
+  <main>
+    <div class="eyebrow">CLOVER GREENS · GUEST SERVICES</div>
+    <h1>Breakfast Pass</h1>
+    <p>Show this room QR to the restaurant team. Staff will scan once for each guest.</p>
+    <div id="qr"></div>
+    <div id="status" role="status">Preparing your secure QR…</div>
+    <div class="note">Breakfast service: 7:00 AM–10:00 AM<br>Same QR for every guest in the room. Each guest can redeem once per eligible date.</div>
+  </main>
+  <script>
+    const token=new URLSearchParams(location.search).get("t");
+    const target=document.getElementById("qr");
+    if(!token||token.length<30){document.getElementById("status").textContent="This pass link is incomplete. Please contact reception.";}
+    else if(typeof QRCode!=="function"){document.getElementById("status").textContent="QR could not load. Please refresh while connected to the internet.";}
+    else{new QRCode(target,{text:token,width:240,height:240,colorDark:"#07100B",colorLight:"#FFFFFF",correctLevel:QRCode.CorrectLevel.M});document.getElementById("status").textContent="Ready · Keep this page available when checking in for breakfast.";}
+  </script>
+</body>
+</html>
