@@ -1,3 +1,4 @@
+@import url('/src/data-list-contrast.css');
 /* Global mobile usability pass: preserve desktop layouts, prevent overflow on handheld screens. */
 html,body{max-width:100%;overflow-x:hidden}
 img,video,canvas,svg{max-width:100%}
