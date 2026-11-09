@@ -1,4 +1,5 @@
 const admin = require("firebase-admin");
+const { Timestamp, FieldValue } = require("firebase-admin/firestore");
 const { onCall, HttpsError } = require("firebase-functions/v2/https");
 const { logger } = require("firebase-functions");
 const crypto = require("node:crypto");
@@ -72,8 +73,8 @@ exports.provisionAndroidStaff = onCall({ region: REGION, maxInstances: 5 }, asyn
     });
 
     const inviteCode = createInviteCode();
-    const now = admin.firestore.Timestamp.now();
-    const expiresAt = admin.firestore.Timestamp.fromMillis(now.toMillis() + 30 * 60 * 1000);
+    const now = Timestamp.now();
+    const expiresAt = Timestamp.fromMillis(now.toMillis() + 30 * 60 * 1000);
     const role = authRoleForPlatformRole(profile.platformRole);
     const batch = db.batch();
     batch.set(db.doc("app_roles/" + authUser.uid), {
@@ -84,13 +85,13 @@ exports.provisionAndroidStaff = onCall({ region: REGION, maxInstances: 5 }, asyn
       staffProfileId,
       platformRole: profile.platformRole,
       moduleAccess: profile.moduleAccess,
-      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
       updatedBy: request.auth.uid
     });
     batch.update(profileRef, {
       authUid: authUser.uid,
       status: "active",
-      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
       updatedBy: request.auth.uid
     });
     batch.set(db.doc("android_invites/" + staffProfileId), {
@@ -100,7 +101,7 @@ exports.provisionAndroidStaff = onCall({ region: REGION, maxInstances: 5 }, asyn
       expiresAt,
       attempts: 0,
       usedAt: null,
-      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      createdAt: FieldValue.serverTimestamp(),
       createdBy: request.auth.uid
     });
     await batch.commit();
@@ -146,11 +147,11 @@ exports.redeemAndroidInvite = onCall({ region: REGION, maxInstances: 10 }, async
       }
       if (data.attempts >= 5) throw new HttpsError("resource-exhausted", "Too many activation attempts. Ask an administrator to issue a new code.");
       if (hashInvite(inviteCode) !== data.codeHash) {
-        tx.update(inviteRef, { attempts: admin.firestore.FieldValue.increment(1) });
+        tx.update(inviteRef, { attempts: FieldValue.increment(1) });
         invalidCode = true;
         return;
       }
-      tx.update(inviteRef, { usedAt: admin.firestore.FieldValue.serverTimestamp(), attempts: admin.firestore.FieldValue.increment(1) });
+      tx.update(inviteRef, { usedAt: FieldValue.serverTimestamp(), attempts: FieldValue.increment(1) });
     });
   } catch (error) {
     throw callableError(error);
@@ -210,13 +211,13 @@ exports.linkWebStaffIdentity = onCall({ region: REGION, maxInstances: 5 }, async
     staffProfileId,
     platformRole: profile.platformRole,
     moduleAccess: profile.moduleAccess,
-    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    updatedAt: FieldValue.serverTimestamp(),
     updatedBy: request.auth.uid
   });
   batch.update(profileRef, {
     authUid,
     status: "active",
-    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    updatedAt: FieldValue.serverTimestamp(),
     updatedBy: request.auth.uid
   });
   try { await batch.commit(); }
@@ -262,7 +263,7 @@ exports.updateStaffAccess = onCall({ region: REGION, maxInstances: 5 }, async re
     role: platformRole,
     moduleAccess,
     status,
-    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    updatedAt: FieldValue.serverTimestamp(),
     updatedBy: request.auth.uid
   });
   batch.update(roleRef, {
@@ -271,7 +272,7 @@ exports.updateStaffAccess = onCall({ region: REGION, maxInstances: 5 }, async re
     platformRole,
     moduleAccess,
     active: status === "active",
-    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    updatedAt: FieldValue.serverTimestamp(),
     updatedBy: request.auth.uid
   });
   try {
@@ -302,7 +303,7 @@ exports.reissueAndroidInvite = onCall({ region: REGION, maxInstances: 5 }, async
     throw new HttpsError("failed-precondition", "The Android authorization record is not active.");
   }
   const inviteCode = createInviteCode();
-  const expiresAt = admin.firestore.Timestamp.fromMillis(Date.now() + 30 * 60 * 1000);
+  const expiresAt = Timestamp.fromMillis(Date.now() + 30 * 60 * 1000);
   await db.doc("android_invites/" + staffProfileId).set({
     authUid: profile.authUid,
     mobileNumber: profile.mobileNumber,
@@ -310,7 +311,7 @@ exports.reissueAndroidInvite = onCall({ region: REGION, maxInstances: 5 }, async
     expiresAt,
     attempts: 0,
     usedAt: null,
-    createdAt: admin.firestore.FieldValue.serverTimestamp(),
+    createdAt: FieldValue.serverTimestamp(),
     createdBy: request.auth.uid
   });
   return { success: true, staffProfileId, activationCode: inviteCode, expiresAt: expiresAt.toDate().toISOString() };
