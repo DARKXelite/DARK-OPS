@@ -209,3 +209,88 @@ exports.linkWebStaffIdentity = onCall({ region: REGION, maxInstances: 5 }, async
   catch (error) { throw callableError(error); }
   return { success: true, staffProfileId, authUid };
 });
+
+exports.updateStaffAccess = onCall({ region: REGION, maxInstances: 5 }, async request => {
+  if (!request.auth) throw new HttpsError("unauthenticated", "Administrator sign-in is required.");
+  await requireStaffAdmin(request.auth.uid);
+  const staffProfileId = String(request.data?.staffProfileId || "").trim();
+  const platformRole = String(request.data?.platformRole || "");
+  const moduleAccess = request.data?.moduleAccess;
+  const status = String(request.data?.status || "");
+  if (!staffProfileId || staffProfileId.includes("/") || !["active", "suspended"].includes(status)) {
+    throw new HttpsError("invalid-argument", "A valid linked staff profile and account status are required.");
+  }
+  const profileRef = db.doc("users/" + staffProfileId);
+  const profileSnap = await profileRef.get();
+  if (!profileSnap.exists) throw new HttpsError("not-found", "Staff profile not found.");
+  const profile = profileSnap.data();
+  if (!profile.authUid || !["web", "android"].includes(profile.platform)) {
+    throw new HttpsError("failed-precondition", "This profile has no linked platform identity.");
+  }
+  if (profile.platform === "android" && profile.mobileNumber !== normalizeMobile(profile.mobileNumber)) {
+    throw new HttpsError("failed-precondition", "Android mobile number must remain normalized.");
+  }
+  const candidate = { ...profile, platformRole, moduleAccess, status: "pending", authUid: null };
+  try { validatePlatformProfile(candidate, profile.platform); }
+  catch (error) { throw new HttpsError("invalid-argument", error.message); }
+  const roleRef = db.doc("app_roles/" + profile.authUid);
+  const roleSnap = await roleRef.get();
+  if (!roleSnap.exists || roleSnap.data().staffProfileId !== staffProfileId || roleSnap.data().platform !== profile.platform) {
+    throw new HttpsError("failed-precondition", "The linked authorization record does not match this profile.");
+  }
+  const batch = db.batch();
+  batch.update(profileRef, {
+    platformRole,
+    role: platformRole,
+    moduleAccess,
+    status,
+    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    updatedBy: request.auth.uid
+  });
+  batch.update(roleRef, {
+    role: authRoleForPlatformRole(platformRole),
+    platformRole,
+    moduleAccess,
+    active: status === "active",
+    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    updatedBy: request.auth.uid
+  });
+  try {
+    await auth.updateUser(profile.authUid, { displayName: profile.fullName, disabled: status !== "active" });
+    await batch.commit();
+  } catch (error) {
+    throw callableError(error);
+  }
+  return { success: true, staffProfileId, status };
+});
+
+exports.reissueAndroidInvite = onCall({ region: REGION, maxInstances: 5 }, async request => {
+  if (!request.auth) throw new HttpsError("unauthenticated", "Administrator sign-in is required.");
+  await requireStaffAdmin(request.auth.uid);
+  const staffProfileId = String(request.data?.staffProfileId || "").trim();
+  if (!staffProfileId || staffProfileId.includes("/")) throw new HttpsError("invalid-argument", "A valid staff profile ID is required.");
+  const profileRef = db.doc("users/" + staffProfileId);
+  const profileSnap = await profileRef.get();
+  if (!profileSnap.exists) throw new HttpsError("not-found", "Staff profile not found.");
+  const profile = profileSnap.data();
+  if (profile.platform !== "android" || profile.status !== "active" || !profile.authUid) {
+    throw new HttpsError("failed-precondition", "Only provisioned Android profiles can receive a replacement activation code.");
+  }
+  const roleSnap = await db.doc("app_roles/" + profile.authUid).get();
+  if (!roleSnap.exists || roleSnap.data().staffProfileId !== staffProfileId || roleSnap.data().active !== true) {
+    throw new HttpsError("failed-precondition", "The Android authorization record is not active.");
+  }
+  const inviteCode = createInviteCode();
+  const expiresAt = admin.firestore.Timestamp.fromMillis(Date.now() + 30 * 60 * 1000);
+  await db.doc("android_invites/" + staffProfileId).set({
+    authUid: profile.authUid,
+    mobileNumber: profile.mobileNumber,
+    codeHash: hashInvite(inviteCode),
+    expiresAt,
+    attempts: 0,
+    usedAt: null,
+    createdAt: admin.firestore.FieldValue.serverTimestamp(),
+    createdBy: request.auth.uid
+  });
+  return { success: true, staffProfileId, activationCode: inviteCode, expiresAt: expiresAt.toDate().toISOString() };
+});
