@@ -2064,7 +2064,7 @@ function openUserManagementForm(userId=null) {
       const name=$('#umName').value.trim(), mobile=normMobile($('#umMobile').value), selectedPlatform=$('#umPlatform').value;
       const selectedRole=$('#umRole').value, moduleAccess=$$('input[name="userModuleAccess"]:checked').map(input=>input.value), status=$('#umStatus').value;
       if(!name){toast('Full name is required.','err');return false;}
-      if(!/^\\+\\d{10,14}$/.test(mobile)){toast('Enter a valid mobile number.','err');return false;}
+      if(!/^\+\d{10,14}$/.test(mobile)){toast('Enter a valid mobile number.','err');return false;}
       if(S.users.some(item=>item.id!==existing?.id&&normMobile(item.mobileNumber)===mobile)){toast('This mobile number already belongs to another staff profile.','err');return false;}
       if(existing?.authUid&&mobile!==normMobile(existing.mobileNumber)){toast('Mobile number cannot be changed after the first OTP login.','err');return false;}
       const payload=buildUserProfile({fullName:name,mobileNumber:mobile,platform:selectedPlatform,platformRole:selectedRole,moduleAccess,status});
