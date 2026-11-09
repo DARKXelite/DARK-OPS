@@ -1,3 +1,4 @@
+import { readFile } from "node:fs/promises";
 import assert from "node:assert/strict";
 import { initializeApp, deleteApp } from "firebase/app";
 import {
@@ -35,9 +36,10 @@ connectAuthEmulator(auth, "http://127.0.0.1:9099", { disableWarnings: true });
 connectFirestoreEmulator(db, "127.0.0.1", 8080);
 connectFunctionsEmulator(functions, "127.0.0.1", 5001);
 
+const rules = await readFile(new URL("../firestore.rules", import.meta.url), "utf8");
 const env = await initializeTestEnvironment({
   projectId,
-  firestore: { host: "127.0.0.1", port: 8080 }
+  firestore: { host: "127.0.0.1", port: 8080, rules }
 });
 
 try {
