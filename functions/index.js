@@ -135,7 +135,7 @@ exports.redeemAndroidInvite = onCall({ region: REGION, maxInstances: 10 }, async
   if (profile.status !== "active" || !profile.authUid) throw new HttpsError("failed-precondition", "This Android profile is not active.");
 
   const inviteRef = db.doc("android_invites/" + profileDoc.id);
-  let invite;
+  let invalidCode = false;
   try {
     await db.runTransaction(async tx => {
       const snap = await tx.get(inviteRef);
@@ -147,14 +147,15 @@ exports.redeemAndroidInvite = onCall({ region: REGION, maxInstances: 10 }, async
       if (data.attempts >= 5) throw new HttpsError("resource-exhausted", "Too many activation attempts. Ask an administrator to issue a new code.");
       if (hashInvite(inviteCode) !== data.codeHash) {
         tx.update(inviteRef, { attempts: admin.firestore.FieldValue.increment(1) });
-        throw new HttpsError("permission-denied", "Activation code is incorrect.");
+        invalidCode = true;
+        return;
       }
       tx.update(inviteRef, { usedAt: admin.firestore.FieldValue.serverTimestamp(), attempts: admin.firestore.FieldValue.increment(1) });
-      invite = data;
     });
   } catch (error) {
     throw callableError(error);
   }
+  if (invalidCode) throw new HttpsError("permission-denied", "Activation code is incorrect.");
 
   try {
     await auth.updateUser(profile.authUid, { password: newPassword });
