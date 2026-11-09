@@ -2100,7 +2100,7 @@ function openUserManagementForm(userId=null) {
   $('#umName').value=existing?.fullName||existing?.username||'';
   $('#umMobile').value=existing?.mobileNumber||'';
   $('#umPlatform').value=platform;
-  $('#umStatus').value=canRetainActive?'active':(existing?.status==='suspended'?'suspended':'pending');
+  $('#umStatus').value=hasLinkedIdentity?(existing?.status==='suspended'?'suspended':'active'):(existing?.status==='suspended'?'suspended':'pending');
   const syncCount=()=>{const badge=$('#umModuleCount');if(badge)badge.textContent=`${$$('input[name="userModuleAccess"]:checked').length} selected`;};
   $('#umPlatform').addEventListener('change',()=>{
     const next=$('#umPlatform').value, opts=userEditorOptions(next,'',[]);
