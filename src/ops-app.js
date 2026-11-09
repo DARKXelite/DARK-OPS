@@ -2001,7 +2001,17 @@ function renderUsersMaster() {
   });
   const roles=[...new Set(all.map(u=>String(u.platformRole||u.role||'').trim()).filter(Boolean))].sort();
   const moduleLabels=ids=>(Array.isArray(ids)?ids:[]).map(id=>id.replaceAll('_',' ')).join(', ');
-  setHTML($('#usersTbl'), `<div class="user-tools user-tools-extended">
+  const webCount=all.filter(u=>u.platform==='web').length;
+  const androidCount=all.filter(u=>u.platform==='android').length;
+  const loginReady=all.filter(u=>u.status==='active'&&!!u.authUid).length;
+  const pendingSetup=all.length-loginReady;
+  setHTML($('#usersTbl'), `<div class="user-admin-summary" aria-label="Staff access summary">
+    <div class="user-admin-stat"><span>Total staff</span><b>${all.length}</b><small>All directory records</small></div>
+    <div class="user-admin-stat"><span>Web profiles</span><b>${webCount}</b><small>Web App assignment</small></div>
+    <div class="user-admin-stat"><span>Android profiles</span><b>${androidCount}</b><small>Android App assignment</small></div>
+    <div class="user-admin-stat"><span>Login-ready</span><b>${loginReady}</b><small>Linked identity + active</small></div>
+    <div class="user-admin-stat"><span>Setup required</span><b>${pendingSetup}</b><small>Pending or legacy records</small></div>
+  </div><div class="user-tools user-tools-extended">
     <label class="user-search"><span class="material-symbols-rounded">search</span><input id="usersSearch" value="${esc(usersSearchText)}" placeholder="Search name, mobile, role or module" aria-label="Search users"></label>
     <label class="user-role-filter">Platform<select id="usersPlatformFilter"><option value="all">All platforms</option><option value="web" ${usersPlatformFilter==='web'?'selected':''}>Web App</option><option value="android" ${usersPlatformFilter==='android'?'selected':''}>Android App</option><option value="legacy" ${usersPlatformFilter==='legacy'?'selected':''}>Legacy / unassigned</option></select></label>
     <label class="user-role-filter">Role<select id="usersRoleFilter"><option value="all">All roles</option>${roles.map(r=>`<option value="${esc(r)}" ${usersRoleFilter===r?'selected':''}>${esc(r.replaceAll('_',' '))}</option>`).join('')}</select></label>
@@ -2009,7 +2019,9 @@ function renderUsersMaster() {
     <span class="muted sm user-count">${rows.length} of ${all.length} profiles</span></div>
     <div class="table-wrap"><table><thead><tr><th>Staff member</th><th>Platform</th><th>Role</th><th>Module access</th><th>Status</th><th class="right">Actions</th></tr></thead><tbody>
     ${!LOADED.users?'<tr><td colspan="6"><div class="skeleton" style="height:80px"></div></td></tr>':rows.length?rows.map(u=>{
-      const status=u.status||'legacy', platform=u.platform||'legacy';
+      const rawStatus=u.status||'legacy', platform=u.platform||'legacy';
+      // Never present a profile as login-ready unless it has a linked Auth identity.
+      const status=rawStatus==='active'&&!u.authUid?'pending':rawStatus;
       const statusClass=status==='active'?'ok':status==='suspended'?'bad':'warn';
       return `<tr><td><b>${esc(u.fullName||u.username||'Staff')}</b><div class="muted sm">${esc(u.mobileNumber||'No mobile')} · <code>${esc(u.id)}</code></div></td>
       <td><span class="badge ${platform==='legacy'?'warn':'gold'}">${esc(userPlatformLabel(platform))}</span></td>
