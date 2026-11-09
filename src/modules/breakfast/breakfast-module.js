@@ -52,7 +52,7 @@ export function createBreakfastModule(deps) {
               '<div class="bf-form-row"><label>Check-in date<input id="bfCheckIn" name="checkInAt" type="datetime-local" required></label><label>Checkout date<input id="bfCheckOut" name="checkOutAt" type="datetime-local" required></label></div>' +
               '<div class="bf-date-preview" id="bfDatePreview">Enter stay date/time to preview breakfast eligibility.</div>' +
               '<button class="bf-primary" type="submit" id="bfCreateButton"><span class="material-symbols-rounded">confirmation_number</span>Generate room QR pass</button>' +
-              '<p class="bf-form-note">One QR covers every guest in this room. The booking contact receives one WhatsApp message with the room QR link.</p>' +
+              '<p class="bf-form-note">One QR covers every guest in this room. Send the room QR image manually through WhatsApp.</p>' +
             '</form></section>' : '') +
           '<section class="bf-panel bf-scanner-panel"><div class="bf-panel-head"><div><span class="bf-step">02 / RESTAURANT</span><h3>Redeem breakfast</h3><p>Scan the same room QR once for each guest in the booking.</p></div><span class="material-symbols-rounded">qr_code_scanner</span></div>' +
             '<div class="bf-scanner-frame"><div id="breakfastQrReader" class="bf-reader"></div><div class="bf-scanner-placeholder" id="bfScannerPlaceholder"><span class="material-symbols-rounded">photo_camera</span><b>Camera scanner ready</b><small>Use the rear camera on a phone or tablet.</small></div></div>' +
@@ -263,16 +263,17 @@ export function createBreakfastModule(deps) {
     a.download="breakfast-room-"+pass.roomNumber+".png";
     a.click();
   }
-  function sendRoomWhatsApp(pass) {
-    const digits=(pass.guestPhone||"").replace(/\D/g,"");
-    const phone=digits.length===10?"91"+digits:digits;
-    if(!phone){toast("This booking has no WhatsApp number. Update the booking contact first.","err");return;}
-    const qrPage=new URL("/breakfast-pass.html",window.location.origin);
-    qrPage.searchParams.set("t",pass.qrToken);
-    const valid=(pass.breakfastDates||[]).join(", ");
-    const nl=String.fromCharCode(10);
-    const message="Hello "+pass.guestName+","+nl+nl+"Your Clover Greens breakfast pass for Room "+pass.roomNumber+" is ready."+nl+"Guests: "+pass.guestCount+nl+"Valid breakfast dates: "+valid+nl+"Breakfast service: 7:00 AM–10:00 AM (the pass can still be scanned later on an eligible date)."+nl+nl+"Open your room QR here: "+qrPage.toString()+nl+nl+"Show this same QR once for each guest. Each guest can redeem once per eligible date."; 
-    window.open("https://wa.me/"+phone+"?text="+encodeURIComponent(message),"_blank","noopener");
+  async function sendRoomWhatsApp(pass) {
+    try {
+      if(!pass?.qrToken) throw new Error("The saved room QR token is unavailable.");
+      const host=document.createElement("div");
+      new window.QRCode(host,{text:pass.qrToken,width:420,height:420,colorDark:"#000000",colorLight:"#FFFFFF",correctLevel:window.QRCode.CorrectLevel.H});
+      const src=host.querySelector("canvas")?.toDataURL("image/png")||host.querySelector("img")?.src;
+      const valid=(pass.breakfastDates||[]).join(", ");
+      const message="Hello "+pass.guestName+",\\n\\nYour Clover Greens breakfast pass for Room "+pass.roomNumber+" is ready.\\nGuests: "+pass.guestCount+"\\nValid breakfast dates: "+valid+"\\nBreakfast service: 7:00 AM–10:00 AM.\\n\\nPlease show the attached QR once for each guest. Each guest can redeem once per eligible date.";
+      const result=await printer.shareQrOnWhatsApp(src,"breakfast-room-"+pass.roomNumber+".png",pass.guestPhone,message);
+      toast(result==="shared"?"QR image shared. Choose WhatsApp and send it.":"QR downloaded. Attach it in the WhatsApp chat that opened.","ok");
+    } catch(error) { toast(error.message||"Could not share breakfast QR.","err"); }
   }
   async function startScanner() {
     if (!canRedeem() || scannerBusy) return;
