@@ -60,3 +60,22 @@ Do not commit service-account credentials, private keys, or other server-side se
 - Previous modular extraction, Fleet Ops, Turf Ops, navigation, repository, and listener changes have passed GitHub Actions tests and Vite production builds.
 - New planner batch and goods-inward service changes have their own mock-based tests; CI is running for the latest branch head.
 - A real browser and live Firestore smoke test remains required before deployment.
+
+## Breakfast pass thermal printing (80 mm)
+
+Breakfast booking creation now commits the booking and entitlement first, then sends the generated room QR receipt to the browser's print pipeline. The receipt is formatted for an 80 mm thermal roll with a 74 mm content area and a 43 mm QR. A **Print pass** action remains available for reprints; it reuses the original saved token and does not create another booking.
+
+### Reception PC setup
+
+1. Install the USB thermal printer's Windows driver and set that printer as the Windows default printer.
+2. Set the printer paper width to **80 mm**, disable headers/footers, and choose the correct roll/cut settings in the driver preferences.
+3. Create a dedicated Chrome shortcut for the reception workstation. Use the installed Chrome path and this command-line target (adjust the executable path if Chrome is installed elsewhere):
+
+   ```text
+   "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe" --kiosk --kiosk-printing --no-first-run https://clovergreens.vercel.app
+   ```
+
+4. Launch DARK OPS using that shortcut. Chrome's `--kiosk-printing` flag suppresses the print preview/dialog and sends the job to the default printer.
+5. Test with a sample booking before live use. Confirm QR readability, paper width, darkness, cut position and that the printer has paper.
+
+**Operational notes:** silent printing depends on the reception PC being in the configured Chrome kiosk session. A normal browser session can still show the browser print UI. The web app can confirm that it submitted a print job, but browsers cannot reliably confirm that paper physically emerged; staff must check the printer. A print failure does not roll back the saved booking. Use **Print pass** to retry without generating a new entitlement.
