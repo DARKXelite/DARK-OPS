@@ -3,7 +3,7 @@ const crypto = require("node:crypto");
 const ANDROID_ROLES = new Set(["operator", "storekeeper", "captain", "marshal", "workshop_manager"]);
 const WEB_ROLES = new Set(["operator", "foe", "marshal", "storekeeper", "workshop_manager", "golf_superintendent", "user"]);
 const ANDROID_MODULES = new Set(["inventory", "breakfast_qr", "golf_qr", "turf_ops", "fleet_ops", "workshop_ops", "other_modules"]);
-const WEB_MODULES = new Set(["fuel_fertilizer_dashboard", "inventory", "breakfast_qr", "golf_qr", "turf_ops", "fleet_ops", "workshop_ops", "reports", "other_modules"]);
+const WEB_MODULES = new Set(["fuel_fertilizer_dashboard", "inventory", "breakfast_qr", "golf_qr", "turf_ops", "fleet_ops", "workshop_ops", "reports", "fnb_ops", "other_modules"]);
 
 function normalizeMobile(value) {
   const raw = String(value || "").trim().replace(/[\s()-]/g, "");
