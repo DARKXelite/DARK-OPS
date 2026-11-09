@@ -5,16 +5,16 @@ $AppUrl = "https://clovergreens.vercel.app/?receptionPrint=1"
 $Desktop = [Environment]::GetFolderPath("Desktop")
 $ProfileRoot = Join-Path $env:LOCALAPPDATA "DARKOPS\ReceptionProfiles"
 New-Item -ItemType Directory -Force -Path $ProfileRoot | Out-Null
-function Find-Browser($Name, $Exe) {
+function Find-Browser($Name, $InstallFolder, $Exe) {
   $programFilesX86 = [Environment]::GetFolderPath("ProgramFilesX86")
-  $candidates = @((Join-Path $env:ProgramFiles "$Name\Application\$Exe"),(Join-Path $programFilesX86 "$Name\Application\$Exe"),(Join-Path $env:LOCALAPPDATA "$Name\Application\$Exe")) | Where-Object { $_ -and (Test-Path $_) }
+  $candidates = @((Join-Path $env:ProgramFiles "$InstallFolder\Application\$Exe"),(Join-Path $programFilesX86 "$InstallFolder\Application\$Exe"),(Join-Path $env:LOCALAPPDATA "$InstallFolder\Application\$Exe")) | Where-Object { $_ -and (Test-Path $_) }
   if ($candidates.Count -gt 0) { return $candidates[0] }
   return $null
 }
 $Shell = New-Object -ComObject WScript.Shell
 $created = 0
-foreach ($browser in @(@{Name="Chrome";Exe="chrome.exe";Profile="Chrome"},@{Name="Edge";Exe="msedge.exe";Profile="Edge"})) {
-  $exe = Find-Browser $browser.Name $browser.Exe
+foreach ($browser in @(@{Name="Chrome";InstallFolder="Google\Chrome";Exe="chrome.exe";Profile="Chrome"},@{Name="Edge";InstallFolder="Microsoft\Edge";Exe="msedge.exe";Profile="Edge"})) {
+  $exe = Find-Browser $browser.Name $browser.InstallFolder $browser.Exe
   if (-not $exe) { Write-Host "$($browser.Name) not found. Skipping."; continue }
   $profile = Join-Path $ProfileRoot $browser.Profile
   New-Item -ItemType Directory -Force -Path $profile | Out-Null
