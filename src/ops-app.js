@@ -7,6 +7,7 @@ import { createBreakfastModule } from "./modules/breakfast/breakfast-module.js";
 import { createGolfPassModule } from "./modules/golf-pass/golf-pass-module.js";
 import { inventoryOnHand } from "./domain/inventory-balance.js";
 import { ROLE_PERMISSIONS, ROLE_LABELS, canRole, permissionForAction, permissionForView, permissionForCollection } from "./modules/rbac.js";
+import { buildUserProfile, rolesForPlatform, modulesForPlatform } from "./modules/user-management.js";
 
 
 const FUEL_RATE = 92.50; // Legacy reference rate; operational costing is managed in the local cost model.
@@ -236,9 +237,9 @@ function openModal({ title, sub = '', body = '', footer = '', size = '' }) {
   $('#overlay').classList.add('open');
 }
 function closeModal() { $('#overlay').classList.remove('open'); curModalRender = null; }
-function openForm({ title, html, submit = 'Save', danger = false, onSubmit }) {
+function openForm({ title, html, submit = 'Save', danger = false, size = 'sm', onSubmit }) {
   curModalRender = null;
-  openModal({ title, size: 'sm', body: html, footer: `<button class="btn" data-act="close-modal">Cancel</button><button class="btn ${danger ? 'btn-danger fill' : 'btn-primary'}" id="mSubmit">${esc(submit)}</button>` });
+  openModal({ title, size, body: html, footer: `<button class="btn" data-act="close-modal">Cancel</button><button class="btn ${danger ? 'btn-danger fill' : 'btn-primary'}" id="mSubmit">${esc(submit)}</button>` });
   const btn = $('#mSubmit');
   btn.onclick = async () => { btn.disabled = true; try { const ok = await onSubmit(); if (ok !== false) closeModal(); } catch (e) { console.error(e); toast(e.message || 'Something went wrong', 'err'); } btn.disabled = false; };
   const first = $('#mBody input,#mBody select'); if (first) setTimeout(() => first.focus(), 30);
@@ -1985,14 +1986,103 @@ function normMobile(raw) {
   if (!plus && d.length === 10) return '+91' + d; if (!plus && d.length === 12 && d.startsWith('91')) return '+' + d; if (!plus && d.length === 11 && d.startsWith('0')) return '+91' + d.slice(1);
   return (plus ? '+' : '') + d;
 }
-let usersSearchText = '', usersRoleFilter = 'all';
+let usersSearchText = '', usersRoleFilter = 'all', usersPlatformFilter = 'all', usersStatusFilter = 'all';
+const userPlatformLabel = platform => platform === 'web' ? 'Web App' : platform === 'android' ? 'Android App' : 'Legacy / unassigned';
+const userStatusLabel = status => status === 'active' ? 'Active' : status === 'suspended' ? 'Suspended' : status === 'legacy' ? 'Legacy' : 'Pending';
 function renderUsersMaster() {
   const q = usersSearchText.trim().toLowerCase();
-  const all = [...(S.users || [])].sort((a, b) => (a.fullName || a.username || '').localeCompare(b.fullName || b.username || ''));
-  const rows = all.filter(u => (!q || [u.fullName,u.username,u.mobileNumber,u.role].some(v => String(v||'').toLowerCase().includes(q))) && (usersRoleFilter === 'all' || String(u.role||'') === usersRoleFilter));
-  const roles = [...new Set(all.map(u=>String(u.role||'').trim()).filter(Boolean))].sort();
-  setHTML($('#usersTbl'), `<div class="user-tools"><label class="user-search"><span class="material-symbols-rounded">search</span><input id="usersSearch" value="${esc(usersSearchText)}" placeholder="Search name, mobile or role" aria-label="Search users"></label><label class="user-role-filter">Role<select id="usersRoleFilter"><option value="all">All roles</option>${roles.map(r=>`<option value="${esc(r)}" ${usersRoleFilter===r?'selected':''}>${esc(r)}</option>`).join('')}</select></label><span class="muted sm user-count">${rows.length} of ${all.length} users</span>${RBAC.can('access.manage') ? '<button class="btn btn-sm" data-act="open-role-admin">Manage app access</button>' : ''}</div><div class="table-wrap"><table><thead><tr><th>Name</th><th>Mobile</th><th>Role</th><th>Record ID</th><th class="right">Actions</th></tr></thead><tbody>${!LOADED.users ? '<tr><td colspan="5"><div class="skeleton" style="height:80px"></div></td></tr>' : rows.length ? rows.map(u => `<tr><td><b>${esc(u.fullName || u.username || 'Staff')}</b><div class="muted sm">${u.username && u.username!==u.fullName ? esc(u.username) : 'Workforce profile'}</div></td><td>${esc(u.mobileNumber || '—')}</td><td><span class="badge ${u.role === 'incharge' ? 'gold' : String(u.role||'').startsWith('storekeeper') ? 'warn' : 'ok'}">${esc(u.role || '—')}</span></td><td><code>${esc(u.id)}</code></td><td class="right" style="white-space:nowrap"><button class="btn btn-sm" data-act="edit-user" data-id="${esc(u.id)}">Edit</button> <button class="btn btn-danger btn-sm" data-act="del" data-col="users" data-id="${esc(u.id)}" data-label="${esc(u.fullName || 'this user')}"><span class="material-symbols-rounded">delete</span></button></td></tr>`).join('') : `<tr><td colspan="5" class="empty">${all.length?'No users match these filters.':'No users yet. Add a workforce member to begin.'}</td></tr>`}</tbody></table></div>`);
-  const search = $('#usersSearch'); if (search && document.activeElement?.id === 'usersSearch') { search.focus(); search.setSelectionRange(search.value.length, search.value.length); }
+  const all = [...(S.users || [])].sort((a,b)=>(a.fullName||a.username||'').localeCompare(b.fullName||b.username||''));
+  const rows = all.filter(u => {
+    const searchable = [u.fullName,u.username,u.mobileNumber,u.role,u.platform,u.platformRole,(u.moduleAccess||[]).join(' ')].some(v=>String(v||'').toLowerCase().includes(q));
+    return (!q || searchable)
+      && (usersRoleFilter==='all' || String(u.platformRole||u.role||'')===usersRoleFilter)
+      && (usersPlatformFilter==='all' || String(u.platform||'legacy')===usersPlatformFilter)
+      && (usersStatusFilter==='all' || String(u.status||'legacy')===usersStatusFilter);
+  });
+  const roles=[...new Set(all.map(u=>String(u.platformRole||u.role||'').trim()).filter(Boolean))].sort();
+  const moduleLabels=ids=>(Array.isArray(ids)?ids:[]).map(id=>id.replaceAll('_',' ')).join(', ');
+  setHTML($('#usersTbl'), `<div class="user-tools user-tools-extended">
+    <label class="user-search"><span class="material-symbols-rounded">search</span><input id="usersSearch" value="${esc(usersSearchText)}" placeholder="Search name, mobile, role or module" aria-label="Search users"></label>
+    <label class="user-role-filter">Platform<select id="usersPlatformFilter"><option value="all">All platforms</option><option value="web" ${usersPlatformFilter==='web'?'selected':''}>Web App</option><option value="android" ${usersPlatformFilter==='android'?'selected':''}>Android App</option><option value="legacy" ${usersPlatformFilter==='legacy'?'selected':''}>Legacy / unassigned</option></select></label>
+    <label class="user-role-filter">Role<select id="usersRoleFilter"><option value="all">All roles</option>${roles.map(r=>`<option value="${esc(r)}" ${usersRoleFilter===r?'selected':''}>${esc(r.replaceAll('_',' '))}</option>`).join('')}</select></label>
+    <label class="user-role-filter">Status<select id="usersStatusFilter"><option value="all">All statuses</option><option value="pending" ${usersStatusFilter==='pending'?'selected':''}>Pending</option><option value="active" ${usersStatusFilter==='active'?'selected':''}>Active</option><option value="suspended" ${usersStatusFilter==='suspended'?'selected':''}>Suspended</option><option value="legacy" ${usersStatusFilter==='legacy'?'selected':''}>Legacy</option></select></label>
+    <span class="muted sm user-count">${rows.length} of ${all.length} profiles</span></div>
+    <div class="table-wrap"><table><thead><tr><th>Staff member</th><th>Platform</th><th>Role</th><th>Module access</th><th>Status</th><th class="right">Actions</th></tr></thead><tbody>
+    ${!LOADED.users?'<tr><td colspan="6"><div class="skeleton" style="height:80px"></div></td></tr>':rows.length?rows.map(u=>{
+      const status=u.status||'legacy', platform=u.platform||'legacy';
+      const statusClass=status==='active'?'ok':status==='suspended'?'bad':'warn';
+      return `<tr><td><b>${esc(u.fullName||u.username||'Staff')}</b><div class="muted sm">${esc(u.mobileNumber||'No mobile')} · <code>${esc(u.id)}</code></div></td>
+      <td><span class="badge ${platform==='legacy'?'warn':'gold'}">${esc(userPlatformLabel(platform))}</span></td>
+      <td><b>${esc((u.platformRole||u.role||'Unassigned').replaceAll('_',' '))}</b></td>
+      <td class="user-module-cell">${u.moduleAccess?.length?esc(moduleLabels(u.moduleAccess)):'<span class="muted">No modules assigned</span>'}</td>
+      <td><span class="badge ${statusClass}">${esc(userStatusLabel(status))}</span></td>
+      <td class="right" style="white-space:nowrap"><button class="btn btn-sm" data-act="edit-user" data-id="${esc(u.id)}">Manage</button> <button class="btn btn-danger btn-sm" data-act="del" data-col="users" data-id="${esc(u.id)}" data-label="${esc(u.fullName||'this user')}"><span class="material-symbols-rounded">delete</span></button></td></tr>`;
+    }).join(''):`<tr><td colspan="6" class="empty">${all.length?'No profiles match these filters.':'No users yet. Add a staff profile to begin.'}</td></tr>`}</tbody></table></div>`);
+  const search=$('#usersSearch'); if(search&&document.activeElement?.id==='usersSearch'){search.focus();search.setSelectionRange(search.value.length,search.value.length);}
+}
+function userEditorOptions(platform, selectedRole, selectedModules) {
+  const roles=rolesForPlatform(platform), modules=modulesForPlatform(platform);
+  return {
+    roleOptions: roles.map(item=>`<option value="${esc(item.id)}" ${selectedRole===item.id?'selected':''}>${esc(item.label)}</option>`).join(''),
+    moduleOptions: modules.map(item=>`<label class="access-module-option"><input type="checkbox" name="userModuleAccess" value="${esc(item.id)}" ${selectedModules.includes(item.id)?'checked':''}><span><b>${esc(item.label)}</b><small>${esc(item.id)}</small></span></label>`).join('')
+  };
+}
+function openUserManagementForm(userId=null) {
+  if(!RBAC.can('users.manage')){toast('You do not have permission to manage staff profiles.','err');return;}
+  const existing=userId?S.users.find(item=>item.id===userId):null;
+  if(userId&&!existing){toast('User profile not found. Refresh and retry.','err');return;}
+  let platform=existing?.platform==='android'?'android':'web';
+  let role=existing?.platformRole||(existing?.platform?existing.role:'');
+  let selectedModules=Array.isArray(existing?.moduleAccess)?[...existing.moduleAccess]:[];
+  const canRetainActive=existing?.status==='active'&&!!existing?.authUid;
+  const initial=userEditorOptions(platform,role,selectedModules);
+  const statuses='<option value="pending">Pending · identity not provisioned</option><option value="suspended">Suspended</option>'+(canRetainActive?'<option value="active">Active · provisioned</option>':'');
+  const html=`
+    <div class="user-admin-intro"><span class="material-symbols-rounded">admin_panel_settings</span><div><b>One staff profile, one platform</b><p>Choose Web App or Android App. Roles and modules are filtered to match.</p></div></div>
+    <div class="user-admin-grid">${fld('Full name','<input id="umName" required maxlength="100" placeholder="e.g. Rajesh Kumar" autocomplete="name">')}${fld('Mobile number','<input id="umMobile" required inputmode="tel" maxlength="18" placeholder="+91 98765 43210" autocomplete="tel">')}</div>
+    ${fld('Platform','<select id="umPlatform" required><option value="web">Web App</option><option value="android">Android App</option></select>','A staff profile cannot be assigned to both platforms.')}
+    ${fld('Platform role',`<select id="umRole" required>${initial.roleOptions}</select>`)}
+    <div class="user-access-heading"><div><b>Module access</b><span>Grant only the modules this person needs.</span></div><span id="umModuleCount" class="badge gold">0 selected</span></div>
+    <div id="umModules" class="access-module-grid">${initial.moduleOptions}</div>
+    ${fld('Account status',`<select id="umStatus">${statuses}</select>`,'New profiles remain pending until a separate Firebase identity and authorization record are provisioned.')}
+    <div class="user-admin-notice"><span class="material-symbols-rounded">lock</span><span>Saving this profile does not create login credentials or grant Firebase access. Authentication provisioning and Firestore enforcement are separate steps.</span></div>`;
+  openForm({
+    title:existing?'Manage staff access':'Create staff profile',
+    sub:existing?'Update platform assignment and module permissions.':'Create a staff directory record and configure platform access.',
+    size:'user-admin',html,submit:existing?'Save user access':'Create pending profile',
+    onSubmit:async()=>{
+      const name=$('#umName').value.trim(), mobile=normMobile($('#umMobile').value), selectedPlatform=$('#umPlatform').value;
+      const selectedRole=$('#umRole').value, moduleAccess=$$('input[name="userModuleAccess"]:checked').map(input=>input.value), status=$('#umStatus').value;
+      if(!name){toast('Full name is required.','err');return false;}
+      if(!/^\\+\\d{10,14}$/.test(mobile)){toast('Enter a valid mobile number.','err');return false;}
+      if(S.users.some(item=>item.id!==existing?.id&&normMobile(item.mobileNumber)===mobile)){toast('This mobile number already belongs to another staff profile.','err');return false;}
+      if(status==='active'&&!canRetainActive){toast('A profile cannot be activated until its platform identity is provisioned.','err');return false;}
+      if(existing&&existing.platform&&existing.platform!==selectedPlatform&&existing.authUid){toast('Platform cannot be changed after an authentication identity is linked. Use a reviewed identity migration.','err');return false;}
+      const payload=buildUserProfile({fullName:name,mobileNumber:mobile,platform:selectedPlatform,platformRole:selectedRole,moduleAccess,status});
+      payload.updatedAt=serverTimestamp();payload.updatedBy=RBAC.session.uid;
+      if(existing){
+        await updateDoc(doc(db,CONFIG.COL.users,existing.id),payload);
+        toast('Staff profile and module access updated.');
+      }else{
+        payload.createdAt=serverTimestamp();payload.createdBy=RBAC.session.uid;
+        await addDoc(collection(db,CONFIG.COL.users),payload);
+        toast('Pending staff profile created. Login access is not active yet.');
+      }
+    }
+  });
+  $('#umName').value=existing?.fullName||existing?.username||'';
+  $('#umMobile').value=existing?.mobileNumber||'';
+  $('#umPlatform').value=platform;
+  $('#umStatus').value=canRetainActive?'active':(existing?.status==='suspended'?'suspended':'pending');
+  const syncCount=()=>{const badge=$('#umModuleCount');if(badge)badge.textContent=`${$$('input[name="userModuleAccess"]:checked').length} selected`;};
+  $('#umPlatform').addEventListener('change',()=>{
+    const next=$('#umPlatform').value, opts=userEditorOptions(next,'',[]);
+    $('#umRole').innerHTML=opts.roleOptions;
+    $('#umModules').innerHTML=opts.moduleOptions||'<p class="muted sm">No modules available.</p>';
+    syncCount();
+  });
+  $('#umModules').addEventListener('change',syncCount);
+  syncCount();
 }
 const STORE_CATS = ['Fuel','Fertilizers','Pesticides','Turf Enhancements','Spare Parts','Tools','F&B','Other'];
 const itemName = i => i.partName || i.itemName || i.name || i.productName || 'Unnamed item';
@@ -2882,10 +2972,8 @@ const H = {
   'add-inward': () => openInward(),
   'export-stock': () => downloadCSV('inventory_stock.csv',[['Category','Item','Unit','Stock','Auto reorder at','Rate basis','Unit rate'],...S.inventory.map(i=>[i.category,itemName(i),i.unit||'Nos',inventoryOnHand(i),effectiveReorderLevel(i),autoReorderDetails(i).method,i.unitCost])]),
   'export-inwards': () => downloadCSV('goods_inwards.csv',[['Date','Invoice','Supplier','Category','Item','Unit','Qty','Rate','GST %','Taxable','GST amount','Total'],...S.inwards.map(r=>[r.receiptDate,r.invoiceNumber,r.supplier,r.category,r.itemName,r.unit,r.quantity,r.rate,r.gstPercent,r.taxableAmount,r.gstAmount,r.total])]),
-  'edit-user': d => { const u=S.users.find(x=>x.id===d.id); if(!u) return toast('User record not found','err'); openForm({title:'Edit workforce member',submit:'Save changes',html:fld('Full name','<input id="euName" required>')+fld('Mobile number','<input id="euMob" inputmode="tel" required>','Saved in normalized +91 format where applicable.')+fld('Role','<select id="euRole"><option value="operator">Operator</option><option value="incharge">Incharge</option><option value="storekeeper">Storekeeper (Fuel Ledger)</option><option value="storekeeper_fertilizer">Storekeeper (Fertilizers & Pesticides)</option></select>'),onSubmit:async()=>{const name=$('#euName').value.trim(), mob=normMobile($('#euMob').value), role=$('#euRole').value;if(!name){toast('Name is required','err');return false;}if(!/^\+\d{10,14}$/.test(mob)){toast('Enter a valid mobile number','err');return false;}if(S.users.some(x=>x.id!==u.id&&x.mobileNumber===mob)){toast('This mobile number is already registered','err');return false;}await updateDoc(doc(db,CONFIG.COL.users,u.id),{fullName:name,username:name,mobileNumber:mob,role});toast('User profile updated');}});setTimeout(()=>{if($('#euName'))$('#euName').value=u.fullName||u.username||'';if($('#euMob'))$('#euMob').value=u.mobileNumber||'';if($('#euRole'))$('#euRole').value=u.role||'operator';},0); },
-  'add-user': () => openForm({ title: 'Register workforce member', submit: 'Add user',
-    html: fld('Full name', '<input id="uName" placeholder="e.g. Rajesh Kumar">') + fld('Mobile number', '<input id="uMob" inputmode="tel" placeholder="98765 43210">', 'Saved as +91XXXXXXXXXX so the app login can match it.') + fld('Role', '<select id="uRole"><option value="operator">Operator</option><option value="incharge">Incharge</option><option value="storekeeper">Storekeeper (Fuel Ledger)</option><option value="storekeeper_fertilizer">Storekeeper (Fertilizers & Pesticides)</option></select>'),
-    onSubmit: async () => { const name = $('#uName').value.trim(), mob = normMobile($('#uMob').value); if (!name) { toast('Name is required', 'err'); return false; } if (!/^\+\d{10,14}$/.test(mob)) { toast('Enter a valid mobile number', 'err'); return false; } if (S.users.some(u => u.mobileNumber === mob)) { toast('This mobile number is already registered', 'err'); return false; } await addDoc(collection(db, CONFIG.COL.users), { fullName: name, mobileNumber: mob, role: $('#uRole').value, username: name }); toast('User registered for mobile login'); } }),
+  'edit-user': d => openUserManagementForm(d.id),
+  'add-user': () => openUserManagementForm(),
   'add-local-expense': () => { openForm({title:'Add local bill',submit:'Save bill',size:'md',html:
     `<div class="row3">${fld('Date','<input id="exDate" type="date" value="'+today()+'">')}${fld('Paid by','<select id="exPaidBy"><option value="me">Me · to claim from office</option><option value="accounts">Accounts · paid by office</option></select>')}${fld('Shop / bill ref (optional)','<input id="exVendor" placeholder="e.g. Sri Hardware, #123" autocomplete="off">')}</div>`+
     '<div class="exp-rows-head"><span>Item name</span><span>Qty</span><span>Rate ₹</span><span>Amount ₹</span><span></span></div><div id="exRows">'+exRowHTML()+exRowHTML()+'</div>'+
@@ -2971,7 +3059,7 @@ const C = {
   'part-category': v => { const w = $('#pModelWrap'); if (w) w.hidden = v !== 'Spare Parts'; const unit = $('#pUnit'); if (unit && v === 'Fuel') unit.value = 'Litre'; }
 };
 document.addEventListener('input', e => { if (e.target?.id === 'usersSearch') { const pos=e.target.selectionStart; usersSearchText=e.target.value||''; renderUsersMaster(); const next=$('#usersSearch'); if(next){next.focus();try{next.setSelectionRange(pos,pos)}catch(_){}} } });
-document.addEventListener('change', e => { if (e.target?.id === 'usersRoleFilter') { usersRoleFilter=e.target.value||'all'; renderUsersMaster(); } });
+document.addEventListener('change', e => { if (e.target?.id === 'usersRoleFilter') { usersRoleFilter=e.target.value||'all'; renderUsersMaster(); } if (e.target?.id === 'usersPlatformFilter') { usersPlatformFilter=e.target.value||'all'; renderUsersMaster(); } if (e.target?.id === 'usersStatusFilter') { usersStatusFilter=e.target.value||'all'; renderUsersMaster(); } });
 document.addEventListener('click', e => {
   const el = e.target.closest('[data-act]');
   if (!el) { $$('.kmenu.open').forEach(x => x.classList.remove('open')); return; }
