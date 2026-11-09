@@ -47,6 +47,7 @@ The role list shown in the create/edit form must be filtered by the selected pla
 | `fleet_ops` | Fleet Ops | Yes | Yes |
 | `workshop_ops` | Workshop Ops | Yes | Yes |
 | `reports` | Reports & Analytics | Yes | No |
+| `fnb_ops` | F&B Operations | Yes | No |
 | `other_modules` | Other modules (future module grants) | Yes | Yes |
 
 Only modules listed as available for the selected platform may be assigned. `other_modules` is a future-module marker only; it is not a wildcard permission and must not grant access to arbitrary collections or screens. Role defaults may preselect sensible modules, but Admin must be able to review the final module list.
@@ -181,7 +182,7 @@ The Android Auth identity deliberately has no phone number attached. The staff m
 
 ### Firestore authorization
 
-New platform-linked `app_roles` documents must match their staff profile's platform, role, status, UID and module list. Module grants are checked at the collection boundary. Legacy role documents without platform fields retain their existing policy for backward compatibility. `other_modules` is not a wildcard; `fnb_ops` is not in the approved module catalog and therefore platform-linked accounts do not gain F&B order access through it.
+New platform-linked `app_roles` documents must match their staff profile's platform, role, status, UID and module list. Module grants are checked at the collection boundary. Legacy role documents without platform fields retain their existing policy for backward compatibility. `other_modules` is not a wildcard. F&B order access requires the explicit Web-only `fnb_ops` grant.
 
 ### Deployment requirements
 
