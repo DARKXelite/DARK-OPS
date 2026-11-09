@@ -1,4 +1,4 @@
-export function createGolfPassModule({db,auth,RBAC,collection,doc,setDoc,onSnapshot,serverTimestamp,esc,today,toast,reissueGolfPassQr}) {
+export function createGolfPassModule({db,auth,RBAC,collection,doc,setDoc,onSnapshot,serverTimestamp,esc,today,toast,reissueGolfPassQr,printer}) {
   const root=()=>document.getElementById("golfPassRoot");
   const categories=["Member","Non-Member","Complimentary"];
   let tab="dashboard", rows=[], unsub=null, lastPass=null, qrCache=new Map(), ledgerView="table";
@@ -99,20 +99,19 @@ export function createGolfPassModule({db,auth,RBAC,collection,doc,setDoc,onSnaps
   }
   function imageData(token){const holder=document.createElement("div");holder.style.cssText="position:fixed;left:-10000px;top:0;background:#fff;padding:8px";document.body.appendChild(holder);new QRCode(holder,{text:token,width:260,height:260,colorDark:"#07100B",colorLight:"#FFFFFF",correctLevel:QRCode.CorrectLevel.M});const canvas=holder.querySelector("canvas"),img=holder.querySelector("img");const src=canvas?canvas.toDataURL("image/png"):img?.src;holder.remove();return src;}
   async function qrAction(p,mode){
-    const printWindow=mode==="print"?window.open("","_blank","width=460,height=700"):null;
-    if(mode==="print"&&!printWindow){toast("Allow pop-ups to print the pass.","err");return;}
     try{
-      if(p.status!=="active"){if(mode==="print"){printEntry(p,null,printWindow);return;}throw new Error("This pass is already checked in. Its one-time QR has been consumed.");}
+      if(p.status!=="active"){if(mode==="print"){await printEntry(p,null);return;}throw new Error("This pass is already checked in. Its one-time QR has been consumed.");}
       const token=await ensureQr(p),src=imageData(token);
       if(mode==="view"){const panel=document.getElementById("gpPanel");let modal=document.getElementById("gpQrModal");if(!modal){modal=document.createElement("div");modal.id="gpQrModal";modal.className="gp-qr-modal";root().appendChild(modal);}modal.innerHTML='<div class="gp-qr-dialog"><button class="gp-modal-close" data-gp-action="close-qr">×</button><span class="gp-tag">ACTIVE ENTRY PASS</span><h3>'+esc(p.passRef)+'</h3><p>'+esc(p.golferName)+' · '+esc(p.playDate)+'</p><img src="'+src+'" alt="Golf pass QR"><div class="gp-actions"><button class="gp-btn" data-gp-action="download-qr" data-pass="'+esc(p.passRef)+'">Download PNG</button><button class="gp-btn gp-primary" data-gp-action="print" data-pass="'+esc(p.passRef)+'">Print pass</button></div><small>Reissuing invalidates the previously issued QR token.</small></div>';modal.hidden=false;}
       if(mode==="download"){const a=document.createElement("a");a.href=src;a.download=p.passRef+".png";a.click();}
-      if(mode==="print")printEntry(p,src,printWindow);
-    }catch(e){printWindow?.close();toast(e.message||"Could not prepare QR.","err");}
+      if(mode==="print")await printEntry(p,src);
+    }catch(e){toast(e.message||"Could not prepare QR.","err");}
   }
-  function printEntry(p,src,w){
+  async function printEntry(p,src){
     const qr=src?'<img class="qr" src="'+src+'">':'<div class="used">CHECKED IN · QR CONSUMED</div>';
     const body='<main><div class="brand">CLOVER GREENS</div><div class="sub">GOLF PASS · ENTRY TICKET</div><div class="ref">'+esc(p.passRef)+'</div>'+qr+'<h2>'+esc(p.golferName)+'</h2><p>'+esc(p.category)+' · '+esc(p.playDate)+'</p><p>'+esc(p.phone)+'</p><div class="foot">'+(src?"Present this QR at the golf entry":"Entry recorded. This is an audit copy, not a valid entry QR.")+'</div></main>';
-    w.document.write('<!doctype html><html><head><title>'+esc(p.passRef)+'</title><style>@page{margin:8mm}*{box-sizing:border-box}body{font:14px Arial;color:#111;text-align:center}.brand{font-weight:800;font-size:22px}.sub{font-size:11px;letter-spacing:2px;margin:8px}.ref{font-weight:800;border-block:1px dashed #777;padding:10px}.qr{display:block;width:220px;height:220px;object-fit:contain;margin:18px auto}.used{padding:24px;margin:20px 0;background:#eee;font-weight:800}h2{margin:10px 0 4px}.foot{border-top:1px dashed #777;margin-top:20px;padding-top:14px;font-size:11px}</style></head><body>'+body+'<script>window.onload=()=>setTimeout(()=>window.print(),300);<\\/script></body></html>');w.document.close();
+    const html='<!doctype html><html><head><meta charset="utf-8"><title>'+esc(p.passRef)+'</title><style>@page{size:80mm auto;margin:3mm}*{box-sizing:border-box}html,body{width:74mm;margin:0;padding:0;font:10pt Arial;color:#111;text-align:center}.brand{font-weight:900;font-size:16pt}.sub{font-size:9pt;letter-spacing:1px;margin:2mm}.ref{font-weight:800;border-block:1px dashed #777;padding:3mm}.qr{display:block;width:43mm;height:43mm;object-fit:contain;margin:3mm auto}.used{padding:8mm;margin:5mm 0;background:#eee;font-weight:800}h2{font-size:13pt;margin:3mm 0 1mm}.foot{border-top:1px dashed #777;margin-top:4mm;padding-top:3mm;font-size:8pt}</style></head><body>'+body+'</body></html>';
+    await printer.printHtml(html,"Golf pass "+p.passRef);
   }
   function passByRef(ref){return rows.find(p=>p.passRef===ref);}
   function click(e){
