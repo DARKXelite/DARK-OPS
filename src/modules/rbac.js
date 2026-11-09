@@ -43,7 +43,7 @@ export function permissionForView(view) {
   if (view === "fnb") return "fnb.read";
   if (view === "breakfast") return "breakfast.read";
   if (view === "breakfastscan") return "breakfast.redeem";
-  if (view === "golfpass") return "golf.read";
+  if (view === "golfpass") return "golf.manage";
   return "dashboard.read";
 }
 
