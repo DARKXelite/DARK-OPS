@@ -6,6 +6,7 @@ import { getFunctions, httpsCallable } from "https://www.gstatic.com/firebasejs/
 import { createFnbModule } from "./modules/fnb/fnb-module.js";
 import { createBreakfastModule } from "./modules/breakfast/breakfast-module.js";
 import { createGolfPassModule } from "./modules/golf-pass/golf-pass-module.js";
+import { createReceptionPrinter } from "./modules/reception-printer.js";
 import { inventoryOnHand } from "./domain/inventory-balance.js";
 import { ROLE_PERMISSIONS, ROLE_LABELS, canRole, permissionForAction, permissionForView, permissionForCollection } from "./modules/rbac.js";
 import { buildUserProfile, rolesForPlatform, modulesForPlatform } from "./modules/user-management.js";
@@ -2355,7 +2356,7 @@ const VIEWS = {
   breakfastscan: ["Breakfast Scanner", "Dedicated restaurant QR redemption", "qr_code_scanner", "Guest Services"],
   golfpass: ["Golf Pass", "Golfer registration, entry validation & reconciliation", "golf_course", "Guest Services"]
 };
-const RENDER = { overview: renderOverview, fleet: renderFleet, fuel: () => renderLedger(), shifts: () => renderShifts(), records: () => renderRecords(), radar: renderRadarPanel, zones: renderZonePanel, registry: renderRegistry, expenses: renderLocalExpenseLedger, users: renderUsersMaster, incidents: renderIncidents, turfcare: renderTurfCare, fnb: () => fnbModule.render(), breakfast: () => breakfastModule?.render(), breakfastscan: () => breakfastModule?.renderScanner(), golfpass: () => golfPassModule?.render() };
+const RENDER = { overview: renderOverview, fleet: renderFleet, fuel: () => renderLedger(), shifts: () => renderShifts(), records: () => renderRecords(), radar: renderRadarPanel, zones: renderZonePanel, registry: renderRegistry, expenses: renderLocalExpenseLedger, users: renderUsersMaster, incidents: renderIncidents, turfcare: renderTurfCare, fnb: () => fnbModule.render(), breakfast: () => { receptionPrinter.showSetupPrompt(); breakfastModule?.render(); }, breakfastscan: () => { receptionPrinter.showSetupPrompt(); breakfastModule?.renderScanner(); }, golfpass: () => { receptionPrinter.showSetupPrompt(); golfPassModule?.render(); } };
 const NAV_GROUPS = {
   fleetops: { label: 'Fleet Ops', icon: 'precision_manufacturing', view: 'fleet', pages: [['fleet','Fleet'],['shifts','Run logs'],['records','Maintenance & records'],['radar','Course map']] },
   turfops: { label: 'Turf Ops', icon: 'eco', view: 'turfcare', pages: [] },
@@ -3218,10 +3219,11 @@ const RBAC = {
   }
 };
 const reissueGolfPassQr = httpsCallable(functions, "reissueGolfPassQr");
-golfPassModule = createGolfPassModule({ db, auth, RBAC, collection, doc, setDoc, onSnapshot, serverTimestamp, esc, today, toast, reissueGolfPassQr });
+const receptionPrinter = createReceptionPrinter();
+golfPassModule = createGolfPassModule({ db, auth, RBAC, collection, doc, setDoc, onSnapshot, serverTimestamp, esc, today, toast, reissueGolfPassQr, printer: receptionPrinter });
 breakfastModule = createBreakfastModule({
   db, auth, RBAC, collection, doc, getDocs, writeBatch, runTransaction,
-  query, where, orderBy, serverTimestamp, Timestamp, esc, today, addDays, toast
+  query, where, orderBy, serverTimestamp, Timestamp, esc, today, addDays, toast, printer: receptionPrinter
 });
 window.CLOVER_RBAC = RBAC;
 buildNav();
