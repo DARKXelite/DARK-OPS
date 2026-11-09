@@ -66,7 +66,7 @@ export function createGolfPassModule({db,auth,RBAC,collection,doc,setDoc,onSnaps
   function drawQr(token){const node=qrNode();if(!node)return;node.innerHTML="";if(window.QRCode)new QRCode(node,{text:token,width:220,height:220,colorDark:"#07100B",colorLight:"#FFFFFF",correctLevel:QRCode.CorrectLevel.M});}
   function showQr(p){
     const box=document.getElementById("gpCreated");if(!box)return;
-    box.innerHTML='<div class="gp-qr-result"><div><span class="gp-tag">PASS CREATED</span><h4>'+esc(p.passRef)+'</h4><p>'+esc(p.golferName)+' · '+esc(p.category)+' · '+esc(p.playDate)+'</p></div><div id="gpQrCode" class="gp-qr-code"></div><div class="gp-actions"><button class="gp-btn" data-gp-action="download-created">Download QR</button><button class="gp-btn" data-gp-action="print-created">Print pass</button></div><small>Private one-time QR. Reissuing it invalidates the previous QR.</small></div>';
+    box.innerHTML='<div class="gp-qr-result"><div><span class="gp-tag">PASS CREATED</span><h4>'+esc(p.passRef)+'</h4><p>'+esc(p.golferName)+' · '+esc(p.category)+' · '+esc(p.playDate)+'</p></div><div id="gpQrCode" class="gp-qr-code"></div><div class="gp-actions"><button class="gp-btn" data-gp-action="download-created">Download QR</button><button class="gp-btn" data-gp-action="print-created">Print pass</button><button class="gp-btn" data-gp-action="whatsapp-created">Send WhatsApp</button></div><small>Private one-time QR. Reissuing it invalidates the previous QR.</small></div>';
     drawQr(p.qrToken);
   }
   function activityTable(list){return '<div class="gp-table-wrap"><table class="gp-table"><thead><tr><th>Pass reference</th><th>Golfer</th><th>Category</th><th>Play date</th><th>Entry status</th></tr></thead><tbody>'+(list.length?list.map(p=>'<tr><td><strong>'+esc(p.passRef)+'</strong></td><td>'+esc(p.golferName)+'</td><td>'+esc(p.category)+'</td><td>'+esc(p.playDate)+'</td><td>'+statusPill(p.status)+'</td></tr>').join(""):'<tr><td colspan="5" class="gp-empty">No pass records found.</td></tr>')+'</tbody></table></div>';}
@@ -76,7 +76,7 @@ export function createGolfPassModule({db,auth,RBAC,collection,doc,setDoc,onSnaps
     const list=filtered();
     panel.innerHTML='<section class="gp-card"><div class="gp-section-head"><div><h3>Pass ledger</h3><p>Search, filter, review and export current or historical entries</p></div><button class="gp-btn gp-primary" data-gp-action="export">↓ Download CSV</button></div><div class="gp-filters"><label class="gp-field gp-search"><span>Search records</span><input id="gpSearch" value="'+esc(filters.search)+'" placeholder="Pass ref, golfer, mobile or notes"></label><label class="gp-field"><span>From date</span><input id="gpFrom" type="date" value="'+esc(filters.from)+'"></label><label class="gp-field"><span>To date</span><input id="gpTo" type="date" value="'+esc(filters.to)+'"></label><label class="gp-field"><span>Category</span><select id="gpCategoryFilter">'+[['all','All categories'],...categories.map(x=>[x,x])].map(x=>'<option value="'+esc(x[0])+'" '+(filters.category===x[0]?'selected':'')+'>'+esc(x[1])+'</option>').join("")+'</select></label><label class="gp-field"><span>Status</span><select id="gpStatusFilter">'+[['all','All statuses'],['active','Awaiting entry'],['checked_in','Checked in']].map(x=>'<option value="'+x[0]+'" '+(filters.status===x[0]?'selected':'')+'>'+x[1]+'</option>').join("")+'</select></label><div class="gp-view-toggle"><button class="'+(ledgerView==="table"?"active":"")+'" data-gp-view="table">Table</button><button class="'+(ledgerView==="cards"?"active":"")+'" data-gp-view="cards">Cards</button></div></div><div class="gp-ledger-summary"><b>'+list.length+'</b> records shown <span>·</span> '+rows.length+' total records</div><div id="gpLedgerRows">'+(ledgerView==="table"?ledgerTable(list):ledgerCards(list))+'</div></section>';
   }
-  function ledgerActions(p){return '<div class="gp-row-actions"><button class="gp-link" data-gp-action="view-qr" data-pass="'+esc(p.passRef)+'" '+(p.status!=="active"?'disabled':'')+'>View QR</button><button class="gp-link" data-gp-action="download-qr" data-pass="'+esc(p.passRef)+'" '+(p.status!=="active"?'disabled':'')+'>Download</button><button class="gp-link" data-gp-action="print" data-pass="'+esc(p.passRef)+'">Print</button></div>';}
+  function ledgerActions(p){return '<div class="gp-row-actions"><button class="gp-link" data-gp-action="view-qr" data-pass="'+esc(p.passRef)+'" '+(p.status!=="active"?'disabled':'')+'>View QR</button><button class="gp-link" data-gp-action="download-qr" data-pass="'+esc(p.passRef)+'" '+(p.status!=="active"?'disabled':'')+'>Download</button><button class="gp-link" data-gp-action="print" data-pass="'+esc(p.passRef)+'">Print</button><button class="gp-link" data-gp-action="whatsapp" data-pass="'+esc(p.passRef)+'">WhatsApp</button></div>';}
   function ledgerTable(list){return '<div class="gp-table-wrap"><table class="gp-table"><thead><tr><th>Pass</th><th>Golfer / Mobile</th><th>Category</th><th>Play date</th><th>Created</th><th>Status</th><th>Actions</th></tr></thead><tbody>'+(list.length?list.map(p=>'<tr><td><strong>'+esc(p.passRef)+'</strong></td><td>'+esc(p.golferName)+'<small>'+esc(p.phone)+'</small></td><td>'+esc(p.category)+'</td><td>'+esc(p.playDate)+'</td><td>'+esc(p.createdAt?.toDate?.().toLocaleString?.()||"—")+'</td><td>'+statusPill(p.status)+'</td><td>'+ledgerActions(p)+'</td></tr>').join(""):'<tr><td colspan="7" class="gp-empty">No records match these filters.</td></tr>')+'</tbody></table></div>';}
   function ledgerCards(list){return '<div class="gp-record-cards">'+(list.length?list.map(p=>'<article class="gp-record"><div class="gp-record-head"><b>'+esc(p.passRef)+'</b>'+statusPill(p.status)+'</div><h4>'+esc(p.golferName)+'</h4><p>'+esc(p.phone)+' · '+esc(p.category)+'</p><small>Play date: '+esc(p.playDate)+'</small>'+ledgerActions(p)+'</article>').join(""):'<div class="gp-empty">No records match these filters.</div>')+'</div>';}
   function csv(){
@@ -105,6 +105,11 @@ export function createGolfPassModule({db,auth,RBAC,collection,doc,setDoc,onSnaps
       if(mode==="view"){const panel=document.getElementById("gpPanel");let modal=document.getElementById("gpQrModal");if(!modal){modal=document.createElement("div");modal.id="gpQrModal";modal.className="gp-qr-modal";root().appendChild(modal);}modal.innerHTML='<div class="gp-qr-dialog"><button class="gp-modal-close" data-gp-action="close-qr">×</button><span class="gp-tag">ACTIVE ENTRY PASS</span><h3>'+esc(p.passRef)+'</h3><p>'+esc(p.golferName)+' · '+esc(p.playDate)+'</p><img src="'+src+'" alt="Golf pass QR"><div class="gp-actions"><button class="gp-btn" data-gp-action="download-qr" data-pass="'+esc(p.passRef)+'">Download PNG</button><button class="gp-btn gp-primary" data-gp-action="print" data-pass="'+esc(p.passRef)+'">Print pass</button></div><small>Reissuing invalidates the previously issued QR token.</small></div>';modal.hidden=false;}
       if(mode==="download"){const a=document.createElement("a");a.href=src;a.download=p.passRef+".png";a.click();}
       if(mode==="print")await printEntry(p,src);
+      if(mode==="whatsapp") {
+        const message="Hello "+p.golferName+",\\n\\nYour Clover Greens golf pass "+p.passRef+" is ready.\\nCategory: "+p.category+"\\nPlay date: "+p.playDate+"\\n\\nPlease present the attached QR at golf entry.";
+        const result=await printer.shareQrOnWhatsApp(src,p.passRef+".png",p.phone,message);
+        toast(result==="shared"?"QR image shared. Choose WhatsApp and send it.":"QR downloaded. Attach it in the WhatsApp chat that opened.","ok");
+      }
     }catch(e){toast(e.message||"Could not prepare QR.","err");}
   }
   async function printEntry(p,src){
@@ -123,11 +128,11 @@ export function createGolfPassModule({db,auth,RBAC,collection,doc,setDoc,onSnaps
     if(action==="close-qr"){document.getElementById("gpQrModal")?.remove();return;}
     if(action==="export"){csv();return;}
     if(action==="download-created"&&lastPass){qrAction(lastPass,"download");return;}
-    if(action==="print-created"&&lastPass){qrAction(lastPass,"print");return;}
+    if(action==="print-created"&&lastPass){qrAction(lastPass,"print");return;}\n    if(action==="whatsapp-created"&&lastPass){qrAction(lastPass,"whatsapp");return;}
     const p=passByRef(t.dataset.pass);if(!p)return;
     if(action==="view-qr")qrAction(p,"view");
     if(action==="download-qr")qrAction(p,"download");
-    if(action==="print")qrAction(p,"print");
+    if(action==="print")qrAction(p,"print");\n    if(action==="whatsapp")qrAction(p,"whatsapp");
   }
   function submit(e){if(e.target?.id==="gpRegistration")create(e).catch(err=>toast("Could not create pass: "+err.message,"err"));}
   function change(e){
