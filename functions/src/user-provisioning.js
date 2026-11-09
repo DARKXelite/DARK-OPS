@@ -15,6 +15,7 @@ function normalizeMobile(value) {
 function validatePlatformProfile(profile, expectedPlatform) {
   if (!profile || profile.platform !== expectedPlatform) throw new Error("Staff profile platform does not match this provisioning flow.");
   if (profile.status !== "pending") throw new Error("Only pending staff profiles can be provisioned.");
+  if (profile.authUid) throw new Error("Staff profile already has a linked authentication identity.");
   if (profile.authUid) throw new Error("This staff profile already has a linked authentication identity.");
   if (!/^\\+[1-9]\\d{7,14}$/.test(String(profile.mobileNumber || ""))) throw new Error("Staff mobile number is not normalized.");
   const roleSet = expectedPlatform === "android" ? ANDROID_ROLES : WEB_ROLES;
