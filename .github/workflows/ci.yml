@@ -40,7 +40,7 @@ jobs:
       - name: Run unit and security regression tests
         if: ${{ !cancelled() && steps.install.outcome == 'success' }}
         run: npm test
-      - name: Run Firestore Rules and Functions emulator suites
+      - name: Run Firestore Rules emulator suite
         if: ${{ !cancelled() && steps.install.outcome == 'success' }}
         run: npx --yes firebase-tools@15.34.1 emulators:exec --only firestore --project demo-clover-greens-ops "npm run test:rules"
       - name: Build production assets
