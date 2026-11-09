@@ -26,6 +26,43 @@ service cloud.firestore {
           && get(profilePath).data.status == 'active'
           && get(profilePath).data.authUid == request.auth.uid);
     }
+    // A verified Phone Auth user may claim only the single active staff profile
+    // whose normalized mobile number equals Firebase's verified phone_number claim.
+    function validStaffClaim(uid) {
+      let d = request.resource.data;
+      let profilePath = /databases/$(database)/documents/users/$(d.staffProfileId);
+      let p = getAfter(profilePath).data;
+      return signedIn()
+        && request.auth.uid == uid
+        && request.auth.token.phone_number is string
+        && existsAfter(profilePath)
+        && p.authUid == uid
+        && p.mobileNumber == request.auth.token.phone_number
+        && p.status == 'active'
+        && p.platform in ['web', 'android']
+        && d.platform == p.platform
+        && d.platformRole == p.platformRole
+        && d.moduleAccess == p.moduleAccess
+        && d.active == true
+        && d.role == (p.platformRole == 'storekeeper' ? 'storekeeper' : 'operator')
+        && d.updatedBy == uid;
+    }
+    // Admin edits to an already-linked profile and its role must agree atomically.
+    function validStaffRoleSync(uid) {
+      let d = request.resource.data;
+      let profilePath = /databases/$(database)/documents/users/$(d.staffProfileId);
+      let p = getAfter(profilePath).data;
+      return existsAfter(profilePath)
+        && p.authUid == uid
+        && p.platform in ['web', 'android']
+        && p.platformRole is string
+        && p.moduleAccess is list
+        && d.platform == p.platform
+        && d.platformRole == p.platformRole
+        && d.moduleAccess == p.moduleAccess
+        && d.active == (p.status == 'active')
+        && d.role == (p.platformRole == 'storekeeper' ? 'storekeeper' : 'operator');
+    }
     function hasRole(allowed) {
       return signedIn()
         && exists(rolePath())
@@ -247,38 +284,59 @@ service cloud.firestore {
         );
     }
 
-    // Activation codes are server-only. Clients never read or write invite hashes.
-    match /android_invites/{staffProfileId} {
-      allow read, write: if false;
-    }
-
     match /app_roles/{uid} {
       allow get: if signedIn() && (request.auth.uid == uid || admin());
       allow list: if admin();
-      // Safe one-time owner bootstrap: exact allowlisted UID, own document only,
-      // and admin role only. It cannot overwrite an existing role.
+      // First OTP sign-in can create only the caller's own role, atomically claiming
+      // the active staff profile whose mobile matches Firebase's verified phone.
       allow create: if (
-          admin()
+          (admin()
+            && request.resource.data.keys().hasOnly(['role', 'active', 'updatedAt', 'updatedBy', 'displayName'])
+            && request.resource.data.role in ['admin', 'manager', 'storekeeper', 'operator']
+            && request.resource.data.active is bool)
           || (signedIn()
             && request.auth.uid == uid
             && request.auth.uid == 'C1l8ArB3GlSaAQr6iw4O9RKGGik1'
             && request.resource.data.keys().hasOnly(['role', 'active', 'updatedAt', 'updatedBy', 'displayName'])
             && request.resource.data.role == 'admin'
             && request.resource.data.active == true)
-        )
-        && request.resource.data.keys().hasOnly(['role', 'active', 'updatedAt', 'updatedBy', 'displayName'])
-        && request.resource.data.role in ['admin', 'manager', 'storekeeper', 'operator']
-        && request.resource.data.active is bool;
+          || (request.resource.data.keys().hasOnly([
+            'role', 'active', 'updatedAt', 'updatedBy', 'displayName',
+            'platform', 'staffProfileId', 'platformRole', 'moduleAccess'
+          ]) && validStaffClaim(uid))
+        );
       allow update: if admin()
-        && request.resource.data.keys().hasOnly(['role', 'active', 'updatedAt', 'updatedBy', 'displayName'])
-        && request.resource.data.role in ['admin', 'manager', 'storekeeper', 'operator']
+        && (
+          (request.resource.data.keys().hasOnly(['role', 'active', 'updatedAt', 'updatedBy', 'displayName'])
+            && request.resource.data.role in ['admin', 'manager', 'storekeeper', 'operator'])
+          || (request.resource.data.keys().hasOnly([
+            'role', 'active', 'updatedAt', 'updatedBy', 'displayName',
+            'platform', 'staffProfileId', 'platformRole', 'moduleAccess'
+          ]) && validStaffRoleSync(uid))
+        )
         && request.resource.data.active is bool;
       allow delete: if admin();
     }
     match /users/{id} {
-      allow get: if manager() || (signedIn() && resource.data.authUid == request.auth.uid && platformIdentityValid());
-      allow list: if manager();
-      allow create, update, delete: if manager();
+      allow get: if manager()
+        || (signedIn() && resource.data.authUid == request.auth.uid && platformIdentityValid())
+        || (signedIn() && request.auth.token.phone_number is string
+          && resource.data.mobileNumber == request.auth.token.phone_number);
+      // A staff member may query only their exact verified mobile number.
+      allow list: if manager()
+        || (signedIn() && request.auth.token.phone_number is string
+          && resource.data.mobileNumber == request.auth.token.phone_number);
+      allow create, delete: if manager();
+      allow update: if manager()
+        || (signedIn()
+          && resource.data.mobileNumber == request.auth.token.phone_number
+          && resource.data.status == 'active'
+          && (!resource.data.keys().hasAny(['authUid']) || resource.data.authUid == null || resource.data.authUid == request.auth.uid)
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['authUid', 'updatedAt', 'updatedBy'])
+          && request.resource.data.authUid == request.auth.uid
+          && request.resource.data.mobileNumber == resource.data.mobileNumber
+          && request.resource.data.platform == resource.data.platform
+          && request.resource.data.status == resource.data.status);
     }
     // Assets are separate records; Fleet-linked machines keep their canonical /machines document.
     match /asset_departments/{id} {

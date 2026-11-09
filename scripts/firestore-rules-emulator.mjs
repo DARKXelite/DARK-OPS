@@ -11,10 +11,14 @@ import {
   deleteDoc,
   doc,
   getDoc,
+  getDocs,
+  query,
+  where,
   runTransaction,
   serverTimestamp,
   setDoc,
-  updateDoc
+  updateDoc,
+  writeBatch
 } from "firebase/firestore";
 
 const PROJECT_ID = "demo-clover-greens-ops";
@@ -203,23 +207,63 @@ test("Android role modules gate Breakfast, Golf and Workshop collections indepen
   await assertFails(getDoc(doc(workshopDb, "machines", "machine-1")));
 });
 
-test("platform activation secrets and client-side platform role provisioning are denied", async () => {
+test("verified phone OTP can claim only its own active staff profile", async () => {
   await seed(
-    ["app_roles/admin-user", role("admin")],
-    ["android_invites/staff-1", { codeHash: "private-hash" }]
+    ["users/otp-staff", {
+      fullName: "OTP Operator", username: "OTP Operator", mobileNumber: "+919876543210",
+      role: "operator", platform: "android", platformRole: "operator",
+      moduleAccess: ["inventory"], status: "active", authUid: null
+    }],
+    ["inventory/item-1", { partName: "Sand", stockQuantity: 5 }]
   );
-  const adminDb = testEnv.authenticatedContext("admin-user").firestore();
-  await assertFails(getDoc(doc(adminDb, "android_invites", "staff-1")));
-  await assertFails(setDoc(doc(adminDb, "app_roles", "platform-user"), {
-    role: "operator",
-    active: true,
-    platform: "android",
-    staffProfileId: "staff-1",
-    platformRole: "operator",
-    moduleAccess: ["inventory"],
-    updatedAt: serverTimestamp(),
-    updatedBy: "admin-user"
-  }));
+  const uid = "phone-otp-uid";
+  const db = testEnv.authenticatedContext(uid, { phone_number: "+919876543210" }).firestore();
+  const ownProfiles = await getDocs(query(collection(db, "users"), where("mobileNumber", "==", "+919876543210")));
+  assert.equal(ownProfiles.size, 1);
+  await assertFails(getDocs(collection(db, "users")));
+  const batch = writeBatch(db);
+  batch.update(doc(db, "users", "otp-staff"), {
+    authUid: uid, updatedAt: serverTimestamp(), updatedBy: uid
+  });
+  batch.set(doc(db, "app_roles", uid), {
+    role: "operator", active: true, displayName: "OTP Operator",
+    platform: "android", staffProfileId: "otp-staff", platformRole: "operator",
+    moduleAccess: ["inventory"], updatedAt: serverTimestamp(), updatedBy: uid
+  });
+  await assertSucceeds(batch.commit());
+  await assertSucceeds(getDoc(doc(db, "inventory", "item-1")));
+});
+
+test("phone OTP cannot claim another number's profile or invent a role", async () => {
+  await seed(["users/otp-staff", {
+    fullName: "OTP Operator", username: "OTP Operator", mobileNumber: "+919876543210",
+    role: "operator", platform: "android", platformRole: "operator",
+    moduleAccess: ["inventory"], status: "active", authUid: null
+  }]);
+  const uid = "attacker-uid";
+  const db = testEnv.authenticatedContext(uid, { phone_number: "+919999999999" }).firestore();
+  const batch = writeBatch(db);
+  batch.update(doc(db, "users", "otp-staff"), { authUid: uid, updatedAt: serverTimestamp(), updatedBy: uid });
+  batch.set(doc(db, "app_roles", uid), {
+    role: "admin", active: true, displayName: "Attacker",
+    platform: "android", staffProfileId: "otp-staff", platformRole: "operator",
+    moduleAccess: ["inventory"], updatedAt: serverTimestamp(), updatedBy: uid
+  });
+  await assertFails(batch.commit());
+
+  // Even with the correct verified phone, the caller cannot turn their own
+  // profile into an administrator or alter the admin-assigned module grants.
+  const validPhoneDb = testEnv.authenticatedContext("role-tamper-uid", { phone_number: "+919876543210" }).firestore();
+  const tamper = writeBatch(validPhoneDb);
+  tamper.update(doc(validPhoneDb, "users", "otp-staff"), {
+    authUid: "role-tamper-uid", updatedAt: serverTimestamp(), updatedBy: "role-tamper-uid"
+  });
+  tamper.set(doc(validPhoneDb, "app_roles", "role-tamper-uid"), {
+    role: "admin", active: true, displayName: "Tampered",
+    platform: "android", staffProfileId: "otp-staff", platformRole: "operator",
+    moduleAccess: ["inventory"], updatedAt: serverTimestamp(), updatedBy: "role-tamper-uid"
+  });
+  await assertFails(tamper.commit());
 });
 
 test("platform identity is denied when profile is suspended or grants do not match", async () => {
