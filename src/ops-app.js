@@ -2022,8 +2022,9 @@ function renderUsersMaster() {
 }
 function userEditorOptions(platform, selectedRole, selectedModules) {
   const roles=rolesForPlatform(platform), modules=modulesForPlatform(platform);
+  const roleIsValid=roles.some(item=>item.id===selectedRole);
   return {
-    roleOptions: roles.map(item=>`<option value="${esc(item.id)}" ${selectedRole===item.id?'selected':''}>${esc(item.label)}</option>`).join(''),
+    roleOptions: `<option value="" disabled ${roleIsValid?'':'selected'}>Select a role</option>`+roles.map(item=>`<option value="${esc(item.id)}" ${selectedRole===item.id?'selected':''}>${esc(item.label)}</option>`).join(''),
     moduleOptions: modules.map(item=>`<label class="access-module-option"><input type="checkbox" name="userModuleAccess" value="${esc(item.id)}" ${selectedModules.includes(item.id)?'checked':''}><span><b>${esc(item.label)}</b><small>${esc(item.id)}</small></span></label>`).join('')
   };
 }
@@ -2059,8 +2060,11 @@ function openUserManagementForm(userId=null) {
       if(status==='active'&&!canRetainActive){toast('A profile cannot be activated until its platform identity is provisioned.','err');return false;}
       if(existing&&existing.platform&&existing.platform!==selectedPlatform&&existing.authUid){toast('Platform cannot be changed after an authentication identity is linked. Use a reviewed identity migration.','err');return false;}
       const payload=buildUserProfile({fullName:name,mobileNumber:mobile,platform:selectedPlatform,platformRole:selectedRole,moduleAccess,status});
+      payload.authUid=existing?.authUid||null;
       payload.updatedAt=serverTimestamp();payload.updatedBy=RBAC.session.uid;
       if(existing){
+        delete payload.createdAt;
+        delete payload.createdBy;
         await updateDoc(doc(db,CONFIG.COL.users,existing.id),payload);
         toast('Staff profile and module access updated.');
       }else{
