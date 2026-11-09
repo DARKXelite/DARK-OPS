@@ -151,36 +151,56 @@ export function createBreakfastModule(deps) {
     const qrImage = qrHost.querySelector("img");
     const qrData = qrCanvas?.toDataURL("image/png") || qrImage?.src;
     if (!qrData) throw new Error("Could not render the pass QR code.");
-    const dates = (pass.breakfastDates || []).join(", ");
+    const dates = (pass.breakfastDates || []).map(d => receiptEscape(d)).join(", ");
     const html = `<!doctype html><html><head><meta charset="utf-8"><title>Breakfast Pass ${receiptEscape(pass.roomNumber)}</title>
       <style>
-        @page { size: 80mm auto; margin: 3mm; }
+        @page { size: 80mm auto; margin: 2.5mm; }
         * { box-sizing: border-box; }
-        html, body { width: 74mm; margin: 0; padding: 0; color: #000; background: #fff; font-family: Arial, sans-serif; }
-        body { font-size: 10pt; line-height: 1.3; }
-        .receipt { width: 74mm; padding: 0; text-align: center; }
-        .brand { font-size: 16pt; font-weight: 900; letter-spacing: .5px; }
-        .subtitle { margin-top: 1mm; font-size: 10pt; font-weight: 800; letter-spacing: 1px; }
-        .rule { border-top: 1px dashed #000; margin: 3mm 0; }
-        .qr { display: block; width: 43mm; height: 43mm; margin: 2mm auto; image-rendering: pixelated; }
-        .room { font-size: 19pt; font-weight: 900; margin: 1mm 0; }
-        .details { text-align: left; font-size: 10pt; }
-        .details div { margin: 1.2mm 0; overflow-wrap: anywhere; }
-        .instruction { font-size: 8pt; font-weight: 800; margin-top: 2mm; }
-        .foot { font-size: 7.5pt; margin-top: 2mm; }
+        html, body { width: 75mm; margin: 0; padding: 0; color: #111; background: #fff; font-family: Arial, sans-serif; }
+        body { font-size: 8.5pt; line-height: 1.22; }
+        .receipt { width: 75mm; padding: 0; text-align: center; }
+        .brand-head { padding: 0 0 1.5mm; border-bottom: 1px solid #183d2b; }
+        .brand-mark { display:block; width:19mm; height:19mm; margin:0 auto 1mm; }
+        .brand-name { font-size:13pt; font-weight:900; letter-spacing:1.1px; color:#183d2b; }
+        .brand-sub { font-size:6.5pt; font-weight:700; letter-spacing:1.5px; margin-top:.5mm; }
+        .pass-title { font-size:10pt; font-weight:900; letter-spacing:1px; margin:2mm 0; }
+        .qr { display:block; width:37mm; height:37mm; margin:2mm auto; image-rendering:pixelated; }
+        .room { font-size:16pt; font-weight:900; margin:1mm 0 2mm; }
+        .details { border-top:1px solid #aaa; padding-top:1mm; text-align:left; }
+        .details div { display:flex; align-items:flex-start; gap:2mm; padding:1.1mm 0; border-bottom:1px dotted #bbb; }
+        .details span { flex:0 0 22mm; font-size:7pt; font-weight:700; letter-spacing:.3px; color:#444; }
+        .details b { flex:1; min-width:0; overflow-wrap:anywhere; text-align:right; font-size:8.5pt; }
+        .rule { border-top:1px dashed #777; margin:2mm 0; }
+        .instruction { font-size:7.5pt; font-weight:900; margin-top:1.5mm; }
+        .foot { font-size:7pt; margin-top:1.5mm; }
+        .venue { font-size:6.5pt; font-weight:800; letter-spacing:.5px; margin-top:1.5mm; }
       </style></head><body><main class="receipt">
-        <div class="brand">CLOVER GREENS</div><div class="subtitle">BREAKFAST PASS</div><div class="rule"></div>
+        <header class="brand-head">
+          <svg class="brand-mark" viewBox="0 0 200 200" role="img" aria-label="Clover Greens Golfscapes">
+            <circle cx="100" cy="100" r="94" fill="none" stroke="#183d2b" stroke-width="3"/>
+            <circle cx="100" cy="100" r="62" fill="none" stroke="#183d2b" stroke-width="2"/>
+            <defs><path id="cg-top" d="M25 100 A75 75 0 0 1 175 100"/><path id="cg-bottom" d="M25 100 A75 75 0 0 0 175 100"/></defs>
+            <text fill="#183d2b" font-size="17" font-weight="800" letter-spacing="3"><textPath href="#cg-top" startOffset="50%" text-anchor="middle">CLOVER GREENS</textPath></text>
+            <text fill="#183d2b" font-size="16" font-weight="800" letter-spacing="3"><textPath href="#cg-bottom" startOffset="50%" text-anchor="middle">GOLFSCAPES</textPath></text>
+            <g fill="#183d2b"><circle cx="100" cy="100" r="24" fill="none" stroke="#183d2b" stroke-width="2"/><ellipse cx="100" cy="86" rx="8" ry="15"/><ellipse cx="114" cy="100" rx="15" ry="8"/><ellipse cx="100" cy="114" rx="8" ry="15"/><ellipse cx="86" cy="100" rx="15" ry="8"/></g>
+          </svg>
+          <div class="brand-name">CLOVER GREENS</div><div class="brand-sub">GOLFSCAPES · RESORT &amp; GOLF</div>
+        </header>
+        <div class="pass-title">BREAKFAST GUEST PASS</div>
         <img class="qr" src="${qrData}" alt="Breakfast entitlement QR">
         <div class="room">ROOM ${receiptEscape(pass.roomNumber)}</div>
-        <div class="details">
-          <div><b>Lead guest:</b> ${receiptEscape(pass.guestName)}</div>
-          <div><b>Guests:</b> ${receiptEscape(pass.guestCount)}</div>
-          <div><b>Booking:</b> ${receiptEscape(pass.bookingRef)}</div>
-          <div><b>Valid dates:</b> ${receiptEscape(dates)}</div>
-          <div><b>Breakfast:</b> 7:00 AM – 10:00 AM</div>
-        </div><div class="rule"></div>
-        <div class="instruction">SCAN ONCE PER GUEST PER ELIGIBLE DAY</div>
-        <div class="foot">Present this same pass at breakfast reception.</div>
+        <section class="details">
+          <div><span>LEAD GUEST</span><b>${receiptEscape(pass.guestName)}</b></div>
+          <div><span>GUEST COUNT</span><b>${receiptEscape(pass.guestCount)}</b></div>
+          <div><span>BOOKING REF</span><b>${receiptEscape(pass.bookingRef)}</b></div>
+          <div><span>WHATSAPP</span><b>${receiptEscape(pass.guestPhone)}</b></div>
+          <div><span>VALID DATES</span><b>${dates}</b></div>
+          <div><span>SERVICE HOURS</span><b>07:00 AM – 10:00 AM</b></div>
+        </section>
+        <div class="rule"></div>
+        <div class="instruction">SCAN ONCE PER GUEST · PER ELIGIBLE DAY</div>
+        <div class="foot">Present this QR at the breakfast counter.</div>
+        <div class="venue">CLOVER GREENS RESORT &amp; GOLF</div>
       </main></body></html>`;
     await printer.printHtml(html, "Breakfast pass " + pass.roomNumber);
     toast("Breakfast pass sent to the browser printer.", "ok");
