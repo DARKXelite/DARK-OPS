@@ -47,8 +47,9 @@ The role list shown in the create/edit form must be filtered by the selected pla
 | `fleet_ops` | Fleet Ops | Yes | Yes |
 | `workshop_ops` | Workshop Ops | Yes | Yes |
 | `reports` | Reports & Analytics | Yes | No |
+| `other_modules` | Other modules (future module grants) | Yes | Yes |
 
-Only modules listed as available for the selected platform may be assigned. Role defaults may preselect sensible modules, but Admin must be able to review the final module list.
+Only modules listed as available for the selected platform may be assigned. `other_modules` is a future-module marker only; it is not a wildcard permission and must not grant access to arbitrary collections or screens. Role defaults may preselect sensible modules, but Admin must be able to review the final module list.
 
 ## Firestore data model
 
