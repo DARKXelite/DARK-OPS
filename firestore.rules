@@ -57,6 +57,7 @@ service cloud.firestore {
       return hasRole(['admin', 'manager', 'storekeeper', 'operator']) && hasModuleAccess('turf_ops');
     }
     function fnbTeam() { return hasRole(['admin', 'manager', 'storekeeper']) && hasModuleAccess('fnb_ops'); }
+    function reportsTeam() { return hasRole(['admin', 'manager', 'storekeeper', 'operator']) && hasModuleAccess('reports'); }
     function breakfastStaff() { return hasRole(['admin', 'manager', 'storekeeper', 'operator']) && hasModuleAccess('breakfast_qr'); }
     function breakfastManagers() { return hasRole(['admin', 'manager']) && hasModuleAccess('breakfast_qr'); }
     function golfStaff() { return hasRole(['admin', 'manager', 'storekeeper', 'operator']) && hasModuleAccess('golf_qr'); }
@@ -359,7 +360,7 @@ service cloud.firestore {
       allow delete: if storeTeam() && resource.data.transactionType != 'FNB_RECEIPT';
     }
     match /local_expenses/{id} {
-      allow read: if storeTeam() && hasModuleAccess('reports');
+      allow read: if reportsTeam();
       allow create, update, delete: if manager();
     }
     match /fnb_orders/{id} {
