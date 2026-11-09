@@ -142,7 +142,7 @@ export function createGolfPassModule({db,auth,RBAC,collection,doc,setDoc,onSnaps
   async function printEntry(p,src){
     const qr=src?'<img class="qr" src="'+src+'" alt="Golf pass QR">':'<div class="used">CHECKED IN · QR CONSUMED</div>';
     const body='<main class="receipt"><header class="brand-head"><svg class="brand-mark" viewBox="0 0 200 200" role="img" aria-label="Clover Greens Golfscapes"><circle cx="100" cy="100" r="94" fill="none" stroke="#183d2b" stroke-width="3"/><circle cx="100" cy="100" r="62" fill="none" stroke="#183d2b" stroke-width="2"/><defs><path id="cg-top" d="M 25,100 A 75,75 0 0,1 175,100"/><path id="cg-bottom" d="M 25,100 A 75,75 0 0,0 175,100"/></defs><text fill="#183d2b" font-size="17" font-weight="800" letter-spacing="3"><textPath href="#cg-top" startOffset="50%" text-anchor="middle">CLOVER GREENS</textPath></text><text fill="#183d2b" font-size="16" font-weight="800" letter-spacing="3"><textPath href="#cg-bottom" startOffset="50%" text-anchor="middle">GOLFSCAPES</textPath></text><g fill="#183d2b"><circle cx="100" cy="100" r="24" fill="none" stroke="#183d2b" stroke-width="2"/><ellipse cx="100" cy="86" rx="8" ry="15"/><ellipse cx="114" cy="100" rx="15" ry="8"/><ellipse cx="100" cy="114" rx="8" ry="15"/><ellipse cx="86" cy="100" rx="15" ry="8"/></g></svg><div class="brand-name">CLOVER GREENS</div><div class="brand-sub">GOLFSCAPES · RESORT &amp; GOLF</div></header><div class="pass-title">GOLF ENTRY PASS</div><div class="ref"><span>PASS REF</span><b>'+esc(p.passRef)+'</b></div>'+qr+'<section class="details"><div><span>GOLFER</span><b>'+esc(p.golferName)+'</b></div><div><span>CATEGORY</span><b>'+esc(p.category)+'</b></div><div><span>PLAY DATE</span><b>'+esc(p.playDate)+'</b></div><div><span>MOBILE</span><b>'+esc(p.phone)+'</b></div></section><div class="foot">'+(src?"Present this QR at the golf entry checkpoint.":"Entry recorded. This audit copy is not a valid entry QR.")+'</div><div class="venue">CLOVER GREENS RESORT &amp; GOLF</div></main>';
-    const html='<!doctype html><html><head><meta charset="utf-8"><title>'+esc(p.passRef)+'</title><style>
+    const html=`<!doctype html><html><head><meta charset="utf-8"><title>${esc(p.passRef)}</title><style>
       @page{size:80mm auto;margin:2.5mm}
       *{box-sizing:border-box}
       html,body{width:75mm;margin:0;padding:0;background:#fff;color:#111;font-family:Arial,sans-serif}
@@ -163,7 +163,7 @@ export function createGolfPassModule({db,auth,RBAC,collection,doc,setDoc,onSnaps
       .used{padding:7mm 2mm;margin:3mm 0;background:#eee;font-weight:900}
       .foot{border-top:1px dashed #777;margin-top:2mm;padding-top:2mm;font-size:7pt}
       .venue{font-size:6.5pt;font-weight:800;letter-spacing:.5px;margin-top:1.5mm}
-    </style></head><body>'+body+'</body></html>';
+    </style></head><body>${body}</body></html>`;
     await printer.printHtml(html,"Golf pass "+p.passRef);
   }
   function passByRef(ref){return rows.find(p=>p.passRef===ref);}
