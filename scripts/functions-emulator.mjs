@@ -12,7 +12,8 @@ import {
   connectFirestoreEmulator,
   doc,
   getDoc,
-  getFirestore
+  getFirestore,
+  setDoc
 } from "firebase/firestore";
 import {
   connectFunctionsEmulator,
@@ -43,19 +44,16 @@ try {
   const adminCredential = await createUserWithEmailAndPassword(auth, "admin@clover-test.invalid", "Admin-test-password-123!");
   const adminUid = adminCredential.user.uid;
   const staffProfileId = "android-staff-integration-test";
-  const seedDb = env.authenticatedContext("seed").firestore();
-
   await env.withSecurityRulesDisabled(async context => {
     const seed = context.firestore();
-    await seedDb.terminate?.();
-    await (await import("firebase/firestore")).setDoc(doc(seed, "app_roles", adminUid), {
+    await setDoc(doc(seed, "app_roles", adminUid), {
       role: "admin",
       active: true,
       displayName: "Integration Admin",
       updatedAt: new Date(),
       updatedBy: adminUid
     });
-    await (await import("firebase/firestore")).setDoc(doc(seed, "users", staffProfileId), {
+    await setDoc(doc(seed, "users", staffProfileId), {
       fullName: "Integration Operator",
       username: "Integration Operator",
       mobileNumber: "+919876543210",
