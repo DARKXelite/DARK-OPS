@@ -169,7 +169,7 @@ The Android Auth identity deliberately has no phone number attached. The staff m
 1. The staff member completes the existing Web phone OTP flow once. If no role exists yet, the Web app signs out; the Firebase Auth identity remains created.
 2. An administrator copies that user's UID from Firebase Authentication and uses **Link OTP UID** on the pending Web profile.
 3. `linkWebStaffIdentity` verifies that the Auth user's verified phone number matches the profile mobile number and refuses to overwrite an existing `app_roles` identity.
-4. The backend links the profile and creates the Web `app_roles` record.
+4. The backend links the profile and creates the Web `app_roles` record. Existing legacy `operator`, `storekeeper` and `manager` role records may be upgraded after phone verification; manager is downgraded to the least-privileged platform role mapping. Existing admin identities are never overwritten.
 
 ### Updating and suspending linked staff
 
