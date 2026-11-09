@@ -46,6 +46,7 @@ service cloud.firestore {
     function admin() { return hasRole(['admin']); }
     function manager() { return hasRole(['admin', 'manager']); }
     function storeTeam() { return hasRole(['admin', 'manager', 'storekeeper']) && hasModuleAccess('inventory'); }
+    function fuelTeam() { return hasRole(['admin', 'manager', 'storekeeper']) && hasModuleAccess('fuel_fertilizer_dashboard'); }
     function opsTeam() { return hasRole(['admin', 'manager', 'operator']) && hasModuleAccess('fleet_ops'); }
     function workshopTeam() {
       return manager() || (hasRole(['operator', 'storekeeper'])
@@ -295,7 +296,7 @@ service cloud.firestore {
       allow write: if manager();
     }
     match /fuel_logs/{id} {
-      allow read, create, update: if storeTeam() && hasModuleAccess('fuel_fertilizer_dashboard');
+      allow read, create, update: if fuelTeam();
       allow delete: if manager();
     }
     match /shifts/{id} {
