@@ -6,18 +6,17 @@ const ANDROID_MODULES = new Set(["inventory", "breakfast_qr", "golf_qr", "turf_o
 const WEB_MODULES = new Set(["fuel_fertilizer_dashboard", "inventory", "breakfast_qr", "golf_qr", "turf_ops", "fleet_ops", "workshop_ops", "reports", "other_modules"]);
 
 function normalizeMobile(value) {
-  const raw = String(value || "").trim().replace(/[\\s()-]/g, "");
-  if (/^\\d{10}$/.test(raw)) return "+91" + raw;
-  if (/^91\\d{10}$/.test(raw)) return "+" + raw;
+  const raw = String(value || "").trim().replace(/[\s()-]/g, "");
+  if (/^\d{10}$/.test(raw)) return "+91" + raw;
+  if (/^91\d{10}$/.test(raw)) return "+" + raw;
   return raw;
 }
 
 function validatePlatformProfile(profile, expectedPlatform) {
   if (!profile || profile.platform !== expectedPlatform) throw new Error("Staff profile platform does not match this provisioning flow.");
   if (profile.status !== "pending") throw new Error("Only pending staff profiles can be provisioned.");
-  if (profile.authUid) throw new Error("Staff profile already has a linked authentication identity.");
   if (profile.authUid) throw new Error("This staff profile already has a linked authentication identity.");
-  if (!/^\\+[1-9]\\d{7,14}$/.test(String(profile.mobileNumber || ""))) throw new Error("Staff mobile number is not normalized.");
+  if (!/^\+[1-9]\d{7,14}$/.test(String(profile.mobileNumber || ""))) throw new Error("Staff mobile number is not normalized.");
   const roleSet = expectedPlatform === "android" ? ANDROID_ROLES : WEB_ROLES;
   const moduleSet = expectedPlatform === "android" ? ANDROID_MODULES : WEB_MODULES;
   if (!roleSet.has(profile.platformRole)) throw new Error("Invalid role for the selected platform.");
