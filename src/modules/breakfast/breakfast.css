@@ -142,3 +142,50 @@
 .bf-footer-note{border-top:1px solid rgba(188,199,177,.12);padding-top:12px}
 @media(max-width:900px){.bf-form{grid-template-columns:repeat(2,minmax(0,1fr))}.bf-booking-row{grid-template-columns:minmax(0,1fr) auto;}.bf-booking-row button{grid-column:1/-1;width:100%}}
 @media(max-width:600px){.bf-page{gap:12px}.bf-header-mark{min-width:0}.bf-panel{padding:14px}.bf-form{grid-template-columns:1fr}.bf-form-wide{grid-column:1}.bf-form-actions{align-items:stretch;flex-direction:column}.bf-form-actions .bf-primary{width:100%}.bf-kpi{padding:11px 9px}.bf-booking-row{grid-template-columns:minmax(0,1fr) auto;}.bf-booking-row button{grid-column:1/-1}.bf-bookings-head{align-items:flex-start}}
+
+
+/* Guest Services visual polish: compact hierarchy, consistent controls, restrained motion. */
+.bf-page{max-width:1500px;gap:14px;padding:4px 0 28px}
+.bf-header{padding:2px 0 12px;border-bottom:1px solid #2d3d30;gap:14px}
+.bf-header h2{font-size:clamp(23px,2.1vw,30px);letter-spacing:-.045em}
+.bf-header p{font-size:11px;line-height:1.5}
+.bf-header-mark{min-height:38px;padding:8px 11px;border-radius:8px}
+.bf-kpis{gap:9px}
+.bf-kpi,.bf-panel{border:1px solid #2d3d30;border-radius:11px;background:#151f18;box-shadow:0 5px 18px rgba(0,0,0,.13)}
+.bf-kpi{padding:13px 15px;gap:3px}
+.bf-kpi>span{font-size:9px;letter-spacing:.1em}
+.bf-kpi strong{font-size:25px}
+.bf-kpi small{font-size:10px}
+.bf-workspace{gap:12px}
+.bf-panel{padding:16px}
+.bf-panel-head{margin-bottom:13px;padding-bottom:11px;border-bottom:1px solid #29382d}
+.bf-panel-head h3{font-size:15px;margin:2px 0 3px}
+.bf-panel-head p{font-size:10px;line-height:1.45}
+.bf-form{gap:11px}
+.bf-form label,.bf-manual-scan label{gap:5px;font-size:10px;letter-spacing:.035em}
+.bf-form input,.bf-manual-scan input{height:40px;border-radius:7px;background:#0e1711;border-color:#3b4b3c;font-size:13px}
+.bf-form input:focus,.bf-manual-scan input:focus{outline:0;border-color:#A8BD78;box-shadow:0 0 0 3px rgba(168,189,120,.13)}
+.bf-check{padding:9px 10px;border-radius:8px}
+.bf-date-preview{padding:9px 11px;border-radius:8px}
+.bf-primary,.bf-secondary{min-height:38px;border-radius:8px;padding:0 12px;font-size:11px;transition:background .18s ease,border-color .18s ease,transform .18s ease,box-shadow .18s ease}
+.bf-primary{background:#465A30;border-color:#829653}
+.bf-primary:hover,.bf-secondary:hover{transform:translateY(-1px);box-shadow:0 5px 13px rgba(0,0,0,.18)}
+.bf-secondary{background:#202B1B;border-color:#465338}
+.bf-scanner-frame{min-height:230px;border-radius:10px}
+.bf-scan-actions{margin:9px 0 12px}
+.bf-scan-result{margin-top:10px;padding:11px 12px;border-radius:9px}
+.bf-booking-row{padding:10px 8px;gap:11px}
+.bf-booking-main{gap:2px}
+.bf-booking-main b{font-size:12px}
+.bf-booking-main span,.bf-booking-main small{font-size:10px}
+.bf-booking-row button{min-height:32px;border-radius:7px}
+.bf-coupon-grid{gap:10px}
+.bf-coupon-card{padding:11px;border-radius:9px;background:#17231a;border-color:#344638;transition:transform .18s ease,border-color .18s ease,box-shadow .18s ease}
+.bf-coupon-card:hover{transform:translateY(-2px);border-color:#71834A;box-shadow:0 8px 20px rgba(0,0,0,.18)}
+.bf-qr-wrap{width:136px;height:136px;border-radius:8px}
+.bf-footer-note{padding-top:10px;font-size:10px}
+.bf-page button:focus-visible,.bf-page input:focus-visible,.bf-page select:focus-visible{outline:2px solid #D7DF91;outline-offset:2px}
+.bf-page button:active{transform:translateY(0) scale(.985)}
+@media(max-width:900px){.bf-workspace{grid-template-columns:1fr}.bf-panel{padding:14px}}
+@media(max-width:600px){.bf-page{gap:10px}.bf-header{align-items:flex-start}.bf-header-mark{min-width:0;font-size:8px}.bf-kpis{gap:6px}.bf-kpi{padding:10px 8px}.bf-kpi strong{font-size:21px}.bf-panel{padding:12px}.bf-panel-head{margin-bottom:10px}.bf-form{grid-template-columns:1fr}.bf-form-wide{grid-column:1}.bf-form-actions{gap:9px}.bf-form-actions .bf-primary{min-width:0}.bf-coupon-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.bf-qr-wrap{width:112px;height:112px}.bf-booking-row{padding:10px 0}}
+@media(prefers-reduced-motion:reduce){.bf-page *{scroll-behavior:auto!important;transition:none!important;animation:none!important}}
