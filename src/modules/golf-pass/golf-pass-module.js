@@ -106,7 +106,7 @@ export function createGolfPassModule({db,auth,RBAC,collection,doc,setDoc,onSnaps
       if(mode==="download"){const a=document.createElement("a");a.href=src;a.download=p.passRef+".png";a.click();}
       if(mode==="print")await printEntry(p,src);
       if(mode==="whatsapp") {
-        const message="Hello "+p.golferName+",\n\nYour Clover Greens golf pass "+p.passRef+" is ready.\nCategory: "+p.category+"\\nPlay date: "+p.playDate+"\\n\\nPlease present the attached QR at golf entry.";
+        const message="Hello "+p.golferName+",\n\nYour Clover Greens golf pass "+p.passRef+" is ready.\nCategory: "+p.category+"\nPlay date: "+p.playDate+"\n\nPlease present the attached QR at golf entry.";
         const result=await printer.shareQrOnWhatsApp(src,p.passRef+".png",p.phone,message);
         toast(result==="shared"?"QR image shared. Choose WhatsApp and send it.":"QR downloaded. Attach it in the WhatsApp chat that opened.","ok");
       }
