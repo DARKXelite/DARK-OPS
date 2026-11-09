@@ -333,21 +333,30 @@ exports.reissueGolfPassQr = onCall({ region: REGION, maxInstances: 5 }, async re
   const qrToken = crypto.randomBytes(32).toString("hex");
   const tokenHash = crypto.createHash("sha256").update(qrToken).digest("hex");
   const newRef = db.collection("golf_passes").doc(tokenHash);
-  await db.runTransaction(async tx => {
-    const current = await tx.get(oldRef);
-    if (!current.exists) throw new HttpsError("not-found", "The golf pass no longer exists.");
-    const data = current.data();
-    if (data.passRef !== passRef || data.status !== "active") {
-      throw new HttpsError("failed-precondition", "Only an active, unused pass can receive a replacement QR.");
-    }
-    tx.create(newRef, {
-      ...data,
-      tokenHash,
-      qrIssuedAt: FieldValue.serverTimestamp(),
-      qrIssuedBy: request.auth.uid
+  try {
+    await db.runTransaction(async tx => {
+      // Read every document before writing. This also guards the vanishingly
+      // unlikely token-hash collision without risking an overwrite.
+      const [current, collision] = await Promise.all([tx.get(oldRef), tx.get(newRef)]);
+      if (!current.exists) throw new HttpsError("not-found", "The golf pass was changed or removed. Refresh the ledger and try again.");
+      if (collision.exists) throw new HttpsError("already-exists", "A QR token collision occurred. Please retry.");
+      const data = current.data();
+      if (data.passRef !== passRef || data.status !== "active") {
+        throw new HttpsError("failed-precondition", "Only an active, unused pass can receive a replacement QR.");
+      }
+      tx.set(newRef, {
+        ...data,
+        tokenHash,
+        qrIssuedAt: FieldValue.serverTimestamp(),
+        qrIssuedBy: request.auth.uid
+      });
+      tx.delete(oldRef);
     });
-    tx.delete(oldRef);
-  });
+  } catch (error) {
+    if (error instanceof HttpsError) throw error;
+    logger.error("Golf Pass QR reissue failed", { passRef, uid: request.auth.uid, code: error?.code, message: error?.message, stack: error?.stack });
+    throw new HttpsError("internal", "Golf QR could not be reissued. Refresh the ledger and retry. Check the Firebase function log for the underlying error.");
+  }
   logger.info("Golf Pass QR reissued", { passRef, actor: request.auth.uid });
   return { success: true, passRef, qrToken };
 });
