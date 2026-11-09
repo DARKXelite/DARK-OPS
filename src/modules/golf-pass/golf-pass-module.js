@@ -90,14 +90,38 @@ export function createGolfPassModule({db,auth,RBAC,collection,doc,setDoc,onSnaps
     if(!token){
       if(p.status!=="active")throw new Error("This pass has already been checked in. Its one-time QR is no longer valid.");
       if(!reissueGolfPassQr)throw new Error("Secure QR reissue is unavailable.");
-      const response=await reissueGolfPassQr({passRef:p.passRef});
-      token=response.data?.qrToken;
-      if(!token)throw new Error("QR could not be issued.");
+      let response;
+      try {
+        response=await reissueGolfPassQr({passRef:p.passRef});
+      } catch(error) {
+        const code=String(error?.code||"").replace(/^functions\//,"");
+        const detail=error?.details?.message||error?.details;
+        const message=error?.message&&error.message!=="internal"&&error.message!=="internal [0]"?error.message:
+          code==="permission-denied"?"Your account is not authorized to reissue Golf Pass QR codes.":
+          code==="unauthenticated"?"Your session has expired. Sign in again and retry.":
+          code==="not-found"?"The Golf Pass QR service or pass record could not be found.":
+          "The Golf Pass QR service failed. Refresh the page and retry.";
+        throw new Error((detail&&typeof detail==="string"?detail:message)+(code?" ( "+code+" )":""));
+      }
+      token=response?.data?.qrToken;
+      if(!token)throw new Error("The QR service responded without a token. Check that the latest Firebase function is deployed.");
       qrCache.set(p.passRef,token);
     }
     return token;
   }
-  function imageData(token){const holder=document.createElement("div");holder.style.cssText="position:fixed;left:-10000px;top:0;background:#fff;padding:8px";document.body.appendChild(holder);new QRCode(holder,{text:token,width:260,height:260,colorDark:"#07100B",colorLight:"#FFFFFF",correctLevel:QRCode.CorrectLevel.M});const canvas=holder.querySelector("canvas"),img=holder.querySelector("img");const src=canvas?canvas.toDataURL("image/png"):img?.src;holder.remove();return src;}
+  function imageData(token){
+    if(!window.QRCode)throw new Error("QR generator is unavailable. Reload the page and retry.");
+    const holder=document.createElement("div");
+    holder.style.cssText="position:fixed;left:-10000px;top:0;background:#fff;padding:8px";
+    document.body.appendChild(holder);
+    try {
+      new QRCode(holder,{text:token,width:260,height:260,colorDark:"#07100B",colorLight:"#FFFFFF",correctLevel:QRCode.CorrectLevel.M});
+      const canvas=holder.querySelector("canvas"),img=holder.querySelector("img");
+      const src=canvas?canvas.toDataURL("image/png"):img?.src;
+      if(!src)throw new Error("QR image could not be generated. Reload the page and retry.");
+      return src;
+    } finally { holder.remove(); }
+  }
   async function qrAction(p,mode){
     try{
       if(p.status!=="active"){if(mode==="print"){await printEntry(p,null);return;}throw new Error("This pass is already checked in. Its one-time QR has been consumed.");}
@@ -110,7 +134,10 @@ export function createGolfPassModule({db,auth,RBAC,collection,doc,setDoc,onSnaps
         const result=await printer.shareQrOnWhatsApp(src,p.passRef+".png",p.phone,message);
         toast(result==="shared"?"QR image shared. Choose WhatsApp and send it.":"QR downloaded. Attach it in the WhatsApp chat that opened.","ok");
       }
-    }catch(e){toast(e.message||"Could not prepare QR.","err");}
+    }catch(e){
+      console.error("Golf Pass QR action failed", {mode,passRef:p?.passRef,code:e?.code,message:e?.message,details:e?.details});
+      toast(e?.message||"Could not prepare Golf Pass QR. Refresh and retry.","err");
+    }
   }
   async function printEntry(p,src){
     const qr=src?'<img class="qr" src="'+src+'">':'<div class="used">CHECKED IN · QR CONSUMED</div>';
