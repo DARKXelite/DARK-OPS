@@ -36,7 +36,8 @@ export const USER_MODULES = Object.freeze({
   turf_ops: Object.freeze({ label: "Turf Ops", platforms: ["web", "android"] }),
   fleet_ops: Object.freeze({ label: "Fleet Ops", platforms: ["web", "android"] }),
   workshop_ops: Object.freeze({ label: "Workshop Ops", platforms: ["web", "android"] }),
-  reports: Object.freeze({ label: "Reports & Analytics", platforms: ["web"] })
+  reports: Object.freeze({ label: "Reports & Analytics", platforms: ["web"] }),
+  other_modules: Object.freeze({ label: "Other modules (future module grants)", platforms: ["web", "android"] })
 });
 
 export const USER_ACCOUNT_STATUSES = Object.freeze(["pending", "active", "suspended"]);
