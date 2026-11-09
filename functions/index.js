@@ -218,6 +218,7 @@ exports.updateStaffAccess = onCall({ region: REGION, maxInstances: 5 }, async re
   const staffProfileId = String(request.data?.staffProfileId || "").trim();
   const platformRole = String(request.data?.platformRole || "");
   const moduleAccess = request.data?.moduleAccess;
+  const fullName = String(request.data?.fullName || "").trim();
   const status = String(request.data?.status || "");
   if (!staffProfileId || staffProfileId.includes("/") || !["active", "suspended"].includes(status)) {
     throw new HttpsError("invalid-argument", "A valid linked staff profile and account status are required.");
@@ -232,7 +233,8 @@ exports.updateStaffAccess = onCall({ region: REGION, maxInstances: 5 }, async re
   if (profile.platform === "android" && profile.mobileNumber !== normalizeMobile(profile.mobileNumber)) {
     throw new HttpsError("failed-precondition", "Android mobile number must remain normalized.");
   }
-  const candidate = { ...profile, platformRole, moduleAccess, status: "pending", authUid: null };
+  if (!fullName || fullName.length > 100) throw new HttpsError("invalid-argument", "Enter a valid staff name.");
+  const candidate = { ...profile, fullName, platformRole, moduleAccess, status: "pending", authUid: null };
   try { validatePlatformProfile(candidate, profile.platform); }
   catch (error) { throw new HttpsError("invalid-argument", error.message); }
   const roleRef = db.doc("app_roles/" + profile.authUid);
@@ -242,6 +244,8 @@ exports.updateStaffAccess = onCall({ region: REGION, maxInstances: 5 }, async re
   }
   const batch = db.batch();
   batch.update(profileRef, {
+    fullName,
+    username: fullName,
     platformRole,
     role: platformRole,
     moduleAccess,
@@ -251,6 +255,7 @@ exports.updateStaffAccess = onCall({ region: REGION, maxInstances: 5 }, async re
   });
   batch.update(roleRef, {
     role: authRoleForPlatformRole(platformRole),
+    displayName: fullName,
     platformRole,
     moduleAccess,
     active: status === "active",
@@ -258,7 +263,7 @@ exports.updateStaffAccess = onCall({ region: REGION, maxInstances: 5 }, async re
     updatedBy: request.auth.uid
   });
   try {
-    await auth.updateUser(profile.authUid, { displayName: profile.fullName, disabled: status !== "active" });
+    await auth.updateUser(profile.authUid, { displayName: fullName, disabled: status !== "active" });
     await batch.commit();
   } catch (error) {
     throw callableError(error);
