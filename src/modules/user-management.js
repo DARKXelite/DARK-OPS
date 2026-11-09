@@ -37,6 +37,7 @@ export const USER_MODULES = Object.freeze({
   fleet_ops: Object.freeze({ label: "Fleet Ops", platforms: ["web", "android"] }),
   workshop_ops: Object.freeze({ label: "Workshop Ops", platforms: ["web", "android"] }),
   reports: Object.freeze({ label: "Reports & Analytics", platforms: ["web"] }),
+  fnb_ops: Object.freeze({ label: "F&B Operations", platforms: ["web"] }),
   other_modules: Object.freeze({ label: "Other modules (future module grants)", platforms: ["web", "android"] })
 });
 
