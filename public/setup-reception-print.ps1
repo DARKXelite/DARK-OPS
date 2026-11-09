@@ -18,6 +18,13 @@ foreach ($browser in @(@{Name="Chrome";InstallFolder="Google\Chrome";Exe="chrome
   if (-not $exe) { Write-Host "$($browser.Name) not found. Skipping."; continue }
   $profile = Join-Path $ProfileRoot $browser.Profile
   New-Item -ItemType Directory -Force -Path $profile | Out-Null
+  $setupPath = Join-Path $Desktop ("DARK OPS Reception Setup - " + $browser.Name + ".lnk")
+  $setupShortcut = $Shell.CreateShortcut($setupPath)
+  $setupShortcut.TargetPath = $exe
+  $setupShortcut.Arguments = '--user-data-dir="' + $profile + '" "' + $AppUrl + '"'
+  $setupShortcut.WorkingDirectory = Split-Path $exe
+  $setupShortcut.Description = "One-time printer selection using the isolated $($browser.Name) profile"
+  $setupShortcut.Save()
   $shortcutPath = Join-Path $Desktop ("DARK OPS Reception - " + $browser.Name + ".lnk")
   $shortcut = $Shell.CreateShortcut($shortcutPath)
   $shortcut.TargetPath = $exe
@@ -25,9 +32,10 @@ foreach ($browser in @(@{Name="Chrome";InstallFolder="Google\Chrome";Exe="chrome
   $shortcut.WorkingDirectory = Split-Path $exe
   $shortcut.Description = "DARK OPS reception passes with isolated $($browser.Name) profile and kiosk printing"
   $shortcut.Save()
-  Write-Host "Created: $shortcutPath"
+  Write-Host "Created setup shortcut: $setupPath"
+  Write-Host "Created kiosk shortcut: $shortcutPath"
   $created++
 }
 if ($created -eq 0) { Write-Warning "No supported browser was found. Install Chrome or Edge and run this script again." }
-else { Write-Host "Created $created reception shortcut(s). Normal browser profiles and Windows default printer were not changed."; Write-Host "Test the saved print destination before live use." }
+else { Write-Host "Created $created setup + kiosk shortcut pair(s). Normal browser profiles and Windows default printer were not changed."; Write-Host "First open the Setup shortcut, print a pass and select the reception printer. Then close it and use the normal Reception shortcut for silent printing." }
 Read-Host "Press Enter to close"
