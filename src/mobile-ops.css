@@ -272,3 +272,79 @@ button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,te
   #login .login-story { background:#273522 !important; }
   #login .login-card { background:#1b2518 !important; }
 }
+
+
+/* MOBILE REFINEMENT 02 · keyboard, landscape and dense-data ergonomics */
+*,*::before,*::after { box-sizing:border-box; }
+html,body { width:100%; max-width:100%; }
+body { -webkit-text-size-adjust:100%; }
+.content :is(input,select,textarea) { max-width:100%; min-width:0; }
+.content :is(.form-row,.form-grid,.field-row,.filter-row) {
+  min-width:0;
+  max-width:100%;
+}
+.content :is(.form-row,.form-grid,.field-row,.filter-row) > * { min-width:0; }
+.content :is(input,select,textarea) {
+  width:100%;
+  border-radius:10px;
+}
+.content :is(button,a,.btn) { -webkit-tap-highlight-color:transparent; }
+.content :is(p,small,.muted,.sub,.description) {
+  overflow-wrap:anywhere;
+}
+.content :is(.card,.panel,.ops-domain-card,.ops-mini-panel) {
+  overflow-wrap:anywhere;
+}
+.content :is(.badge,.pill,.status-chip) { max-width:100%; }
+.table-wrap {
+  position:relative;
+  scrollbar-color:rgba(150,170,112,.45) transparent;
+}
+.table-wrap:focus-within { outline:1px solid rgba(150,170,112,.32); outline-offset:2px; }
+.table-wrap table { margin:0; }
+.content :is(.empty-state,.no-data,.empty) {
+  min-height:110px;
+  padding:20px 12px;
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  justify-content:center;
+  text-align:center;
+}
+#login { min-height:100svh; min-height:100dvh; }
+#login .login-layout { min-height:100svh; min-height:100dvh; }
+#login .login-panel { min-height:0; }
+#login .login-card { flex:0 1 auto; }
+#login :is(input,button) { font-size:16px; }
+#login .login-assurance,
+#login .login-access-note { line-height:1.45; }
+#login .login-assurance { display:flex; flex-wrap:wrap; align-items:center; gap:6px; }
+#login .login-access-note { margin-top:9px; }
+#login .login-error:empty { display:none; }
+#login .login-recaptcha:empty { display:none; }
+
+@media (max-height:740px) and (max-width:699px) {
+  #login .login-layout { padding:7px; }
+  #login .login-story { padding:10px 13px; }
+  #login .story-content { padding-top:7px; }
+  #login .story-content h1 { font-size:24px; }
+  #login .login-panel { padding-top:6px; }
+  #login .login-card { padding:14px; }
+  #login .login-brand { margin-bottom:11px; }
+  #login .login-description { margin-bottom:11px; }
+  #login .login-field { margin-bottom:9px; }
+  #login .login-footer { padding-top:6px; }
+}
+@media (orientation:landscape) and (max-height:520px) {
+  #login .login-layout { display:grid; grid-template-columns:minmax(0,.8fr) minmax(0,1.2fr); align-items:center; gap:8px; }
+  #login .login-story { align-self:stretch; display:flex; flex-direction:column; justify-content:center; border-radius:16px; }
+  #login .story-content h1 { font-size:25px; }
+  #login .login-panel { align-items:center; padding:0; }
+  #login .login-card { max-height:calc(100dvh - 14px); overflow-y:auto; }
+}
+@media (max-width:360px) {
+  #dockPill { left:6px; right:6px; }
+  #dockPill .nav-btn { flex-basis:40px; width:40px; min-width:40px; }
+  .top-header { gap:4px; }
+  .th-left,.th-right { gap:4px; }
+}
