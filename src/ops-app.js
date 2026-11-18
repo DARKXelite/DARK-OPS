@@ -34,7 +34,7 @@ const CONFIG = {
   WEATHER_PROXY_URL: '',
   STALE_SEC: 180,              // radar pin turns grey after this many seconds without an update
   WIND_LIMIT: 25,              // km/h, spraying advisory
-  COL: { users:'users', machines:'machines', fuel:'fuel_logs', shifts:'shifts', zones:'CourseZones', live:'live_telemetry', inventory:'inventory', logs:'logs', maintenance:'maintenance_logs', assignments:'assignment_logs', plans:'turf_plans', dailyPlans:'daily_application_plans', inwards:'store_inwards', expenses:'local_expenses', fnbOrders:'fnb_orders', fnbReceipts:'fnb_receipts' }
+  COL: { users:'users', machines:'machines', fuel:'fuel_logs', shifts:'shifts', zones:'CourseZones', live:'live_telemetry', inventory:'inventory', logs:'logs', maintenance:'maintenance_logs', assignments:'assignment_logs', plans:'turf_plans', dailyPlans:'daily_application_plans', inwards:'store_inwards', expenses:'local_expenses', fnbOrders:'fnb_orders', fnbReceipts:'fnb_receipts', savedRecipes:'saved_recipes', partyPlans:'party_plans' }
 };
 
 const app = initializeApp(firebaseConfig);
@@ -100,7 +100,7 @@ function daysBetween(a, b) { const out = []; let d = a, n = 0; while (d <= b && 
 function setHTML(el, html) { if (el && el._h !== html) { el.innerHTML = html; el._h = html; } }
 
 /* ================= STATE ================= */
-const S = { users: [], machines: [], fuel: [], shifts: [], zones: [], live: [], inventory: [], logs: [], maintenance: [], assignments: [], plans: [], dailyPlans: [], inwards: [], expenses: [], fnbOrders: [], fnbReceipts: [], _v: 0 };
+const S = { users: [], machines: [], fuel: [], shifts: [], zones: [], live: [], inventory: [], logs: [], maintenance: [], assignments: [], plans: [], dailyPlans: [], inwards: [], expenses: [], fnbOrders: [], fnbReceipts: [], savedRecipes: [], partyPlans: [], _v: 0 };
 const COST_DEFAULTS = { dieselRate: 92.50, petrolRate: 0, labourPerHour: 0, downtimePerHour: 0, savingsPct: 10, improvementCost: 0 };
 function loadCostModel() {
   try { const saved = JSON.parse(localStorage.getItem('cloverOpsCostModel') || '{}'); return { ...COST_DEFAULTS, ...Object.fromEntries(Object.keys(COST_DEFAULTS).map(k => [k, Number.isFinite(+saved[k]) && +saved[k] >= 0 ? +saved[k] : COST_DEFAULTS[k]])) }; }
@@ -2333,7 +2333,8 @@ function renderRecords() {
 
 const fnbModule = createFnbModule({
   db, CONFIG, collection, addDoc, doc, updateDoc, runTransaction, serverTimestamp,
-  num, esc, money, today, S, $, setHTML, toast
+  num, esc, money, today, S, $, setHTML, toast,
+  canWriteInventory: () => RBAC.can('inventory.write')
 });
 
 /* ================= NAV / RENDER LOOP ================= */
@@ -2433,7 +2434,7 @@ const VIEW_COLLECTIONS = {
   users: ['users'],
   incidents: ['logs','machines'],
   turfcare: ['inventory','plans','dailyPlans','fuel','machines','shifts','maintenance'],
-  fnb: ['fnbOrders','fnbReceipts','inventory']
+  fnb: ['fnbOrders','fnbReceipts','savedRecipes','partyPlans','inventory']
 };
 function collectionAffectsCurrentView(k) {
   return (VIEW_COLLECTIONS[cur] || []).includes(k);
@@ -2884,6 +2885,21 @@ const H = {
   'fnb-receive': d => fnbModule.receive(d.id),
   'fnb-import-orders': () => fnbModule.importOrders(),
   'fnb-clear-import': () => fnbModule.clearImport(),
+  'fnb-party-section': d => { fnbModule.partyPlanner.setSection(d.section); fnbModule.render(); },
+  'fnb-party-new': () => { fnbModule.partyPlanner.beginNew(); fnbModule.render(); },
+  'fnb-party-add-dish': () => { fnbModule.partyPlanner.addDish(); fnbModule.render(); },
+  'fnb-party-add-line': d => { fnbModule.partyPlanner.addIngredient(Number(d.index)); fnbModule.render(); },
+  'fnb-party-remove-dish': d => { fnbModule.partyPlanner.removeDish(Number(d.index)); fnbModule.render(); },
+  'fnb-party-remove-line': d => { fnbModule.partyPlanner.removeIngredient(Number(d.dish), Number(d.line)); fnbModule.render(); },
+  'fnb-party-load': d => { fnbModule.partyPlanner.loadRecipe(d.id); fnbModule.setTab('party'); fnbModule.render(); },
+  'fnb-party-edit': d => { fnbModule.partyPlanner.editPlan(d.id); fnbModule.setTab('party'); fnbModule.render(); },
+  'fnb-party-save': async () => { await fnbModule.partyPlanner.saveParty(); fnbModule.render(); },
+  'fnb-party-save-recipe': async d => { await fnbModule.partyPlanner.saveRecipe(Number(d.index), false); fnbModule.render(); },
+  'fnb-party-update-recipe': async d => { await fnbModule.partyPlanner.saveRecipe(Number(d.index), true); fnbModule.render(); },
+  'fnb-party-quick': d => { fnbModule.partyPlanner.readDraftFromDOM(); fnbModule.partyPlanner.quickAddDish = Number(d.index); fnbModule.render(); },
+  'fnb-party-add-inventory': async d => { await fnbModule.partyPlanner.quickCreateIngredient(Number(d.dish)); fnbModule.render(); },
+  'fnb-party-cancel-quick': () => { fnbModule.partyPlanner.cancelQuickAdd(); fnbModule.render(); },
+  'fnb-party-show-library': () => { fnbModule.partyPlanner.setSection('library'); fnbModule.render(); },
   'open-role-admin': () => openRoleAdmin(),
   'open-data-reset': () => openDataReset(),
   'store-records-tab': d => { storeRecordsTab = d.tab || 'items'; renderStoreRecordsEditor(); },
