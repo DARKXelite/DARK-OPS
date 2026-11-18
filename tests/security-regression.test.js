@@ -154,13 +154,15 @@ test("Breakfast Pass uses one room QR, a daily guest counter, and a direct Whats
   const module = await read("../src/modules/breakfast/breakfast-module.js");
   const rules = await read("../firestore.rules");
   const guestPage = await read("../public/breakfast-pass.html");
+  const printer = await read("../src/modules/reception-printer.js");
   assert.match(module, /couponCount:1/);
   assert.match(module, /guestCount,checkInAt,checkOutAt,breakfastDates/);
   assert.match(module, /ROOM_FULL\|/);
   assert.match(module, /redeemedCount:nextCount/);
   assert.match(module, /sendRoomWhatsApp\(p\)/);
-  assert.match(module, /wa\.me\//);
-  assert.match(module, /breakfast-pass\.html/);
+  assert.match(module, /printer\.shareQrOnWhatsApp/);
+  assert.match(printer, /wa\.me\//);
+  assert.match(guestPage, /new URLSearchParams\(location\.search\)\.get\("t"\)/);
   assert.match(rules, /request\.resource\.data\.redeemedCount == resource\.data\.redeemedCount \+ 1/);
   assert.match(rules, /request\.resource\.data\.redeemedCount <= resource\.data\.guestCount/);
   assert.match(guestPage, /new QRCode\(target/);

@@ -283,6 +283,112 @@ test("operators can only decrease stock and cannot edit machine master data", as
   await assertFails(updateDoc(doc(db, "machines", "machine-1"), { currentHours: 999 }));
 });
 
+test("F&B staff can read inventory and create only zero-stock F&B ingredients, recipes and party plans", async () => {
+  await seed(
+    ["users/fnb-staff", {
+      fullName: "F&B Storekeeper",
+      platform: "web",
+      platformRole: "storekeeper",
+      moduleAccess: ["fnb_ops"],
+      status: "active",
+      authUid: "fnb-staff-1"
+    }],
+    ["app_roles/fnb-staff-1", {
+      ...role("storekeeper"),
+      platform: "web",
+      staffProfileId: "fnb-staff",
+      platformRole: "storekeeper",
+      moduleAccess: ["fnb_ops"]
+    }],
+    ["inventory/rice", { partName: "Rice", category: "F&B", unit: "Kg", stockQuantity: 20, unitCost: 80 }],
+    ["inventory/tool", { partName: "Wrench", category: "Tools", unit: "Nos", stockQuantity: 1, unitCost: 500 }]
+  );
+  const db = testEnv.authenticatedContext("fnb-staff-1").firestore();
+  await assertSucceeds(getDoc(doc(db, "inventory", "rice")));
+  await assertFails(getDoc(doc(db, "inventory", "tool")));
+
+  await assertSucceeds(setDoc(doc(db, "inventory", "mozzarella"), {
+    partName: "Mozzarella",
+    category: "F&B",
+    domain: "F&B",
+    stockQuantity: 0,
+    unit: "Kg",
+    unitCost: 350,
+    reorderLevel: 0,
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp()
+  }));
+  await assertFails(setDoc(doc(db, "inventory", "prestocked"), {
+    partName: "Pre-stocked cheese",
+    category: "F&B",
+    domain: "F&B",
+    stockQuantity: 5,
+    unit: "Kg",
+    unitCost: 350,
+    reorderLevel: 0,
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp()
+  }));
+  await assertFails(setDoc(doc(db, "inventory", "wrong-category"), {
+    partName: "Tool",
+    category: "Tools",
+    domain: "F&B",
+    stockQuantity: 0,
+    unit: "Nos",
+    unitCost: 350,
+    reorderLevel: 0,
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp()
+  }));
+
+  await assertSucceeds(setDoc(doc(db, "saved_recipes", "biryani"), {
+    name: "Chicken Biryani",
+    category: "Main Course",
+    ingredients: [{ itemId: "rice", itemName: "Rice", purchaseUnit: "Kg", purchaseRate: 80, portionQty: 150, portionUnit: "g" }],
+    version: 1,
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp()
+  }));
+  const partyRef = doc(db, "party_plans", "wedding");
+  await assertSucceeds(setDoc(partyRef, {
+    eventName: "Wedding Reception",
+    eventDate: "2026-11-25",
+    pax: 250,
+    eventType: "Wedding",
+    notes: "",
+    menuItems: [{ name: "Chicken Biryani", ingredients: [{ itemId: "rice", portionQty: 150, portionUnit: "g" }] }],
+    totalFoodCostSnapshot: 15000,
+    foodCostPerPaxSnapshot: 60,
+    pricedSnapshot: true,
+    shortageSnapshot: [],
+    status: "Draft",
+    revision: 1,
+    revisionHistory: [],
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp()
+  }));
+  await assertSucceeds(updateDoc(partyRef, {
+    eventName: "Wedding Reception - Revised",
+    revision: 2,
+    revisionHistory: [{
+      revision: 1, eventName: "Wedding Reception", eventDate: "2026-11-25",
+      pax: 250, totalFoodCostSnapshot: 15000, foodCostPerPaxSnapshot: 60
+    }],
+    updatedAt: serverTimestamp()
+  }));
+  assert.equal((await getDoc(partyRef)).data().revision, 2);
+
+  const operatorDb = testEnv.authenticatedContext("operator-no-fnb").firestore();
+  await seed(["app_roles/operator-no-fnb", role("operator")]);
+  await assertFails(getDoc(doc(operatorDb, "saved_recipes", "biryani")));
+  await assertFails(setDoc(doc(operatorDb, "party_plans", "blocked"), {
+    eventName: "Blocked", eventDate: "2026-11-25", pax: 1, eventType: "Party",
+    notes: "", menuItems: [{ name: "Dish", ingredients: [] }],
+    totalFoodCostSnapshot: 0, foodCostPerPaxSnapshot: 0, pricedSnapshot: false,
+    shortageSnapshot: [], status: "Draft", createdAt: serverTimestamp(), updatedAt: serverTimestamp()
+  }));
+});
+
 test("F&B order creation rejects invalid quantities and unexpected fields", async () => {
   await seed(["app_roles/storekeeper-1", role("storekeeper")]);
   const db = testEnv.authenticatedContext("storekeeper-1").firestore();

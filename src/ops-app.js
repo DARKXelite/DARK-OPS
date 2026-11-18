@@ -34,7 +34,7 @@ const CONFIG = {
   WEATHER_PROXY_URL: '',
   STALE_SEC: 180,              // radar pin turns grey after this many seconds without an update
   WIND_LIMIT: 25,              // km/h, spraying advisory
-  COL: { users:'users', machines:'machines', fuel:'fuel_logs', shifts:'shifts', zones:'CourseZones', live:'live_telemetry', inventory:'inventory', logs:'logs', maintenance:'maintenance_logs', assignments:'assignment_logs', plans:'turf_plans', dailyPlans:'daily_application_plans', inwards:'store_inwards', expenses:'local_expenses', fnbOrders:'fnb_orders', fnbReceipts:'fnb_receipts' }
+  COL: { users:'users', machines:'machines', fuel:'fuel_logs', shifts:'shifts', zones:'CourseZones', live:'live_telemetry', inventory:'inventory', logs:'logs', maintenance:'maintenance_logs', assignments:'assignment_logs', plans:'turf_plans', dailyPlans:'daily_application_plans', inwards:'store_inwards', expenses:'local_expenses', fnbOrders:'fnb_orders', fnbReceipts:'fnb_receipts', savedRecipes:'saved_recipes', partyPlans:'party_plans' }
 };
 
 const app = initializeApp(firebaseConfig);
@@ -62,7 +62,36 @@ const updateStaffAccess = httpsCallable(functions, "updateStaffAccess");
 
 /* ================= HELPERS ================= */
 const $ = (s, r=document) => r.querySelector(s);
-const $$ = (s, r=document) => [...r.querySelectorAll(s)];
+const queryAll = (s, r=document) => [...r.querySelectorAll(s)];
+
+const DENSITY_STORAGE_PREFIX = "cloverOpsDensityV1:";
+function syncDensityUi(mode) {
+  const compact = mode === "compact";
+  document.body.classList.toggle("density-compact", compact);
+  const button = $("#densityToggle");
+  if (!button) return;
+  button.setAttribute("aria-pressed", String(compact));
+  button.title = compact ? "Switch to comfortable spacing" : "Switch to compact spacing";
+  const label = button.querySelector(".density-label");
+  if (label) label.textContent = compact ? "Compact" : "Comfortable";
+}
+function applyDensityPreference(uid = "") {
+  let mode = "comfortable";
+  if (uid) {
+    try { mode = localStorage.getItem(DENSITY_STORAGE_PREFIX + uid) === "compact" ? "compact" : "comfortable"; }
+    catch (_) { /* Preferences remain usable when browser storage is blocked. */ }
+  }
+  syncDensityUi(mode);
+}
+function toggleDensityPreference() {
+  const mode = document.body.classList.contains("density-compact") ? "comfortable" : "compact";
+  syncDensityUi(mode);
+  const uid = auth.currentUser?.uid;
+  if (uid) {
+    try { localStorage.setItem(DENSITY_STORAGE_PREFIX + uid, mode); }
+    catch (_) { /* Keep the current session preference even without storage. */ }
+  }
+}
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const num = v => { const n = parseFloat(v); return isFinite(n) ? n : 0; };
 // Normalize every supported fuel issue quantity field so all ledgers reconcile to the same source transactions.
@@ -100,7 +129,7 @@ function daysBetween(a, b) { const out = []; let d = a, n = 0; while (d <= b && 
 function setHTML(el, html) { if (el && el._h !== html) { el.innerHTML = html; el._h = html; } }
 
 /* ================= STATE ================= */
-const S = { users: [], machines: [], fuel: [], shifts: [], zones: [], live: [], inventory: [], logs: [], maintenance: [], assignments: [], plans: [], dailyPlans: [], inwards: [], expenses: [], fnbOrders: [], fnbReceipts: [], _v: 0 };
+const S = { users: [], machines: [], fuel: [], shifts: [], zones: [], live: [], inventory: [], logs: [], maintenance: [], assignments: [], plans: [], dailyPlans: [], inwards: [], expenses: [], fnbOrders: [], fnbReceipts: [], savedRecipes: [], partyPlans: [], _v: 0 };
 const COST_DEFAULTS = { dieselRate: 92.50, petrolRate: 0, labourPerHour: 0, downtimePerHour: 0, savingsPct: 10, improvementCost: 0 };
 function loadCostModel() {
   try { const saved = JSON.parse(localStorage.getItem('cloverOpsCostModel') || '{}'); return { ...COST_DEFAULTS, ...Object.fromEntries(Object.keys(COST_DEFAULTS).map(k => [k, Number.isFinite(+saved[k]) && +saved[k] >= 0 ? +saved[k] : COST_DEFAULTS[k]])) }; }
@@ -335,6 +364,8 @@ function exportWorkflowWorkbook() {
   addSheet('Users',generic(S.users));
   addSheet('FNB Orders',generic(S.fnbOrders));
   addSheet('FNB Receipts',generic(S.fnbReceipts));
+  addSheet('Saved Recipes',generic(S.savedRecipes));
+  addSheet('Party Plans',generic(S.partyPlans));
   if(assets){
     addSheet('Asset Register',assets.records||[]);
     addSheet('Asset Departments',assets.departments||[]);
@@ -1075,7 +1106,7 @@ function applyTurfCostPreset(range) {
   const from=range==='7d'?addDays(to,-6):range==='30d'?addDays(to,-29):monthStart(to);
   const fromInput=$('#turfCostFrom'),toInput=$('#turfCostTo');
   if(fromInput)fromInput.value=from;if(toInput)toInput.value=to;
-  $$('.turf-cost-presets .chip').forEach(btn=>btn.classList.toggle('on',btn.dataset.range===range));
+  queryAll('.turf-cost-presets .chip').forEach(btn=>btn.classList.toggle('on',btn.dataset.range===range));
   renderTurfCostAnalytics(from,to);
 }
 function exportTurfCostRange() {
@@ -1548,7 +1579,7 @@ function renderOpsAnalytics(){
   const views=(OA_VIEWS[OA.domain]||OA_VIEWS.overview),viewTabs=views.map(v=>'<button type="button" class="oa-view-tab '+(OA.view===v[0]?'active':'')+'" data-act="oa-view" data-view="'+v[0]+'">'+v[1]+'</button>').join('');
   const presetDefs=[['today','Today'],['yesterday','Yesterday'],['7d','7 days'],['30d','30 days'],['mtd','Month to date'],['last-month','Last month']];
   const presets=presetDefs.map(p=>'<button type="button" class="oa-preset" data-act="oa-preset" data-range="'+p[0]+'">'+p[1]+'</button>').join('');
-  const requiredMap={overview:['fuel','machines','shifts','inventory','plans','dailyPlans','maintenance','expenses','inwards','fnbOrders','fnbReceipts'],fuel:['fuel','machines','shifts'],turf:['plans','dailyPlans','inventory'],inventory:['inventory','inwards'],maintenance:['maintenance'],expenses:['expenses'],shifts:['shifts'],fnb:['fnbOrders','fnbReceipts'],assets:['machines']};
+  const requiredMap={overview:['fuel','machines','shifts','inventory','plans','dailyPlans','maintenance','expenses','inwards','fnbOrders','fnbReceipts'],fuel:['fuel','machines','shifts'],turf:['plans','dailyPlans','inventory'],inventory:['inventory','inwards'],maintenance:['maintenance'],expenses:['expenses'],shifts:['shifts'],fnb:['fnbOrders','fnbReceipts','savedRecipes','partyPlans'],assets:['machines']};
   const required=requiredMap[OA.domain]||[];
   const denied=required.filter(k=>!RBAC.can(permissionForCollection(CONFIG.COL[k],false)));
   const loading=required.filter(k=>!LOADED[k]&&RBAC.can(permissionForCollection(CONFIG.COL[k],false)));
@@ -2073,7 +2104,7 @@ function openUserManagementForm(userId=null) {
     size:'user-admin',html,submit:existing?'Save user access':'Create pending profile',
     onSubmit:async()=>{
       const name=$('#umName').value.trim(), mobile=normMobile($('#umMobile').value), selectedPlatform=$('#umPlatform').value;
-      const selectedRole=$('#umRole').value, moduleAccess=$$('input[name="userModuleAccess"]:checked').map(input=>input.value), status=$('#umStatus').value;
+      const selectedRole=$('#umRole').value, moduleAccess=queryAll('input[name="userModuleAccess"]:checked').map(input=>input.value), status=$('#umStatus').value;
       if(!name){toast('Full name is required.','err');return false;}
       if(!/^\+\d{10,14}$/.test(mobile)){toast('Enter a valid mobile number.','err');return false;}
       if(S.users.some(item=>item.id!==existing?.id&&normMobile(item.mobileNumber)===mobile)){toast('This mobile number already belongs to another staff profile.','err');return false;}
@@ -2102,7 +2133,7 @@ function openUserManagementForm(userId=null) {
   $('#umMobile').value=existing?.mobileNumber||'';
   $('#umPlatform').value=platform;
   $('#umStatus').value=hasLinkedIdentity?(existing?.status==='suspended'?'suspended':'active'):(existing?.status==='suspended'?'suspended':'pending');
-  const syncCount=()=>{const badge=$('#umModuleCount');if(badge)badge.textContent=`${$$('input[name="userModuleAccess"]:checked').length} selected`;};
+  const syncCount=()=>{const badge=$('#umModuleCount');if(badge)badge.textContent=`${queryAll('input[name="userModuleAccess"]:checked').length} selected`;};
   $('#umPlatform').addEventListener('change',()=>{
     const next=$('#umPlatform').value, opts=userEditorOptions(next,'',[]);
     $('#umRole').innerHTML=opts.roleOptions;
@@ -2196,6 +2227,8 @@ const RESET_GROUPS = [
   {key:'expenses', label:'Local expenses', cols:['expenses'], note:'Local expense and bill records.'},
   {key:'fnbOrders', label:'F&B orders', cols:['fnbOrders'], note:'F&B order records. Review linked receipts before reset.'},
   {key:'fnbReceipts', label:'F&B receipts', cols:['fnbReceipts'], note:'F&B receipt records.'},
+   {key:'savedRecipes', label:'Saved F&B recipes', cols:['savedRecipes'], note:'Reusable recipe templates.'},
+   {key:'partyPlans', label:'Party plans', cols:['partyPlans'], note:'Party menus and historical costing snapshots.'},
   {key:'assetDepartments', label:'Asset departments', collections:['asset_departments'], note:'Assets module department masters.'},
   {key:'assetTypes', label:'Asset types & custom fields', collections:['asset_types'], note:'Assets module type and field definitions.'},
   {key:'assetRecords', label:'Asset records', collections:['asset_records'], note:'Standalone asset records. Fleet-linked machine records are in Machines / fleet.'}
@@ -2204,7 +2237,7 @@ function openDataReset() {
   if (!RBAC.can("access.manage")) { toast("Only an administrator can reset operational data.", "err"); return; }
   const choices = RESET_GROUPS.map(g=>`<label class="reset-data-option"><input type="checkbox" name="resetGroup" value="${g.key}"><span><b>${esc(g.label)}</b><small>${esc(g.note)}</small></span></label>`).join('');
   openForm({title:'Reset selected data',submit:'Permanently reset selected',danger:true,html:`<div class="alert-box" style="margin-bottom:12px"><b>Destructive action.</b> Selected records will be permanently deleted from Firebase. This cannot be undone. Export or back up data first.</div><div style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap"><button type="button" class="btn btn-sm" id="resetSelectAll">Select all</button><button type="button" class="btn btn-sm" id="resetSelectNone">Clear selection</button></div><div class="reset-data-list">${choices}</div><div class="field" style="margin-top:14px"><label class="f">Type RESET to confirm</label><input id="resetConfirmText" autocomplete="off" placeholder="Type RESET"></div><p class="muted sm">Each selected collection is deleted independently. Stock balances are not automatically recalculated when receipts or issue history are reset. Firebase Authentication accounts and app_roles access policies are intentionally excluded to prevent accidental lockout.</p>`,onSubmit:async()=>{
-    const selected=$$('#mBody input[name="resetGroup"]:checked').map(el=>RESET_GROUPS.find(g=>g.key===el.value)).filter(Boolean);
+    const selected=queryAll('#mBody input[name="resetGroup"]:checked').map(el=>RESET_GROUPS.find(g=>g.key===el.value)).filter(Boolean);
     if(!selected.length){toast('Select at least one data group','err');return false;}
     if($('#resetConfirmText')?.value.trim()!=='RESET'){toast('Type RESET exactly to confirm','err');return false;}
     const summary=[];
@@ -2226,8 +2259,8 @@ function openDataReset() {
     toast(`Reset complete · ${summary.join(' · ')}`);
     scheduleRender();
   }});
-  $('#resetSelectAll')?.addEventListener('click',()=>$$('#mBody input[name="resetGroup"]').forEach(el=>el.checked=true));
-  $('#resetSelectNone')?.addEventListener('click',()=>$$('#mBody input[name="resetGroup"]').forEach(el=>el.checked=false));
+  $('#resetSelectAll')?.addEventListener('click',()=>queryAll('#mBody input[name="resetGroup"]').forEach(el=>el.checked=true));
+  $('#resetSelectNone')?.addEventListener('click',()=>queryAll('#mBody input[name="resetGroup"]').forEach(el=>el.checked=false));
 }
 function renderStoreRecordsEditor() {
   const tabButtons = `<div class="turf-view-tabs" style="margin-bottom:14px"><button class="turf-view-tab ${storeRecordsTab==='items'?'active':''}" data-act="store-records-tab" data-tab="items">Item master <span class="turf-count-pill">${S.inventory.length}</span></button><button class="turf-view-tab ${storeRecordsTab==='inwards'?'active':''}" data-act="store-records-tab" data-tab="inwards">Goods receipts <span class="turf-count-pill">${S.inwards.length}</span></button></div>`;
@@ -2311,7 +2344,7 @@ let recordsTab = 'maintenance';
 function renderRecords() {
   const card = $('#recordsCard');
   if (!card) return;
-  $$('#recordsChips .chip').forEach(c => c.classList.toggle('on', c.dataset.tab === recordsTab));
+  queryAll('#recordsChips .chip').forEach(c => c.classList.toggle('on', c.dataset.tab === recordsTab));
   if (recordsTab === 'maintenance') {
     const rows = [...(S.maintenance || [])].sort((a, b) => tsMs(b.timestamp) - tsMs(a.timestamp) || (b.date || '').localeCompare(a.date || ''));
     if (!LOADED.maintenance) { setHTML(card, '<div class="skeleton" style="height:240px"></div>'); return; }
@@ -2333,7 +2366,8 @@ function renderRecords() {
 
 const fnbModule = createFnbModule({
   db, CONFIG, collection, addDoc, doc, updateDoc, runTransaction, serverTimestamp,
-  num, esc, money, today, S, $, setHTML, toast
+  num, esc, money, today, S, $, setHTML, toast,
+  canWriteInventory: () => RBAC.can('inventory.write') || RBAC.can('fnb.write')
 });
 
 /* ================= NAV / RENDER LOOP ================= */
@@ -2384,7 +2418,7 @@ function openNavGroup(key) {
   const g = NAV_GROUPS[key] || NAV_GROUPS.insights;
   activeNavGroup = key;
   switchView(g.view);
-  $$('#nav .nav-btn').forEach(b => b.classList.toggle('active', b.dataset.group === key));
+  queryAll('#nav .nav-btn').forEach(b => b.classList.toggle('active', b.dataset.group === key));
   if (window.innerWidth < 900) toggleDock(false);
 }
 function toggleDock(force) { const dock = $('#dockPill'); if (!dock) return; const open = typeof force === 'boolean' ? force : !dock.classList.contains('active'); dock.classList.add('active'); }
@@ -2402,12 +2436,12 @@ function switchView(v) {
   cur = v;
   if (listenersStarted) syncListenersForView();
   document.body.classList.toggle('turf-board-mode', v === 'turfcare'); history.replaceState(null, '', '#' + v);
-  $$('.view').forEach(x => x.classList.toggle('active', x.id === 'v-' + v));
+  queryAll('.view').forEach(x => x.classList.toggle('active', x.id === 'v-' + v));
   $('#pageTitle').textContent = VIEWS[v][0]; $('#pageSub').textContent = VIEWS[v][1]; $('#viewHead').style.display = (v === 'overview' || v === 'turfcare') ? 'none' : ''; window.scrollTo(0, 0);
   const mapMode = (v === 'radar' || v === 'zones');
   document.body.classList.toggle('map-mode', mapMode);
   activeNavGroup = groupForView(v);
-  $$('#nav .nav-btn').forEach(b => b.classList.toggle('active', b.dataset.group === activeNavGroup));
+  queryAll('#nav .nav-btn').forEach(b => b.classList.toggle('active', b.dataset.group === activeNavGroup));
   renderGroupTabs();
   if (v === 'radar') { initRadarMap(); setTimeout(() => { if (radarMap) { radarMap.invalidateSize(); fitToCourse(radarMap); } }, 80); }
   if (v === 'zones') { initZoneMap(); setTimeout(() => { if (zoneMap) { zoneMap.invalidateSize(); fitToCourse(zoneMap); } }, 80); }
@@ -2420,6 +2454,7 @@ function renderAll() { try { (RENDER[cur] || (() => {}))(); updateBadges(); if (
 let unsubs = new Map();
 let listenersStarted = false;
 const listenerEpochs = new Map();
+const listenerScopes = new Map();
 const VIEW_COLLECTIONS = {
   overview: ['fuel','machines','shifts','inventory','plans','dailyPlans','maintenance','logs'],
   fleet: ['machines','live','fuel','shifts'],
@@ -2433,7 +2468,7 @@ const VIEW_COLLECTIONS = {
   users: ['users'],
   incidents: ['logs','machines'],
   turfcare: ['inventory','plans','dailyPlans','fuel','machines','shifts','maintenance'],
-  fnb: ['fnbOrders','fnbReceipts','inventory']
+  fnb: ['fnbOrders','fnbReceipts','savedRecipes','partyPlans','inventory']
 };
 function collectionAffectsCurrentView(k) {
   return (VIEW_COLLECTIONS[cur] || []).includes(k);
@@ -2444,6 +2479,7 @@ function stopOneListener(k) {
   if (unsubscribe) {
     try { unsubscribe(); } catch (_) {}
     unsubs.delete(k);
+    listenerScopes.delete(k);
   }
 }
 function syncListenersForView() {
@@ -2451,8 +2487,9 @@ function syncListenersForView() {
   setConn('');
   const desired = new Set(VIEW_COLLECTIONS[cur] || []);
   Object.keys(CONFIG.COL).forEach(k => {
-    const permitted = RBAC.can(permissionForCollection(CONFIG.COL[k], false));
+    const permitted = RBAC.can(permissionForCollection(CONFIG.COL[k], false)) || (cur === 'fnb' && k === 'inventory' && RBAC.can('fnb.read'));
     const shouldListen = desired.has(k) && permitted;
+    const scope = cur === "fnb" && k === "inventory" ? "fnb-inventory" : "full";
     if (!shouldListen) {
       if (unsubs.has(k)) stopOneListener(k);
       // Clear data not active on this screen, so a role/view transition never keeps
@@ -2463,14 +2500,18 @@ function syncListenersForView() {
       if (k === 'logs' || k === 'live') updateBadges(k);
       return;
     }
-    if (unsubs.has(k)) return;
+    if (unsubs.has(k) && listenerScopes.get(k) === scope) return;
+    if (unsubs.has(k)) stopOneListener(k);
 
     const epoch = (listenerEpochs.get(k) || 0) + 1;
     listenerEpochs.set(k, epoch);
     const cache = new Map();
     LOADED[k] = false;
     S[k] = [];
-    const unsubscribe = onSnapshot(collection(db, CONFIG.COL[k]), snap => {
+    const source = cur === "fnb" && k === "inventory"
+      ? query(collection(db, CONFIG.COL[k]), where("category", "==", "F&B"))
+      : collection(db, CONFIG.COL[k]);
+    const unsubscribe = onSnapshot(source, snap => {
       if (listenerEpochs.get(k) !== epoch) return;
       const firstSnapshot = !LOADED[k];
       const changes = snap.docChanges();
@@ -2502,6 +2543,7 @@ function syncListenersForView() {
       if (collectionAffectsCurrentView(k)) scheduleRender();
     });
     unsubs.set(k, unsubscribe);
+    listenerScopes.set(k, scope);
   });
 }
 function startListeners() {
@@ -2769,93 +2811,9 @@ function createInventoryImporter(options) {
 }
 
 
-function installInventoryReadabilityStyles() {
-  if (document.getElementById('inventoryReadabilityStyles')) return;
-  const style = document.createElement('style');
-  style.id = 'inventoryReadabilityStyles';
-  style.textContent = [
-    '#v-registry { --inv-surface:#202f27; --inv-row:#26372d; --inv-row-alt:#2b3d32; --inv-line:#45594a; --inv-text:#e4e9df; --inv-muted:#b7c4b5; }',
-    '#v-registry .card { background:var(--inv-surface)!important; color:var(--inv-text)!important; border-color:var(--inv-line)!important; box-shadow:none!important; }',
-    '#v-registry .card-h h3,#v-registry .kpi-label,#v-registry .inv-category summary,#v-registry .inv-category summary b { color:var(--inv-text)!important; }',
-    '#v-registry .card-h .muted,#v-registry .inv-category summary small,#v-registry .inv-category-placeholder,#v-registry .muted { color:var(--inv-muted)!important; }',
-    '#v-registry .kpi { background:#26372d!important; color:var(--inv-text)!important; border-color:var(--inv-line)!important; box-shadow:none!important; }',
-    '#v-registry .kpi-value { color:#f0f1e9!important; }',
-    '#v-registry .inv-category { background:var(--inv-row)!important; border-color:var(--inv-line)!important; }',
-    '#v-registry .inv-category>summary:hover { background:#304438!important; }',
-    '#v-registry .inv-cat-icon { background:#304438!important; border-color:#506454!important; color:#c7d4bd!important; }',
-    '#v-registry .inv-cat-alert { background:#2d4034!important; border-color:#506454!important; color:#d1dacd!important; }',
-    '#v-registry .inv-category-body { border-color:var(--inv-line)!important; }',
-    '#v-registry table { background:var(--inv-row)!important; color:var(--inv-text)!important; border-color:var(--inv-line)!important; }',
-    '#v-registry table thead th { background:#34493b!important; color:#edf0e8!important; border-color:#4a5e4e!important; }',
-    '#v-registry table tbody tr,#v-registry table tbody tr td { background:var(--inv-row)!important; color:var(--inv-text)!important; border-color:var(--inv-line)!important; }',
-    '#v-registry table tbody tr:nth-child(even),#v-registry table tbody tr:nth-child(even) td { background:var(--inv-row-alt)!important; }',
-    '#v-registry table tbody tr:hover,#v-registry table tbody tr:hover td { background:#354b3d!important; }',
-    '#v-registry table td b { color:#f1f2eb!important; }',
-    '#v-registry table .muted,#v-registry table small { color:#b9c7b8!important; }',
-    '#v-registry .toolbar .btn:not(.btn-primary) { background:#293b30!important; color:#e4e9df!important; border-color:#506454!important; }',
-    '#v-registry .toolbar .btn:not(.btn-primary):hover { background:#354b3d!important; }',
-    '#overlay .modal .inv-importer { color:#e4e9df; }',
-    '#overlay .modal .inv-importer p { color:#b9c7b8; font-size:12px; line-height:1.55; }',
-    '#overlay .modal .inv-import-file { display:flex; align-items:center; gap:12px; position:relative; overflow:hidden; padding:14px; border:1px dashed #607766; border-radius:10px; background:#263a2e; cursor:pointer; }',
-    '#overlay .modal .inv-import-file>.material-symbols-rounded { color:#c7d4bd; font-size:26px; }',
-    '#overlay .modal .inv-import-file span:nth-child(2) { display:grid; gap:4px; }',
-    '#overlay .modal .inv-import-file b { color:#edf0e8; font-size:13px; overflow-wrap:anywhere; }',
-    '#overlay .modal .inv-import-file small { color:#b9c7b8; font-size:11px; }',
-    '#overlay .modal .inv-import-file input { position:absolute; inset:0; width:100%; height:100%; opacity:0; cursor:pointer; }',
-    '#overlay .modal .inv-import-meta { display:flex; justify-content:space-between; gap:10px; flex-wrap:wrap; margin:14px 0 10px; color:#e4e9df; font-size:12px; }',
-    '#overlay .modal .inv-import-meta span { color:#b9c7b8; }',
-    '#overlay .modal .inv-import-header-row { display:flex; align-items:center; justify-content:space-between; gap:12px; margin:12px 0; color:#d5dfd2; font-size:12px; }',
-    '#overlay .modal .inv-import-header-row select,#overlay .modal .inv-import-map-field select { min-width:0; width:100%; padding:9px 10px; border:1px solid #506454; border-radius:8px; background:#1d2d24!important; color:#e4e9df!important; }',
-    '#overlay .modal .inv-import-mapping { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; }',
-    '#overlay .modal .inv-import-map-field { display:grid; gap:5px; min-width:0; color:#b9c7b8; font-size:11px; }',
-    '#overlay .modal .inv-import-section-title { margin:18px 0 9px; color:#e4e9df; font-size:13px; }',
-    '#overlay .modal .inv-import-physical { display:flex; align-items:flex-start; gap:10px; margin-top:14px; padding:12px; border:1px solid #78653c; border-radius:9px; background:#332f22; color:#f0e4c4; cursor:pointer; }',
-    '#overlay .modal .inv-import-physical input { flex:none; margin-top:3px; accent-color:#c9b77f; }',
-    '#overlay .modal .inv-import-physical span { display:grid; gap:4px; }',
-    '#overlay .modal .inv-import-physical b { font-size:12px; color:#f0e4c4; }',
-    '#overlay .modal .inv-import-physical small { color:#d1c6a5; font-size:11px; line-height:1.45; }',
-    '#overlay .modal .inv-import-preview { max-width:100%; overflow:auto; border:1px solid #45594a; border-radius:8px; }',
-    '#overlay .modal .inv-import-preview table { min-width:620px; }',
-    '#overlay .modal .inv-import-preview th { background:#34493b!important; color:#edf0e8!important; }',
-    '#overlay .modal .inv-import-preview td { background:#26372d!important; color:#e4e9df!important; }',
-    '#overlay .modal .inv-import-preview tr:nth-child(even) td { background:#2b3d32!important; }',
-    '#overlay .modal .inv-import-corrections { margin-top:15px; }',
-    '#overlay .modal .inv-import-section-heading h4 { margin:0 0 4px; color:#f0d69a; font-size:12px; }',
-    '#overlay .modal .inv-import-section-heading p { margin:0 0 10px; font-size:11px; }',
-    '#overlay .modal .inv-import-correction { padding:11px; margin-top:8px; border:1px solid #45594a; border-radius:9px; background:#24362b; }',
-    '#overlay .modal .inv-import-row-title { margin-bottom:8px; color:#d7e0d2; font-size:11px; font-weight:700; }',
-    '#overlay .modal .inv-import-edit-grid { display:grid; grid-template-columns:repeat(5,minmax(0,1fr)); gap:8px; }',
-    '#overlay .modal .inv-import-edit-field { display:grid; gap:4px; min-width:0; color:#b9c7b8; font-size:10px; }',
-    '#overlay .modal .inv-import-edit-field input { min-width:0; width:100%; padding:8px 7px; background:#1c2b22!important; color:#edf0e8!important; border:1px solid #506454!important; border-radius:7px; }',
-    '#overlay .modal .inv-import-edit-field input::placeholder { color:#91a394!important; }',
-    '#overlay .modal .inv-import-ok { margin-top:12px; padding:10px; border-radius:8px; background:#243c2c; color:#c8e3c9; font-size:12px; }',
-    '#overlay .modal .inv-import-error { margin-top:10px; padding:10px; border-radius:8px; background:#452d2a; color:#ffd0c8; font-size:12px; }',
-    '#overlay .modal .inv-import-note { margin:12px 0 0; font-size:11px; }',
-    '#overlay .modal .inv-import-empty { margin-top:12px; padding:22px 12px; text-align:center; border:1px dashed #45594a; border-radius:9px; color:#b9c7b8; font-size:12px; }',
-    '@media(max-width:700px) { #overlay .modal .inv-import-mapping { grid-template-columns:1fr; } #overlay .modal .inv-import-edit-grid { grid-template-columns:repeat(2,minmax(0,1fr)); } #overlay .modal .inv-import-header-row { align-items:stretch; flex-direction:column; } }'
-  ].join('\n');
-  document.head.appendChild(style);
-}
-installInventoryReadabilityStyles();
-function installInventoryTableContrastOverrides() {
-  if (document.getElementById('inventoryTableContrastOverrides')) return;
-  const style = document.createElement('style');
-  style.id = 'inventoryTableContrastOverrides';
-  style.textContent = [
-    'body:not(.auth-locked) .main #v-registry table { background:#26372d!important; color:#e4e9df!important; border-color:#45594a!important; }',
-    'body:not(.auth-locked) .main #v-registry table thead th { background:#34493b!important; color:#edf0e8!important; border-color:#4a5e4e!important; }',
-    'body:not(.auth-locked) .main #v-registry table tbody tr td { background:#26372d!important; color:#e4e9df!important; border-color:#45594a!important; }',
-    'body:not(.auth-locked) .main #v-registry table tbody tr:nth-child(even) td { background:#2b3d32!important; color:#e4e9df!important; }',
-    'body:not(.auth-locked) .main #v-registry table tbody tr:hover td { background:#354b3d!important; color:#f1f2eb!important; }',
-    'body:not(.auth-locked) .main #v-registry table td b { color:#f1f2eb!important; }',
-    'body:not(.auth-locked) .main #v-registry table td .muted, body:not(.auth-locked) .main #v-registry table td small { color:#b9c7b8!important; }',
-    'body:not(.auth-locked) .main #v-registry .inv-category>summary, body:not(.auth-locked) .main #v-registry .inv-category>summary b { color:#e4e9df!important; }',
-    'body:not(.auth-locked) .main #v-registry .inv-category>summary small { color:#b9c7b8!important; }',
-    'body:not(.auth-locked) .main #v-registry .inv-category-placeholder { color:#b9c7b8!important; }'
-  ].join('\n');
-  document.head.appendChild(style);
-}
-installInventoryTableContrastOverrides();
+/* Inventory presentation is defined in clover-calm-theme.css; avoid runtime CSS injection. */
+
+
 
 const inventoryImporter = createInventoryImporter({ db, collection, doc, writeBatch, serverTimestamp, getInventory: () => S.inventory, onComplete: () => scheduleRender(), esc, toast, openModal, closeModal });
 
@@ -2879,11 +2837,27 @@ const H = {
   'open-inventory-import': () => inventoryImporter.open(),
   'inventory-import-commit': () => inventoryImporter.commit(),
   'open-store-records': () => openStoreRecordsEditor(),
+  'toggle-density': () => toggleDensityPreference(),
   'fnb-tab': d => { fnbModule.setTab(d.tab); renderAll(); },
   'fnb-save-order': () => fnbModule.saveOrder(),
   'fnb-receive': d => fnbModule.receive(d.id),
   'fnb-import-orders': () => fnbModule.importOrders(),
   'fnb-clear-import': () => fnbModule.clearImport(),
+  'fnb-party-section': d => { fnbModule.partyPlanner.setSection(d.section); fnbModule.render(); },
+  'fnb-party-new': () => { fnbModule.partyPlanner.beginNew(); fnbModule.render(); },
+  'fnb-party-add-dish': () => { fnbModule.partyPlanner.addDish(); fnbModule.render(); },
+  'fnb-party-add-line': d => { fnbModule.partyPlanner.addIngredient(Number(d.index)); fnbModule.render(); },
+  'fnb-party-remove-dish': d => { fnbModule.partyPlanner.removeDish(Number(d.index)); fnbModule.render(); },
+  'fnb-party-remove-line': d => { fnbModule.partyPlanner.removeIngredient(Number(d.dish), Number(d.line)); fnbModule.render(); },
+  'fnb-party-load': d => { fnbModule.partyPlanner.loadRecipe(d.id); fnbModule.setTab('party'); fnbModule.render(); },
+  'fnb-party-edit': d => { fnbModule.partyPlanner.editPlan(d.id); fnbModule.setTab('party'); fnbModule.render(); },
+  'fnb-party-save': async () => { await fnbModule.partyPlanner.saveParty(); fnbModule.render(); },
+  'fnb-party-save-recipe': async d => { await fnbModule.partyPlanner.saveRecipe(Number(d.index), false); fnbModule.render(); },
+  'fnb-party-update-recipe': async d => { await fnbModule.partyPlanner.saveRecipe(Number(d.index), true); fnbModule.render(); },
+  'fnb-party-quick': d => { fnbModule.partyPlanner.openQuickAdd(Number(d.index)); fnbModule.render(); },
+  'fnb-party-add-inventory': async d => { await fnbModule.partyPlanner.quickCreateIngredient(Number(d.dish)); fnbModule.render(); },
+  'fnb-party-cancel-quick': () => { fnbModule.partyPlanner.cancelQuickAdd(); fnbModule.render(); },
+  'fnb-party-show-library': () => { fnbModule.partyPlanner.setSection('library'); fnbModule.render(); },
   'open-role-admin': () => openRoleAdmin(),
   'open-data-reset': () => openDataReset(),
   'store-records-tab': d => { storeRecordsTab = d.tab || 'items'; renderStoreRecordsEditor(); },
@@ -2914,7 +2888,7 @@ const H = {
   'add-machine': () => machineForm(null), 'edit-machine': d => machineForm(mx().get(d.id)),
   'svc-done': d => { const m = mx().get(d.id); openForm({ title: 'Mark as serviced', submit: 'Confirm service', html: `<p style="margin:0">Record that <b>${esc(m.assetName)}</b> was serviced at <b>${fmt(num(m.currentHours))} hrs</b>? The ${CONFIG.SERVICE_INTERVAL}-hr cycle restarts from here.</p>`, onSubmit: async () => { await updateDoc(doc(db, CONFIG.COL.machines, m.id), { lastServiceHours: num(m.currentHours), lastServiceDate: today() }); toast('Service recorded'); } }); },
   del: d => confirmDelete(d.col, d.id, d.label),
-  kebab: (d, el, e) => { e.stopPropagation(); const menu = el.nextElementSibling, open = menu.classList.contains('open'); $$('.kmenu.open').forEach(x => x.classList.remove('open')); if (!open) menu.classList.add('open'); },
+  kebab: (d, el, e) => { e.stopPropagation(); const menu = el.nextElementSibling, open = menu.classList.contains('open'); queryAll('.kmenu.open').forEach(x => x.classList.remove('open')); if (!open) menu.classList.add('open'); },
   'add-spray': d => openAddSprayTaskForm(d.day, d.date),
   'save-turf-batch': () => saveTurfBatch(),
   'open-turf-variance': () => openTurfVarianceModal(),
@@ -3054,7 +3028,7 @@ const H = {
     '<div class="muted sm">Item names are free text. Items not in inventory will each prompt you to add them to the master.</div>',
     onSubmit: async()=>{
       const items=[]; let bad=false;
-      $$('#exRows .exp-row').forEach(r=>{
+      queryAll('#exRows .exp-row').forEach(r=>{
         const n=r.querySelector('.exi-name').value.trim(), rateRaw=r.querySelector('.exi-rate').value, q=num(r.querySelector('.exi-qty').value), rt=num(rateRaw);
         if(!n&&!rateRaw) return;
         if(!n||q<=0||rt<=0){bad=true;return;}
@@ -3097,7 +3071,7 @@ const H = {
       const seen=new Set(), queue=[];
       clean.forEach((i,idx)=>{const k=normName(i.itemName);if(!i.inInventory&&!seen.has(k)){seen.add(k);queue.push(idx);}});
       if(queue.length){closeModal();runNewItemQueue(ref.id,clean,queue,queue.length);return false;}
-    }}); $$('#exRows .exi-name')[0]?.focus(); },
+    }}); queryAll('#exRows .exi-name')[0]?.focus(); },
   'exp-filter': d => { expFilter = d.f || 'all'; renderLocalExpenseLedger(); },
   'delete-local-expense': d => openForm({title:'Delete local expense',submit:'Delete',danger:true,html:'This expense record will be permanently deleted.',onSubmit:async()=>{await deleteDoc(doc(db,CONFIG.COL.expenses,d.id));toast('Expense deleted');}}),
   'add-part': () => openForm({ title: 'Create item master', submit: 'Create item',
@@ -3135,15 +3109,15 @@ document.addEventListener('input', e => { if (e.target?.id === 'usersSearch') { 
 document.addEventListener('change', e => { if (e.target?.id === 'usersRoleFilter') { usersRoleFilter=e.target.value||'all'; renderUsersMaster(); } if (e.target?.id === 'usersPlatformFilter') { usersPlatformFilter=e.target.value||'all'; renderUsersMaster(); } if (e.target?.id === 'usersStatusFilter') { usersStatusFilter=e.target.value||'all'; renderUsersMaster(); } });
 document.addEventListener('click', e => {
   const el = e.target.closest('[data-act]');
-  if (!el) { $$('.kmenu.open').forEach(x => x.classList.remove('open')); return; }
-  if (el.dataset.act !== 'kebab') $$('.kmenu.open').forEach(x => x.classList.remove('open'));
+  if (!el) { queryAll('.kmenu.open').forEach(x => x.classList.remove('open')); return; }
+  if (el.dataset.act !== 'kebab') queryAll('.kmenu.open').forEach(x => x.classList.remove('open'));
   const permission = permissionForAction(el.dataset.act, el.dataset);
   if (permission && !RBAC.can(permission)) { toast("Your role does not have permission for this action.", "err"); return; }
   const fn = H[el.dataset.act]; if (fn) fn(el.dataset, el, e);
 });
 document.addEventListener('change', e => { const el = e.target.closest('[data-chg]'); if (el && C[el.dataset.chg]) C[el.dataset.chg](el.value, el.dataset, el); });
 function exRowHTML(){return '<div class="exp-row"><input class="exi-name" placeholder="Item name" autocomplete="off"><input class="exi-qty" type="number" min="0" step="any" value="1" inputmode="decimal"><input class="exi-rate" type="number" min="0" step="0.01" placeholder="0" inputmode="decimal"><input class="exi-amt" readonly tabindex="-1" value="0.00"><button type="button" class="btn btn-sm exi-del" title="Remove item" aria-label="Remove item">✕</button><div class="exi-match muted sm"></div></div>';}
-function exUpdateTotal(){let t=0;$$('#exRows .exp-row').forEach(r=>{const a=Math.round(num(r.querySelector('.exi-qty').value)*num(r.querySelector('.exi-rate').value)*100)/100;r.querySelector('.exi-amt').value=a.toFixed(2);t+=a;});const el=$('#exTotal');if(el)el.textContent=money(t,2);}
+function exUpdateTotal(){let t=0;queryAll('#exRows .exp-row').forEach(r=>{const a=Math.round(num(r.querySelector('.exi-qty').value)*num(r.querySelector('.exi-rate').value)*100)/100;r.querySelector('.exi-amt').value=a.toFixed(2);t+=a;});const el=$('#exTotal');if(el)el.textContent=money(t,2);}
 function runNewItemQueue(expId,items,queue,total){
   const idx=queue.shift(); if(idx===undefined) return;
   const next=()=>setTimeout(()=>runNewItemQueue(expId,items,queue,total),60);
@@ -3152,7 +3126,7 @@ function runNewItemQueue(expId,items,queue,total){
 document.addEventListener('change', async e => { const el=e.target.closest('[data-expense-paid]'); if(!el)return; try{await updateDoc(doc(db,CONFIG.COL.expenses,el.dataset.expensePaid),el.checked?{paidBy:'accounts',spentByMe:true,reclaimedAt:serverTimestamp()}:{paidBy:'me',spentByMe:true,reclaimedAt:null});toast(el.checked?'Reclaimed — marked as paid by accounts':'Marked as pending from office');}catch(err){el.checked=!el.checked;toast(err.message||'Could not update expense','err');} });
 document.addEventListener('click', e => {
   if (e.target.closest('#exAddRow')) { const h=$('#exRows'); h.insertAdjacentHTML('beforeend',exRowHTML()); h.lastElementChild.querySelector('.exi-name').focus(); }
-  const d=e.target.closest('.exi-del'); if(d){ const rows=$$('#exRows .exp-row'); if(rows.length>1){d.closest('.exp-row').remove();} else {rows[0].querySelectorAll('input:not([readonly])').forEach(i=>i.value=i.classList.contains('exi-qty')?'1':'');rows[0].querySelector('.exi-match').innerHTML='';} exUpdateTotal(); }
+  const d=e.target.closest('.exi-del'); if(d){ const rows=queryAll('#exRows .exp-row'); if(rows.length>1){d.closest('.exp-row').remove();} else {rows[0].querySelectorAll('input:not([readonly])').forEach(i=>i.value=i.classList.contains('exi-qty')?'1':'');rows[0].querySelector('.exi-match').innerHTML='';} exUpdateTotal(); }
 });
 document.addEventListener('input', e => {
   const t = e.target; if (!t || !t.classList) return;
@@ -3254,6 +3228,7 @@ $("#login").hidden = false;
 let confirmationResult = null;
 let recaptchaVerifier = null;
 onAuthStateChanged(auth, async user => {
+  applyDensityPreference(user?.uid || "");
   stopListeners();
   RBAC.session.role = null; RBAC.session.authenticated = false; RBAC.session.uid = null; RBAC.session.displayName = ""; RBAC.session.platform = null; RBAC.session.platformRole = null; RBAC.session.moduleAccess = [];
   const login = $("#login"), gate = $("#pinGate"), error = $("#loginErr");
@@ -3784,7 +3759,7 @@ function renderTurfCare() {
     const pane = $('#turf'+name.charAt(0).toUpperCase()+name.slice(1)+'Pane');
     if (pane) pane.hidden = turfSection !== name;
   });
-  $$('#v-turfcare .turf-view-tab').forEach(btn => {
+  queryAll('#v-turfcare .turf-view-tab').forEach(btn => {
     const active = btn.dataset.tab === turfSection;
     btn.classList.toggle('active', active);
     btn.setAttribute('aria-selected', String(active));
@@ -3909,7 +3884,7 @@ async function saveTurfBatch() {
   const dayIdx = Number($('#turfBatchDay')?.value), fallbackDate = $('#turfBatchDate')?.value;
   const from = $('#turfBatchFrom')?.value || fallbackDate, until = $('#turfBatchUntil')?.value || fallbackDate;
   const area = $('#turfBatchArea')?.value || 'Greens';
-  const weekdays = $$('input[name="turfBatchWeekday"]:checked').map(x=>Number(x.value));
+  const weekdays = queryAll('input[name="turfBatchWeekday"]:checked').map(x=>Number(x.value));
   const notes = $('#turfBatchNotes')?.value?.trim() || '';
   if(!from || !until || until < from){toast('Choose a valid date range.','err');releaseSave();return;}
   const spanDays = Math.floor((new Date(until + 'T12:00:00') - new Date(from + 'T12:00:00')) / 86400000) + 1;

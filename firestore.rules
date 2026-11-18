@@ -313,9 +313,24 @@ service cloud.firestore {
       allow read: if opsTeam();
       allow write: if opsTeam();
     }
+    function validFnbIngredientCreate() {
+      let d = request.resource.data;
+      return d.keys().hasOnly(['partName', 'category', 'domain', 'stockQuantity', 'unit', 'unitCost', 'reorderLevel', 'createdAt', 'updatedAt'])
+        && d.keys().hasAll(['partName', 'category', 'domain', 'stockQuantity', 'unit', 'unitCost', 'reorderLevel', 'createdAt', 'updatedAt'])
+        && d.partName is string && d.partName.size() > 0 && d.partName.size() <= 200
+        && d.category == 'F&B' && d.domain == 'F&B'
+        && d.stockQuantity == 0
+        && d.unit is string && d.unit.size() > 0 && d.unit.size() <= 30
+        && d.unitCost is number && d.unitCost >= 0
+        && d.reorderLevel == 0
+        && d.createdAt == request.time && d.updatedAt == request.time;
+    }
     match /inventory/{id} {
-      allow read: if signedIn() && hasRole(['admin', 'manager', 'storekeeper', 'operator']) && hasModuleAccess('inventory');
-      allow create, delete: if storeTeam();
+      // F&B staff may read the ingredient masters needed by the Party Planner without
+      // receiving access to the wider Inventory Master view.
+      allow read: if (signedIn() && hasRole(['admin', 'manager', 'storekeeper', 'operator']) && hasModuleAccess('inventory')) || (fnbTeam() && resource.data.category == 'F&B');
+      allow create: if storeTeam() || (fnbTeam() && validFnbIngredientCreate());
+      allow delete: if storeTeam();
       allow update: if storeTeam()
         || (hasRole(['operator'])
           && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['stockQuantity', 'updatedAt'])
@@ -377,6 +392,106 @@ service cloud.firestore {
       allow create: if fnbTeam() && validFnbReceiptCreate(id);
       // Receipt ledger records are immutable. Correct errors through a documented reversal flow.
       allow update, delete: if false;
+    }
+
+    // Saved F&B recipes are reusable templates. Their ingredient references point to
+    // the canonical inventory masters; editing a party copy never mutates this record.
+    match /saved_recipes/{id} {
+      allow read: if fnbTeam();
+      allow create, update: if fnbTeam()
+        && request.resource.data.keys().hasOnly(['name', 'category', 'ingredients', 'version', 'createdAt', 'updatedAt'])
+        && request.resource.data.keys().hasAll(['name', 'category', 'ingredients', 'version', 'updatedAt'])
+        && request.resource.data.name is string
+        && request.resource.data.name.size() > 0
+        && request.resource.data.name.size() <= 120
+        && request.resource.data.category is string
+        && request.resource.data.category.size() <= 60
+        && request.resource.data.ingredients is list
+        && request.resource.data.ingredients.size() > 0
+        && request.resource.data.ingredients.size() <= 100
+        && request.resource.data.version is number
+        && request.resource.data.version >= 1
+        && request.resource.data.updatedAt == request.time;
+      allow delete: if manager() && hasModuleAccess('fnb_ops');
+    }
+
+    // Party estimates are immutable snapshots of the rates and quantities used at save time.
+    // They never alter inventory stock. Stock changes must go through the authorised store ledger.
+    match /party_plans/{id} {
+      allow read: if fnbTeam();
+      allow create: if fnbTeam()
+        && request.resource.data.keys().hasOnly([
+          'eventName', 'eventDate', 'pax', 'eventType', 'notes', 'menuItems',
+          'totalFoodCostSnapshot', 'foodCostPerPaxSnapshot', 'pricedSnapshot',
+          'shortageSnapshot', 'status', 'revision', 'revisionHistory', 'createdAt', 'updatedAt'
+        ])
+        && request.resource.data.keys().hasAll([
+          'eventName', 'eventDate', 'pax', 'eventType', 'notes', 'menuItems',
+          'totalFoodCostSnapshot', 'foodCostPerPaxSnapshot', 'pricedSnapshot',
+          'shortageSnapshot', 'status', 'revision', 'revisionHistory', 'createdAt', 'updatedAt'
+        ])
+        && request.resource.data.eventName is string
+        && request.resource.data.eventName.size() > 0
+        && request.resource.data.eventName.size() <= 120
+        && request.resource.data.eventDate is string
+        && request.resource.data.eventDate.size() == 10
+        && request.resource.data.pax is int
+        && request.resource.data.pax >= 1
+        && request.resource.data.eventType is string
+        && request.resource.data.notes is string
+        && request.resource.data.notes.size() <= 500
+        && request.resource.data.menuItems is list
+        && request.resource.data.menuItems.size() > 0
+        && request.resource.data.menuItems.size() <= 100
+        && request.resource.data.totalFoodCostSnapshot is number
+        && request.resource.data.totalFoodCostSnapshot >= 0
+        && request.resource.data.foodCostPerPaxSnapshot is number
+        && request.resource.data.foodCostPerPaxSnapshot >= 0
+        && request.resource.data.pricedSnapshot is bool
+        && request.resource.data.shortageSnapshot is list
+        && request.resource.data.shortageSnapshot.size() <= 500
+        && request.resource.data.revision is int && request.resource.data.revision >= 1
+        && request.resource.data.revisionHistory is list && request.resource.data.revisionHistory.size() == 0
+        && request.resource.data.status == 'Draft'
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.updatedAt == request.time;
+      allow update: if fnbTeam()
+        && request.resource.data.keys().hasOnly([
+          'eventName', 'eventDate', 'pax', 'eventType', 'notes', 'menuItems',
+          'totalFoodCostSnapshot', 'foodCostPerPaxSnapshot', 'pricedSnapshot',
+          'shortageSnapshot', 'status', 'revision', 'revisionHistory', 'createdAt', 'updatedAt'
+        ])
+        && request.resource.data.keys().hasAll([
+          'eventName', 'eventDate', 'pax', 'eventType', 'notes', 'menuItems',
+          'totalFoodCostSnapshot', 'foodCostPerPaxSnapshot', 'pricedSnapshot',
+          'shortageSnapshot', 'status', 'revision', 'revisionHistory', 'createdAt', 'updatedAt'
+        ])
+        && request.resource.data.eventName is string
+        && request.resource.data.eventName.size() > 0
+        && request.resource.data.eventName.size() <= 120
+        && request.resource.data.eventDate is string
+        && request.resource.data.eventDate.size() == 10
+        && request.resource.data.pax is int
+        && request.resource.data.pax >= 1
+        && request.resource.data.eventType is string
+        && request.resource.data.notes is string
+        && request.resource.data.notes.size() <= 500
+        && request.resource.data.menuItems is list
+        && request.resource.data.menuItems.size() > 0
+        && request.resource.data.menuItems.size() <= 100
+        && request.resource.data.totalFoodCostSnapshot is number
+        && request.resource.data.totalFoodCostSnapshot >= 0
+        && request.resource.data.foodCostPerPaxSnapshot is number
+        && request.resource.data.foodCostPerPaxSnapshot >= 0
+        && request.resource.data.pricedSnapshot is bool
+        && request.resource.data.shortageSnapshot is list
+        && request.resource.data.shortageSnapshot.size() <= 500
+        && request.resource.data.revision is int && request.resource.data.revision > resource.data.revision
+        && request.resource.data.revisionHistory is list && request.resource.data.revisionHistory.size() <= 10
+        && request.resource.data.status == 'Draft'
+        && request.resource.data.createdAt == resource.data.createdAt
+        && request.resource.data.updatedAt == request.time;
+      allow delete: if manager() && hasModuleAccess('fnb_ops');
     }
 
     // Breakfast Pass: one room-level QR, with an atomic per-day guest redemption counter.

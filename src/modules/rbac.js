@@ -54,7 +54,7 @@ export function permissionForCollection(collectionName, write = false) {
     inventory: "inventory.read", logs: "fleet.read", maintenance_logs: "maintenance.read",
     assignment_logs: "assignments.read", turf_plans: "turf.read",
     store_inwards: "inventory.receipts.read", local_expenses: "expenses.read",
-    fnb_orders: "fnb.read", fnb_receipts: "fnb.read", golf_passes: "golf.read", app_roles: "access.manage"
+    fnb_orders: "fnb.read", fnb_receipts: "fnb.read", saved_recipes: "fnb.read", party_plans: "fnb.read", golf_passes: "golf.read", app_roles: "access.manage"
   };
   const writeMap = {
     users: "users.manage", machines: "fleet.write", fuel_logs: "fuel.write",
@@ -62,7 +62,7 @@ export function permissionForCollection(collectionName, write = false) {
     inventory: "inventory.write", logs: "incidents.write", maintenance_logs: "maintenance.write",
     assignment_logs: "assignments.write", turf_plans: "turf.write",
     store_inwards: "inventory.write", local_expenses: "expenses.write",
-    fnb_orders: "fnb.write", fnb_receipts: "fnb.receive", golf_passes: "golf.manage", app_roles: "access.manage"
+    fnb_orders: "fnb.write", fnb_receipts: "fnb.receive", saved_recipes: "fnb.write", party_plans: "fnb.write", golf_passes: "golf.manage", app_roles: "access.manage"
   };
   return (write ? writeMap : readMap)[collectionName] || "admin.only";
 }
@@ -70,6 +70,12 @@ export function permissionForCollection(collectionName, write = false) {
 const ACTION_PERMISSIONS = {
   "fnb-tab": "fnb.read", "fnb-save-order": "fnb.write",
   "fnb-import-orders": "fnb.write", "fnb-clear-import": "fnb.write", "fnb-receive": "fnb.receive",
+  "fnb-party-section": "fnb.read", "fnb-party-new": "fnb.write", "fnb-party-add-dish": "fnb.write",
+  "fnb-party-add-line": "fnb.write", "fnb-party-remove-dish": "fnb.write", "fnb-party-remove-line": "fnb.write",
+  "fnb-party-load": "fnb.write", "fnb-party-edit": "fnb.write", "fnb-party-save": "fnb.write",
+  "fnb-party-save-recipe": "fnb.write", "fnb-party-update-recipe": "fnb.write",
+  "fnb-party-quick": "fnb.write", "fnb-party-add-inventory": "fnb.write",
+  "fnb-party-cancel-quick": "fnb.write", "fnb-party-show-library": "fnb.read",
   "open-role-admin": "access.manage",
   "add-machine": "fleet.write", "edit-machine": "fleet.write", "svc-done": "fleet.write",
   "open-fuel": "fuel.write", "open-run": "shifts.write", "add-spray": "turf.write",
