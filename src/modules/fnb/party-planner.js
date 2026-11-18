@@ -58,7 +58,7 @@ export function createPartyPlannerModule({
     return { eventName: "", eventDate: today(), pax: 1, eventType: "Party", notes: "", menuItems: [] };
   }
 
-  const inventoryItems = () => (S.inventory || []).slice().sort((a, b) =>
+  const inventoryItems = () => (S.inventory || []).filter(item => ["F&B", "Other"].includes(String(item.category || "Other"))).slice().sort((a, b) =>
     String(a.partName || "").localeCompare(String(b.partName || ""))
   );
   const recipes = () => (S.savedRecipes || []).slice().sort((a, b) =>
@@ -156,7 +156,7 @@ export function createPartyPlannerModule({
   }
 
   function loadRecipe(id) {
-    readDraftFromDOM();
+    if (section === "plan") readDraftFromDOM();
     const recipe = recipes().find(row => row.id === id);
     if (!recipe) return;
     draft.menuItems.push({
@@ -237,7 +237,6 @@ export function createPartyPlannerModule({
         toast("Party plan updated. Historical rate and quantity snapshots refreshed for this saved version.");
       } else {
         payload.createdAt = serverTimestamp();
-        payload.createdBy = authUid();
         const ref = await addDoc(collection(db, CONFIG.COL.partyPlans), payload);
         selectedPlanId = ref.id;
         toast("Party plan saved.");
@@ -249,10 +248,6 @@ export function createPartyPlannerModule({
     }
   }
 
-  function authUid() {
-    try { return db.app?.options?.authDomain ? (window.__cloverCurrentUid || "") : ""; }
-    catch (_) { return ""; }
-  }
 
   async function saveRecipe(index, updateOriginal = false) {
     readDraftFromDOM();
