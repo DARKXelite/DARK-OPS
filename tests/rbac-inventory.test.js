@@ -26,6 +26,10 @@ test("view and action policy map F&B, inventory and admin access", () => {
   assert.equal(permissionForAction("open-role-admin"), "access.manage");
   assert.equal(permissionForAction("del", { col: "inventory" }), "inventory.write");
   assert.equal(permissionForCollection("fnb_receipts", true), "fnb.receive");
+  assert.equal(permissionForCollection("saved_recipes", false), "fnb.read");
+  assert.equal(permissionForCollection("party_plans", true), "fnb.write");
+  assert.equal(permissionForAction("fnb-party-save"), "fnb.write");
+  assert.equal(permissionForAction("fnb-party-add-inventory"), "inventory.write");
 });
 
 test("F&B inventory matching is case-insensitive and excludes unrelated categories", () => {
