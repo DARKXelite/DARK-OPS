@@ -2472,7 +2472,7 @@ function syncListenersForView() {
     LOADED[k] = false;
     S[k] = [];
     const source = cur === "fnb" && k === "inventory"
-      ? query(collection(db, CONFIG.COL[k]), where("category", "in", ["F&B", "Other"]))
+      ? query(collection(db, CONFIG.COL[k]), where("category", "==", "F&B"))
       : collection(db, CONFIG.COL[k]);
     const unsubscribe = onSnapshot(source, snap => {
       if (listenerEpochs.get(k) !== epoch) return;
