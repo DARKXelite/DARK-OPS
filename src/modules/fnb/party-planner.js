@@ -243,9 +243,24 @@ export function createPartyPlannerModule({
     };
     try {
       if (selectedPlanId) {
+        const previous = plans().find(plan => plan.id === selectedPlanId);
+        const history = Array.isArray(previous?.revisionHistory) ? [...previous.revisionHistory] : [];
+        if (previous) history.push({
+          revision: Number(previous.revision || 1), eventName: previous.eventName || "",
+          eventDate: previous.eventDate || "", pax: Number(previous.pax || 1),
+          eventType: previous.eventType || "Party", notes: previous.notes || "",
+          menuItems: previous.menuItems || [], totalFoodCostSnapshot: Number(previous.totalFoodCostSnapshot || 0),
+          foodCostPerPaxSnapshot: Number(previous.foodCostPerPaxSnapshot || 0),
+          pricedSnapshot: previous.pricedSnapshot === true, shortageSnapshot: previous.shortageSnapshot || [],
+          savedAt: previous.updatedAt || previous.createdAt || null
+        });
+        payload.revision = Number(previous?.revision || 1) + 1;
+        payload.revisionHistory = history.slice(-10);
         await updateDoc(doc(db, CONFIG.COL.partyPlans, selectedPlanId), payload);
-        toast("Party plan updated. Historical rate and quantity snapshots refreshed for this saved version.");
+        toast("Party plan updated. The previous costing snapshot is retained in revision history.");
       } else {
+        payload.revision = 1;
+        payload.revisionHistory = [];
         payload.createdAt = serverTimestamp();
         const ref = await addDoc(collection(db, CONFIG.COL.partyPlans), payload);
         selectedPlanId = ref.id;
@@ -397,7 +412,7 @@ export function createPartyPlannerModule({
   }
 
   function renderAnalysis() {
-    const rows = plans().map(plan => '<tr><td><b>' + escHtml(plan.eventName) + '</b><div class="fnb-note">' + escHtml(plan.eventDate || "") + '</div></td><td>' + fmt(plan.pax, 0) + '</td><td>' + (plan.menuItems || []).length + '</td><td>' + money(plan.totalFoodCostSnapshot || 0) + '</td><td>' + money(plan.foodCostPerPaxSnapshot || 0) + '</td><td><button class="btn btn-sm" data-act="fnb-party-edit" data-id="' + escHtml(plan.id) + '">Open / edit</button></td></tr>').join("");
+    const rows = plans().map(plan => '<tr><td><b>' + escHtml(plan.eventName) + '</b><div class="fnb-note">' + escHtml(plan.eventDate || "") + ' · v' + escHtml(plan.revision || 1) + '</div></td><td>' + fmt(plan.pax, 0) + '</td><td>' + (plan.menuItems || []).length + '</td><td>' + money(plan.totalFoodCostSnapshot || 0) + '</td><td>' + money(plan.foodCostPerPaxSnapshot || 0) + '</td><td><button class="btn btn-sm" data-act="fnb-party-edit" data-id="' + escHtml(plan.id) + '">Open / edit</button></td></tr>').join("");
     return '<section class="card fnb-panel"><div class="fnb-panel-head"><div><h3>Party cost analysis</h3><div class="fnb-note">Saved estimates retain rate and quantity snapshots. Updating a party plan creates a new saved estimate.</div></div><button class="btn btn-primary" data-act="fnb-party-new">New party plan</button></div>' +
       '<div class="table-wrap"><table class="fnb-table"><thead><tr><th>Event</th><th>PAX</th><th>Dishes</th><th>Total food cost</th><th>Cost / PAX</th><th></th></tr></thead><tbody>' + (rows || '<tr><td colspan="6" class="fnb-empty">No party plans saved yet.</td></tr>') + '</tbody></table></div></section>';
   }
