@@ -423,7 +423,7 @@ service cloud.firestore {
         && request.resource.data.keys().hasOnly([
           'eventName', 'eventDate', 'pax', 'eventType', 'notes', 'menuItems',
           'totalFoodCostSnapshot', 'foodCostPerPaxSnapshot', 'pricedSnapshot',
-          'shortageSnapshot', 'status', 'createdAt', 'updatedAt'
+          'shortageSnapshot', 'status', 'revision', 'revisionHistory', 'createdAt', 'updatedAt'
         ])
         && request.resource.data.keys().hasAll([
           'eventName', 'eventDate', 'pax', 'eventType', 'notes', 'menuItems',
@@ -450,6 +450,8 @@ service cloud.firestore {
         && request.resource.data.pricedSnapshot is bool
         && request.resource.data.shortageSnapshot is list
         && request.resource.data.shortageSnapshot.size() <= 500
+        && request.resource.data.revision is int && request.resource.data.revision >= 1
+        && request.resource.data.revisionHistory is list && request.resource.data.revisionHistory.size() == 0
         && request.resource.data.status == 'Draft'
         && request.resource.data.createdAt == request.time
         && request.resource.data.updatedAt == request.time;
@@ -484,6 +486,8 @@ service cloud.firestore {
         && request.resource.data.pricedSnapshot is bool
         && request.resource.data.shortageSnapshot is list
         && request.resource.data.shortageSnapshot.size() <= 500
+        && request.resource.data.revision is int && request.resource.data.revision > resource.data.revision
+        && request.resource.data.revisionHistory is list && request.resource.data.revisionHistory.size() <= 10
         && request.resource.data.status == 'Draft'
         && request.resource.data.createdAt == resource.data.createdAt
         && request.resource.data.updatedAt == request.time;
