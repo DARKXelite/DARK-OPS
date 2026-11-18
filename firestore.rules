@@ -428,7 +428,7 @@ service cloud.firestore {
         && request.resource.data.keys().hasAll([
           'eventName', 'eventDate', 'pax', 'eventType', 'notes', 'menuItems',
           'totalFoodCostSnapshot', 'foodCostPerPaxSnapshot', 'pricedSnapshot',
-          'shortageSnapshot', 'status', 'createdAt', 'updatedAt'
+          'shortageSnapshot', 'status', 'revision', 'revisionHistory', 'createdAt', 'updatedAt'
         ])
         && request.resource.data.eventName is string
         && request.resource.data.eventName.size() > 0
@@ -459,12 +459,12 @@ service cloud.firestore {
         && request.resource.data.keys().hasOnly([
           'eventName', 'eventDate', 'pax', 'eventType', 'notes', 'menuItems',
           'totalFoodCostSnapshot', 'foodCostPerPaxSnapshot', 'pricedSnapshot',
-          'shortageSnapshot', 'status', 'createdAt', 'updatedAt'
+          'shortageSnapshot', 'status', 'revision', 'revisionHistory', 'createdAt', 'updatedAt'
         ])
         && request.resource.data.keys().hasAll([
           'eventName', 'eventDate', 'pax', 'eventType', 'notes', 'menuItems',
           'totalFoodCostSnapshot', 'foodCostPerPaxSnapshot', 'pricedSnapshot',
-          'shortageSnapshot', 'status', 'createdAt', 'updatedAt'
+          'shortageSnapshot', 'status', 'revision', 'revisionHistory', 'createdAt', 'updatedAt'
         ])
         && request.resource.data.eventName is string
         && request.resource.data.eventName.size() > 0
