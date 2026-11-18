@@ -62,7 +62,36 @@ const updateStaffAccess = httpsCallable(functions, "updateStaffAccess");
 
 /* ================= HELPERS ================= */
 const $ = (s, r=document) => r.querySelector(s);
-const $$ = (s, r=document) => [...r.querySelectorAll(s)];
+const $ = (s, r=document) => [...r.querySelectorAll(s)];
+
+const DENSITY_STORAGE_PREFIX = "cloverOpsDensityV1:";
+function syncDensityUi(mode) {
+  const compact = mode === "compact";
+  document.body.classList.toggle("density-compact", compact);
+  const button = $("#densityToggle");
+  if (!button) return;
+  button.setAttribute("aria-pressed", String(compact));
+  button.title = compact ? "Switch to comfortable spacing" : "Switch to compact spacing";
+  const label = button.querySelector(".density-label");
+  if (label) label.textContent = compact ? "Compact" : "Comfortable";
+}
+function applyDensityPreference(uid = "") {
+  let mode = "comfortable";
+  if (uid) {
+    try { mode = localStorage.getItem(DENSITY_STORAGE_PREFIX + uid) === "compact" ? "compact" : "comfortable"; }
+    catch (_) { /* Preferences remain usable when browser storage is blocked. */ }
+  }
+  syncDensityUi(mode);
+}
+function toggleDensityPreference() {
+  const mode = document.body.classList.contains("density-compact") ? "comfortable" : "compact";
+  syncDensityUi(mode);
+  const uid = auth.currentUser?.uid;
+  if (uid) {
+    try { localStorage.setItem(DENSITY_STORAGE_PREFIX + uid, mode); }
+    catch (_) { /* Keep the current session preference even without storage. */ }
+  }
+}
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const num = v => { const n = parseFloat(v); return isFinite(n) ? n : 0; };
 // Normalize every supported fuel issue quantity field so all ledgers reconcile to the same source transactions.
@@ -2892,6 +2921,7 @@ const H = {
   'open-inventory-import': () => inventoryImporter.open(),
   'inventory-import-commit': () => inventoryImporter.commit(),
   'open-store-records': () => openStoreRecordsEditor(),
+  'toggle-density': () => toggleDensityPreference(),
   'fnb-tab': d => { fnbModule.setTab(d.tab); renderAll(); },
   'fnb-save-order': () => fnbModule.saveOrder(),
   'fnb-receive': d => fnbModule.receive(d.id),
@@ -3282,6 +3312,7 @@ $("#login").hidden = false;
 let confirmationResult = null;
 let recaptchaVerifier = null;
 onAuthStateChanged(auth, async user => {
+  applyDensityPreference(user?.uid || "");
   stopListeners();
   RBAC.session.role = null; RBAC.session.authenticated = false; RBAC.session.uid = null; RBAC.session.displayName = ""; RBAC.session.platform = null; RBAC.session.platformRole = null; RBAC.session.moduleAccess = [];
   const login = $("#login"), gate = $("#pinGate"), error = $("#loginErr");
