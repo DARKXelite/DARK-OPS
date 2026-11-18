@@ -1,4 +1,46 @@
 
+/* F&B Party Planner & recipe costing */
+.fnb-party-shell{display:grid;gap:14px}
+.fnb-party-kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin:12px 0}
+.fnb-party-kpis .stat{min-width:0}
+.fnb-menu-stack{display:grid;gap:12px}
+.fnb-dish-card{padding:16px;display:grid;gap:12px}
+.fnb-dish-head{display:grid;grid-template-columns:minmax(180px,1.5fr) minmax(150px,.8fr) auto;gap:12px;align-items:end}
+.fnb-recipe-lines{display:grid;gap:8px}
+.fnb-recipe-line{display:grid;grid-template-columns:minmax(180px,1.5fr) minmax(100px,.65fr) minmax(100px,.55fr) minmax(150px,1fr) auto;gap:9px;align-items:end;padding:10px;border:1px solid var(--line,rgba(120,130,100,.18));border-radius:10px}
+.fnb-line-meta{font-size:11px;color:var(--muted);padding:10px 0;line-height:1.4}
+.fnb-dish-actions,.fnb-party-toolbar,.fnb-recipe-card-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.fnb-cost-inline{margin-left:auto;font-size:12px;color:var(--muted)}
+.fnb-quick-add{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;padding:14px;border:1px dashed var(--accent,#526747);border-radius:12px;background:rgba(82,103,71,.06)}
+.fnb-quick-add h4{grid-column:1/-1;margin:0}
+.fnb-quick-add button{align-self:end}
+.fnb-party-toolbar{justify-content:flex-end;margin:12px 0}
+.fnb-recipe-card{padding:14px;display:flex;align-items:center;justify-content:space-between;gap:14px;margin-bottom:10px}
+.fnb-recipe-card h3{margin:0 0 5px}
+.fnb-recipe-card-actions{justify-content:flex-end}
+.fnb-empty-state{padding:22px;text-align:center;color:var(--muted);border:1px dashed var(--line,rgba(120,130,100,.22));border-radius:12px}
+.fnb-party-shell .fnb-panel{margin-bottom:12px}
+.fnb-party-shell .fnb-form-grid{grid-template-columns:repeat(4,minmax(0,1fr))}
+.fnb-party-shell .fnb-table{min-width:680px}
+@media(max-width:900px){
+ .fnb-party-kpis{grid-template-columns:repeat(2,minmax(0,1fr))}
+ .fnb-dish-head{grid-template-columns:1fr 1fr}
+ .fnb-dish-head>button{grid-column:1/-1;justify-self:end}
+ .fnb-recipe-line{grid-template-columns:repeat(2,minmax(0,1fr))}
+ .fnb-line-meta{grid-column:1/-1}
+ .fnb-quick-add{grid-template-columns:1fr 1fr}
+}
+@media(max-width:600px){
+ .fnb-party-shell .fnb-form-grid{grid-template-columns:1fr}
+ .fnb-dish-head,.fnb-recipe-line,.fnb-quick-add{grid-template-columns:1fr}
+ .fnb-quick-add h4,.fnb-line-meta{grid-column:auto}
+ .fnb-cost-inline{margin-left:0;width:100%}
+ .fnb-recipe-card{align-items:flex-start;flex-direction:column}
+ .fnb-recipe-card-actions{justify-content:flex-start}
+ .fnb-party-toolbar button{flex:1}
+}
+
+
 
 /* Locally embedded user-supplied fonts: portable in the standalone HTML */
 @font-face{font-family:'Acumin';src:local('Arial');font-style:normal;font-weight:100 900;font-display:swap}
