@@ -66,7 +66,7 @@ export function createPartyPlannerModule({
     return { eventName: "", eventDate: today(), pax: 1, eventType: "Party", notes: "", menuItems: [] };
   }
 
-  const inventoryItems = () => (S.inventory || []).filter(item => ["F&B", "Other"].includes(String(item.category || "Other"))).slice().sort((a, b) =>
+  const inventoryItems = () => (S.inventory || []).filter(item => String(item.category || "") === "F&B").slice().sort((a, b) =>
     String(a.partName || "").localeCompare(String(b.partName || ""))
   );
   const recipes = () => (S.savedRecipes || []).slice().sort((a, b) =>
