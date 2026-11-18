@@ -10,7 +10,7 @@ const UNIT_ALIASES = Object.freeze({
 });
 
 export function unitKey(value) {
-  const unit = String(value || "").trim().toLowerCase().replace(/\\./g, "");
+  const unit = String(value || "").trim().toLowerCase().replaceAll(".", "");
   return UNIT_ALIASES[unit] || unit;
 }
 
