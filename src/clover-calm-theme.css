@@ -701,3 +701,77 @@ body:not(.auth-locked).density-compact .main .bf-secondary { min-height: 34px; }
     transition-duration: .01ms !important;
   }
 }
+
+
+/* Dialog and drawer contents share the same controls as the main workspace. */
+body:not(.auth-locked) .modal input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]),
+body:not(.auth-locked) .modal select,
+body:not(.auth-locked) .modal textarea,
+body:not(.auth-locked) .drawer input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]),
+body:not(.auth-locked) .drawer select,
+body:not(.auth-locked) .drawer textarea,
+body:not(.auth-locked) .cmd-pal input {
+  min-height:40px !important;
+  height:40px !important;
+  padding:8px 10px !important;
+  background:#FAFBF7 !important;
+  color:#29362F !important;
+  border:1px solid #829387 !important;
+  border-radius:8px !important;
+  font:13px/1.4 Inter,"Segoe UI",system-ui,sans-serif !important;
+  box-shadow:none !important;
+  color-scheme:light !important;
+}
+body:not(.auth-locked) .modal textarea,
+body:not(.auth-locked) .drawer textarea { height:auto !important; min-height:88px !important; }
+body:not(.auth-locked) .modal input:focus,
+body:not(.auth-locked) .modal select:focus,
+body:not(.auth-locked) .modal textarea:focus,
+body:not(.auth-locked) .drawer input:focus,
+body:not(.auth-locked) .drawer select:focus,
+body:not(.auth-locked) .drawer textarea:focus,
+body:not(.auth-locked) .cmd-pal input:focus {
+  border-color:#466E54 !important;
+  outline:none !important;
+  background:#FFFFFF !important;
+  box-shadow:0 0 0 3px rgba(49,84,67,.13) !important;
+}
+body:not(.auth-locked) .modal label,
+body:not(.auth-locked) .drawer label,
+body:not(.auth-locked) .modal .f,
+body:not(.auth-locked) .drawer .f {
+  color:#59695F !important;
+  font-size:12px !important;
+  letter-spacing:0 !important;
+  text-transform:none !important;
+}
+body:not(.auth-locked) .modal .btn,
+body:not(.auth-locked) .drawer .btn,
+body:not(.auth-locked) .cmd-pal button {
+  min-height:38px;
+  border:1px solid #C9D4C9 !important;
+  border-radius:8px !important;
+  background:#FAFBF7 !important;
+  color:#315443 !important;
+  box-shadow:none !important;
+  font:600 12px/1.2 Inter,"Segoe UI",system-ui,sans-serif !important;
+  letter-spacing:0 !important;
+}
+body:not(.auth-locked) .modal .btn-primary,
+body:not(.auth-locked) .drawer .btn-primary {
+  background:#315443 !important;
+  border-color:#315443 !important;
+  color:#FFFFFF !important;
+}
+body:not(.auth-locked) .modal .m-head,
+body:not(.auth-locked) .modal .m-foot,
+body:not(.auth-locked) .drawer .m-head {
+  background:#F4F6F1 !important;
+  color:#29362F !important;
+  border-color:#C9D4C9 !important;
+}
+body:not(.auth-locked) .cmd-inp {
+  color:#29362F !important;
+  background:transparent !important;
+}
+body:not(.auth-locked) .cmd-inp::placeholder { color:#68776C !important; }
