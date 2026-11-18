@@ -300,10 +300,12 @@ test("F&B staff can read inventory and create only zero-stock F&B ingredients, r
       platformRole: "storekeeper",
       moduleAccess: ["fnb_ops"]
     }],
-    ["inventory/rice", { partName: "Rice", category: "F&B", unit: "Kg", stockQuantity: 20, unitCost: 80 }]
+    ["inventory/rice", { partName: "Rice", category: "F&B", unit: "Kg", stockQuantity: 20, unitCost: 80 }],
+    ["inventory/tool", { partName: "Wrench", category: "Tools", unit: "Nos", stockQuantity: 1, unitCost: 500 }]
   );
   const db = testEnv.authenticatedContext("fnb-staff-1").firestore();
   await assertSucceeds(getDoc(doc(db, "inventory", "rice")));
+  await assertFails(getDoc(doc(db, "inventory", "tool")));
 
   await assertSucceeds(setDoc(doc(db, "inventory", "mozzarella"), {
     partName: "Mozzarella",
