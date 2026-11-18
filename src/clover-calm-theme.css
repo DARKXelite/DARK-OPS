@@ -77,6 +77,16 @@
   --color-text-muted: var(--cg-muted) !important;
   --color-accent: var(--cg-forest) !important;
   --color-border: var(--cg-border) !important;
+  --accent: var(--cg-forest) !important;
+  --danger: var(--cg-danger-ink) !important;
+  --good: var(--cg-success-ink) !important;
+  --line: var(--cg-border) !important;
+  --store-row: var(--cg-surface) !important;
+  --store-row-alt: #F0F3EE !important;
+  --store-row-hover: var(--cg-surface-hover) !important;
+  --store-text: var(--cg-ink) !important;
+  --store-muted: var(--cg-muted) !important;
+  --store-border: var(--cg-border) !important;
   --oa-bg: var(--cg-canvas) !important;
   --oa-panel: var(--cg-surface) !important;
   --oa-row: var(--cg-surface) !important;
@@ -727,6 +737,97 @@ body:not(.auth-locked) #overlay .modal.ops-analytics-modal .oa-unpriced {
   border-color: #DFD0A9 !important;
 }
 body:not(.auth-locked) #overlay .modal.ops-analytics-modal .oa-drill { color: var(--cg-forest) !important; }
+/* Expenses ledger: override the two-ID legacy selectors, including row, KPI and button colors. */
+body:not(.auth-locked) .main #v-expenses #localExpenseLedgerCard .local-expenses,
+body:not(.auth-locked) .main #v-expenses #localExpenseLedgerCard .local-expenses :is(.local-expense-kpis>div,.local-expenses-tools,.expense-online-tools) {
+  background: var(--cg-surface) !important;
+  color: var(--cg-ink) !important;
+  border-color: var(--cg-border) !important;
+  box-shadow: none !important;
+}
+body:not(.auth-locked) .main #v-expenses #localExpenseLedgerCard .local-expenses :is(h3,b,strong,.expense-paid-toggle,.expense-stock-option) {
+  color: var(--cg-ink) !important;
+}
+body:not(.auth-locked) .main #v-expenses #localExpenseLedgerCard .local-expenses :is(p,small,.muted,.card-h p,.local-expense-kpis small) {
+  color: var(--cg-muted) !important;
+}
+body:not(.auth-locked) .main #v-expenses #localExpenseLedgerCard .local-expenses .local-expense-kpis b {
+  color: var(--cg-ink) !important;
+}
+body:not(.auth-locked) .main #v-expenses #localExpenseLedgerCard .local-expenses table,
+body:not(.auth-locked) .main #v-expenses #localExpenseLedgerCard .local-expenses table tbody,
+body:not(.auth-locked) .main #v-expenses #localExpenseLedgerCard .local-expenses table tbody tr,
+body:not(.auth-locked) .main #v-expenses #localExpenseLedgerCard .local-expenses table tbody td {
+  background: var(--cg-surface) !important;
+  color: var(--cg-ink) !important;
+  border-color: var(--cg-border) !important;
+}
+body:not(.auth-locked) .main #v-expenses #localExpenseLedgerCard .local-expenses table thead th {
+  background: #E5EBE4 !important;
+  color: #344A3B !important;
+  border-color: var(--cg-border) !important;
+}
+body:not(.auth-locked) .main #v-expenses #localExpenseLedgerCard .local-expenses table tbody tr:nth-child(even) td {
+  background: #F0F3EE !important;
+}
+body:not(.auth-locked) .main #v-expenses #localExpenseLedgerCard .local-expenses table tbody tr:hover td {
+  background: var(--cg-surface-hover) !important;
+}
+body:not(.auth-locked) .main #v-expenses #localExpenseLedgerCard .local-expenses table tfoot td {
+  background: var(--cg-surface-soft) !important;
+  color: var(--cg-ink) !important;
+  border-color: var(--cg-border) !important;
+}
+body:not(.auth-locked) .main #v-expenses #localExpenseLedgerCard .local-expenses :is(.chip,.btn:not(.btn-primary)) {
+  background: var(--cg-surface-soft) !important;
+  color: var(--cg-forest) !important;
+  border-color: var(--cg-border) !important;
+}
+body:not(.auth-locked) .main #v-expenses #localExpenseLedgerCard .local-expenses .chip.on {
+  background: var(--cg-sage) !important;
+  color: var(--cg-forest) !important;
+  border-color: var(--cg-focus) !important;
+}
+body:not(.auth-locked) .main #v-expenses #localExpenseLedgerCard .local-expenses .empty {
+  background: var(--cg-surface-soft) !important;
+  color: var(--cg-muted) !important;
+}
+body:not(.auth-locked) .main #v-expenses #localExpenseLedgerCard .local-expenses :is(input,select,textarea) {
+  background: var(--cg-surface) !important;
+  color: var(--cg-ink) !important;
+  border-color: var(--cg-border-strong) !important;
+  color-scheme: light !important;
+}
+
+/* Guest-service refinements: readable labels, neutral booking lists and utility controls. */
+body:not(.auth-locked) .main .bf-page :is(.bf-kpi>span,.bf-kpi small,.bf-booking-main span,.bf-booking-main small,.bf-form-note,.bf-optional,.bf-footer-note,.bf-date-filter label) {
+  color: var(--cg-muted) !important;
+}
+body:not(.auth-locked) .main .bf-page :is(.bf-check,.bf-booking-row,.bf-date-filter,.bf-scan-result,.bf-coupon-card) {
+  background: var(--cg-surface-soft) !important;
+  color: var(--cg-ink) !important;
+  border-color: var(--cg-border) !important;
+  box-shadow: none !important;
+}
+body:not(.auth-locked) .main .bf-page .bf-check b { color: var(--cg-ink) !important; }
+body:not(.auth-locked) .main .bf-page .bf-booking-status,
+body:not(.auth-locked) .main .bf-page .bf-coupon-status:not(.used):not(.revoked) {
+  background: var(--cg-success-bg) !important;
+  color: var(--cg-success-ink) !important;
+  border: 1px solid #B7D1BC !important;
+}
+body:not(.auth-locked) .main .bf-page .bf-date-filter span { color: var(--cg-forest) !important; }
+body:not(.auth-locked) .main .bf-page .bf-footer-note .material-symbols-rounded { color: var(--cg-forest) !important; }
+body:not(.auth-locked) .main .gp-shell :is(.gp-kpi span,.gp-kpi small,.gp-live,.gp-empty,.gp-ledger-summary,.gp-category-meta,.gp-record p,.gp-record small,.gp-table td small) {
+  color: var(--cg-muted) !important;
+}
+body:not(.auth-locked) .main .gp-shell .gp-live { color: var(--cg-success-ink) !important; }
+body:not(.auth-locked) .main .gp-shell .gp-tag {
+  background: var(--cg-sage) !important;
+  color: var(--cg-forest) !important;
+  border: 1px solid var(--cg-border) !important;
+}
+
 /* Turf Ops uses ID-scoped legacy tokens and therefore gets an explicit neutral layer. */
 body:not(.auth-locked) .main #v-turfcare {
   --turf-panel: var(--cg-surface) !important;
