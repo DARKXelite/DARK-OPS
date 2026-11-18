@@ -374,11 +374,12 @@ export function createPartyPlannerModule({
     section = ["plan", "library", "analysis"].includes(value) ? value : "plan";
   }
 
+  function openQuickAdd(index) { readDraftFromDOM(); quickAddDish = Number(index); }
   function cancelQuickAdd() { readDraftFromDOM(); quickAddDish = -1; }
 
   return {
     renderHtml, setSection, beginNew, editPlan, addDish, addIngredient, removeDish,
     removeIngredient, loadRecipe, quickCreateIngredient, saveParty, saveRecipe,
-    cancelQuickAdd, readDraftFromDOM
+    cancelQuickAdd, openQuickAdd, readDraftFromDOM
   };
 }
