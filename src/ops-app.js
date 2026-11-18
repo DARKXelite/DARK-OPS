@@ -2471,7 +2471,10 @@ function syncListenersForView() {
     const cache = new Map();
     LOADED[k] = false;
     S[k] = [];
-    const unsubscribe = onSnapshot(collection(db, CONFIG.COL[k]), snap => {
+    const source = cur === "fnb" && k === "inventory"
+      ? query(collection(db, CONFIG.COL[k]), where("category", "in", ["F&B", "Other"]))
+      : collection(db, CONFIG.COL[k]);
+    const unsubscribe = onSnapshot(source, snap => {
       if (listenerEpochs.get(k) !== epoch) return;
       const firstSnapshot = !LOADED[k];
       const changes = snap.docChanges();
