@@ -77,6 +77,15 @@
   --color-text-muted: var(--cg-muted) !important;
   --color-accent: var(--cg-forest) !important;
   --color-border: var(--cg-border) !important;
+  --oa-bg: var(--cg-canvas) !important;
+  --oa-panel: var(--cg-surface) !important;
+  --oa-row: var(--cg-surface) !important;
+  --oa-row-alt: #F0F3EE !important;
+  --oa-row-hover: var(--cg-surface-hover) !important;
+  --oa-head: #E5EBE4 !important;
+  --oa-line: var(--cg-border) !important;
+  --oa-text: var(--cg-ink) !important;
+  --oa-muted: var(--cg-muted) !important;
 }
 html { scroll-behavior: smooth; scroll-padding-top: 76px; }
 body:not(.auth-locked) {
@@ -406,6 +415,43 @@ body:not(.auth-locked) .main .table-wrap table { min-width: 600px; }
 body:not(.auth-locked) .main :is(.empty,.fnb-empty,.fnb-empty-state,.gp-empty,.bf-empty) { color: var(--cg-muted) !important; }
 body:not(.auth-locked) .main .list-row { border-color: var(--cg-border) !important; }
 
+/* ID-specific legacy table rules in fuel, turf, records and expenses are normalized here. */
+body:not(.auth-locked) .main :is(#v-fuel,#v-shifts,#v-records,#v-turfcare,#v-registry,#v-users,#v-expenses) table,
+body:not(.auth-locked) .main :is(#ledgerCard,#usersTbl,#invTbl,#inwardTbl) table {
+  background: var(--cg-surface) !important;
+  color: var(--cg-ink) !important;
+  border-color: var(--cg-border) !important;
+}
+body:not(.auth-locked) .main :is(#v-fuel,#v-shifts,#v-records,#v-turfcare,#v-registry,#v-users,#v-expenses) table thead th,
+body:not(.auth-locked) .main :is(#ledgerCard,#usersTbl,#invTbl,#inwardTbl) table thead th {
+  background: #E5EBE4 !important;
+  color: #344A3B !important;
+  border-color: var(--cg-border) !important;
+}
+body:not(.auth-locked) .main :is(#v-fuel,#v-shifts,#v-records,#v-turfcare,#v-registry,#v-users,#v-expenses) table tbody tr,
+body:not(.auth-locked) .main :is(#v-fuel,#v-shifts,#v-records,#v-turfcare,#v-registry,#v-users,#v-expenses) table tbody td,
+body:not(.auth-locked) .main :is(#ledgerCard,#usersTbl,#invTbl,#inwardTbl) table tbody td {
+  background: var(--cg-surface) !important;
+  color: var(--cg-ink) !important;
+  border-color: var(--cg-border) !important;
+}
+body:not(.auth-locked) .main :is(#v-fuel,#v-shifts,#v-records,#v-turfcare,#v-registry,#v-users,#v-expenses) table tbody tr:nth-child(even) td,
+body:not(.auth-locked) .main :is(#ledgerCard,#usersTbl,#invTbl,#inwardTbl) table tbody tr:nth-child(even) td {
+  background: #F0F3EE !important;
+}
+body:not(.auth-locked) .main :is(#v-fuel,#v-shifts,#v-records,#v-turfcare,#v-registry,#v-users,#v-expenses) table tbody tr:hover td,
+body:not(.auth-locked) .main :is(#ledgerCard,#usersTbl,#invTbl,#inwardTbl) table tbody tr:hover td {
+  background: var(--cg-surface-hover) !important;
+  color: var(--cg-ink) !important;
+}
+body:not(.auth-locked) .main :is(#v-fuel,#v-shifts,#v-records,#v-turfcare,#v-registry,#v-users,#v-expenses) table :is(small,.muted) {
+  color: var(--cg-muted) !important;
+}
+body:not(.auth-locked) .main :is(#v-fuel,#v-shifts,#v-records,#v-turfcare,#v-registry,#v-users,#v-expenses) table :is(input,select,textarea) {
+  background: var(--cg-surface) !important;
+  color: var(--cg-ink) !important;
+  border-color: var(--cg-border-strong) !important;
+}
 /* Inventory: category accordions, summaries, alerts, tables and import modal. */
 body:not(.auth-locked) .main #v-registry :is(.card,.kpi,.inv-category,details.inv-category,.inv-category-body,.inv-category-table,.inv-category-placeholder) {
   background: var(--cg-surface) !important;
@@ -524,6 +570,163 @@ body:not(.auth-locked) .main #tpContainer .tp-repeat-trigger:hover,
 body:not(.auth-locked) .main #tpContainer .tp-saved-entry button:hover,
 body:not(.auth-locked) .main #tpContainer .tp-repeat-cal-head button:hover { background: var(--cg-sage) !important; }
 
+/* Operations dashboard sub-components and metrics. */
+body:not(.auth-locked) .main :is(
+  .ops-domain-kpi,.ops-status-cell,.ops-compare-col,.ops-intel-stat,
+  .ops-product-compare-row,.ops-day-cost-items,.ops-day-cost-item,
+  .ops-turf-area-row,.ops-week-side-card,.ops-plan-issue-compare,
+  .ops-product-compare-empty
+) {
+  background: var(--cg-surface-soft) !important;
+  color: var(--cg-ink) !important;
+  border-color: var(--cg-border) !important;
+  box-shadow: none !important;
+}
+body:not(.auth-locked) .main :is(.ops-domain-kpi span,.ops-domain-kpi small,.ops-status-label,.ops-intel-stat small,.ops-intel-row small,.ops-intel-value small,.ops-compare-col>span,.ops-compare-col>small,.ops-unplanned-row span,.ops-product-compare-name small,.ops-product-compare-qty small) {
+  color: var(--cg-muted) !important;
+}
+body:not(.auth-locked) .main :is(.ops-domain-kpi b,.ops-intel-stat b,.ops-intel-main b,.ops-intel-value,.ops-product-compare-name b,.ops-product-compare-qty b) {
+  color: var(--cg-ink) !important;
+}
+body:not(.auth-locked) .main .ops-category-mark {
+  background: var(--cg-sage) !important;
+  color: var(--cg-forest) !important;
+  border-color: var(--cg-border) !important;
+}
+body:not(.auth-locked) .main .ops-intel-badge {
+  background: var(--cg-success-bg) !important;
+  color: var(--cg-success-ink) !important;
+  border-color: #B7D1BC !important;
+}
+body:not(.auth-locked) .main .ops-intel-badge .material-symbols-rounded { color: var(--cg-success-ink) !important; }
+body:not(.auth-locked) .main :is(.ops-intel-row,.ops-day-cost-items,.ops-day-cost-item) { border-color: var(--cg-border) !important; }
+body:not(.auth-locked) .main .ops-day-cost-item-value { color: var(--cg-forest) !important; }
+body:not(.auth-locked) .main .ops-day-cost-item-value.unpriced { color: var(--cg-warning-ink) !important; }
+body:not(.auth-locked) .main .ops-day-cost-more { color: var(--cg-forest) !important; }
+body:not(.auth-locked) .main .ops-product-compare-qty.planned b { color: #735B2D !important; }
+body:not(.auth-locked) .main .ops-product-compare-qty.issued b { color: var(--cg-success-ink) !important; }
+body:not(.auth-locked) .main .ops-dashboard-period-label { color: var(--cg-muted) !important; }
+body:not(.auth-locked) .main .ops-unplanned-label { color: var(--cg-warning-ink) !important; }
+
+/* Expenses ledger was a separate dark-green panel with its own table overrides. */
+body:not(.auth-locked) .main .local-expenses,
+body:not(.auth-locked) .main #v-expenses #localExpenseLedgerCard .local-expenses {
+  background: var(--cg-surface) !important;
+  color: var(--cg-ink) !important;
+  border-color: var(--cg-border) !important;
+  box-shadow: var(--cg-shadow) !important;
+}
+body:not(.auth-locked) .main .local-expenses :is(h3,p,.muted,.card-h p) { color: var(--cg-muted) !important; }
+body:not(.auth-locked) .main .local-expenses .card-h h3 { color: var(--cg-ink) !important; }
+body:not(.auth-locked) .main .local-expenses :is(.chip,.chip.on) {
+  background: var(--cg-surface-soft) !important;
+  color: var(--cg-forest) !important;
+  border-color: var(--cg-border) !important;
+}
+body:not(.auth-locked) .main .local-expenses .chip.on {
+  background: var(--cg-sage) !important;
+  border-color: var(--cg-focus) !important;
+}
+body:not(.auth-locked) .main .local-expenses table tfoot td {
+  background: var(--cg-surface-soft) !important;
+  color: var(--cg-ink) !important;
+}
+body:not(.auth-locked) .main .local-expenses .empty {
+  background: var(--cg-surface-soft) !important;
+  color: var(--cg-muted) !important;
+}
+
+/* Turf-cost and operational analytics reports have their own nested component systems. */
+body:not(.auth-locked) .modal.turf-cost-analytics :is(.turf-cost-filterbar,.turf-cost-summary,.turf-cost-panel,.turf-cost-table-wrap) {
+  background: var(--cg-surface-soft) !important;
+  color: var(--cg-ink) !important;
+  border-color: var(--cg-border) !important;
+  box-shadow: none !important;
+}
+body:not(.auth-locked) .modal.turf-cost-analytics :is(.turf-cost-summary small,.turf-cost-summary span,.turf-cost-panel-head small,.turf-cost-panel-head>span,.turf-cost-caveat,.turf-cost-chart-empty) {
+  color: var(--cg-muted) !important;
+}
+body:not(.auth-locked) .modal.turf-cost-analytics :is(.turf-cost-summary b,.turf-cost-panel-head h3) { color: var(--cg-ink) !important; }
+body:not(.auth-locked) .modal.turf-cost-analytics .turf-cost-summary.primary {
+  background: var(--cg-sage) !important;
+  border-color: var(--cg-border-strong) !important;
+}
+body:not(.auth-locked) .modal.turf-cost-analytics .turf-cost-summary.primary b { color: var(--cg-forest) !important; }
+body:not(.auth-locked) .modal.turf-cost-analytics .turf-cost-table th {
+  background: #E5EBE4 !important; color: #344A3B !important; border-color: var(--cg-border) !important;
+}
+body:not(.auth-locked) .modal.turf-cost-analytics .turf-cost-table td {
+  background: var(--cg-surface) !important; color: var(--cg-ink) !important; border-color: var(--cg-border) !important;
+}
+
+/* Operational Analytics report: light report canvas, quiet dividers and semantic data states. */
+body:not(.auth-locked) #overlay .modal.ops-analytics-modal,
+body:not(.auth-locked) #overlay .modal.ops-analytics-modal .m-body,
+body:not(.auth-locked) #overlay .modal.ops-analytics-modal #opsAnalyticsRoot,
+body:not(.auth-locked) #overlay .modal.ops-analytics-modal .oa-report {
+  background: var(--cg-canvas) !important;
+  color: var(--cg-ink) !important;
+}
+body:not(.auth-locked) #overlay .modal.ops-analytics-modal :is(.oa-toolbar,.oa-domain-tabs,.oa-view-tabs) {
+  background: var(--cg-surface-soft) !important;
+  color: var(--cg-ink) !important;
+  border-color: var(--cg-border) !important;
+}
+body:not(.auth-locked) #overlay .modal.ops-analytics-modal :is(.oa-kpi,.oa-panel,.oa-note-text,.oa-access-note,.oa-table-wrap) {
+  background: var(--cg-surface) !important;
+  color: var(--cg-ink) !important;
+  border-color: var(--cg-border) !important;
+  box-shadow: none !important;
+}
+body:not(.auth-locked) #overlay .modal.ops-analytics-modal :is(.oa-kpi small,.oa-kpi span,.oa-panel-head p,.oa-panel-meta,.oa-dim,.oa-loading,.oa-date-controls label) {
+  color: var(--cg-muted) !important;
+}
+body:not(.auth-locked) #overlay .modal.ops-analytics-modal :is(.oa-kpi b,.oa-panel-head h3,.oa-table td,.oa-table b) {
+  color: var(--cg-ink) !important;
+}
+body:not(.auth-locked) #overlay .modal.ops-analytics-modal :is(.oa-panel-head small,.oa-loading .material-symbols-rounded,.oa-access-note .material-symbols-rounded) {
+  color: var(--cg-forest) !important;
+}
+body:not(.auth-locked) #overlay .modal.ops-analytics-modal :is(.oa-date-controls input,.oa-table) {
+  background: var(--cg-surface) !important;
+  color: var(--cg-ink) !important;
+  border-color: var(--cg-border-strong) !important;
+}
+body:not(.auth-locked) #overlay .modal.ops-analytics-modal .oa-table th {
+  background: #E5EBE4 !important;
+  color: #344A3B !important;
+  border-color: var(--cg-border) !important;
+}
+body:not(.auth-locked) #overlay .modal.ops-analytics-modal .oa-table td,
+body:not(.auth-locked) #overlay .modal.ops-analytics-modal .oa-table tbody tr:nth-child(even) td {
+  background: var(--cg-surface) !important;
+  color: var(--cg-ink) !important;
+  border-color: var(--cg-border) !important;
+}
+body:not(.auth-locked) #overlay .modal.ops-analytics-modal .oa-table tbody tr:hover td {
+  background: var(--cg-surface-hover) !important;
+}
+body:not(.auth-locked) #overlay .modal.ops-analytics-modal :is(.oa-preset,.oa-domain-tab,.oa-view-tab) {
+  background: var(--cg-surface) !important;
+  color: var(--cg-forest) !important;
+  border-color: var(--cg-border) !important;
+}
+body:not(.auth-locked) #overlay .modal.ops-analytics-modal :is(.oa-preset.active,.oa-domain-tab.active,.oa-view-tab.active) {
+  background: var(--cg-forest) !important;
+  color: #FFFFFF !important;
+  border-color: var(--cg-forest) !important;
+}
+body:not(.auth-locked) #overlay .modal.ops-analytics-modal :is(.oa-status,.oa-unpriced,.oa-over,.oa-under) {
+  background: var(--cg-surface-soft) !important;
+  color: var(--cg-forest) !important;
+  border-color: var(--cg-border) !important;
+}
+body:not(.auth-locked) #overlay .modal.ops-analytics-modal .oa-unpriced {
+  background: var(--cg-warning-bg) !important;
+  color: var(--cg-warning-ink) !important;
+  border-color: #DFD0A9 !important;
+}
+body:not(.auth-locked) #overlay .modal.ops-analytics-modal .oa-drill { color: var(--cg-forest) !important; }
 /* Turf Ops uses ID-scoped legacy tokens and therefore gets an explicit neutral layer. */
 body:not(.auth-locked) .main #v-turfcare {
   --turf-panel: var(--cg-surface) !important;
