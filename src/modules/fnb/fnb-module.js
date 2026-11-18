@@ -1,5 +1,6 @@
 import { parseOrderRows, parseTextOrders } from "./fnb-import.js";
 import { findFnbInventoryMatch, canReceiveIntoInventory } from "./inventory-link.js";
+import { createPartyPlannerModule } from "./party-planner.js";
 
 export function pendingDays(order, today) {
   const start = new Date(String(order.orderDate || today) + "T00:00:00");
@@ -13,12 +14,13 @@ export function orderBalance(order) {
 
 export function createFnbModule({
   db, CONFIG, collection, addDoc, doc, updateDoc, runTransaction, serverTimestamp,
-  num, esc, money, today, S, $, setHTML, toast
+  num, esc, money, today, S, $, setHTML, toast, canWriteInventory = () => false
 }) {
   let activeTab = "order";
   let importPreview = null;
   let importBusy = false;
   const dateToday = () => today();
+  const partyPlanner = createPartyPlannerModule({ db, CONFIG, collection, addDoc, doc, updateDoc, serverTimestamp, num, money, today, S, $, canWriteInventory, toast });
 
   function sortedPending() {
     return (S.fnbOrders || [])
@@ -120,15 +122,19 @@ export function createFnbModule({
     const root = $("#fnbRoot");
     if (!root) return;
     const pendingCount = sortedPending().length;
-    setHTML(root, '<div class="fnb-shell"><div class="fnb-tabs" role="tablist" aria-label="F&B sections">' +
-      '<button class="btn fnb-tab ' + (activeTab === "order" ? "active" : "") + '" role="tab" aria-selected="' + (activeTab === "order") + '" data-act="fnb-tab" data-tab="order">Order</button>' +
-      '<button class="btn fnb-tab ' + (activeTab === "receivables" ? "active" : "") + '" role="tab" aria-selected="' + (activeTab === "receivables") + '" data-act="fnb-tab" data-tab="receivables">Receivables <span class="fnb-status pending">' + pendingCount + '</span></button></div>' +
-      (activeTab === "order" ? renderImport() + renderOrderForm() + renderPending() : renderReceivables()) + renderConsumption() + '</div>');
+    const tabs = '<div class="fnb-tabs" role="tablist" aria-label="F&B sections">' +
+      '<button class="btn fnb-tab ' + (activeTab === "order" ? "active" : "") + '" role="tab" aria-selected="' + (activeTab === "order") + '" data-act="fnb-tab" data-tab="order">Orders</button>' +
+      '<button class="btn fnb-tab ' + (activeTab === "receivables" ? "active" : "") + '" role="tab" aria-selected="' + (activeTab === "receivables") + '" data-act="fnb-tab" data-tab="receivables">Receivables <span class="fnb-status pending">' + pendingCount + '</span></button>' +
+      '<button class="btn fnb-tab ' + (activeTab === "party" ? "active" : "") + '" role="tab" aria-selected="' + (activeTab === "party") + '" data-act="fnb-tab" data-tab="party">Party Planner & Costing</button></div>';
+    const content = activeTab === "party"
+      ? partyPlanner.renderHtml()
+      : (activeTab === "order" ? renderImport() + renderOrderForm() + renderPending() : renderReceivables()) + renderConsumption();
+    setHTML(root, '<div class="fnb-shell">' + tabs + content + '</div>');
     const fileInput = $("#fnbImportFile");
     if (fileInput) fileInput.addEventListener("change", event => handleImportFile(event.target.files?.[0]));
   }
 
-  function setTab(tab) { activeTab = tab === "receivables" ? "receivables" : "order"; }
+  function setTab(tab) { activeTab = tab === "receivables" ? "receivables" : tab === "party" ? "party" : "order"; }
   function clearImport() { importPreview = null; render(); }
   async function importOrders() {
     const rows = importPreview?.rows || [];
@@ -246,5 +252,5 @@ export function createFnbModule({
       toast(error.message === "Receipt exceeds the remaining balance" ? error.message : "Could not save receipt. Check connection and access rules.", "err");
     }
   }
-  return { render, setTab, saveOrder, receive, importOrders, clearImport };
+  return { render, setTab, saveOrder, receive, importOrders, clearImport, partyPlanner };
 }
