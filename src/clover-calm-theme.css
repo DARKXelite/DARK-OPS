@@ -23,6 +23,60 @@
   --cg-danger-bg: #F6EAE7;
   --cg-danger-ink: #843A33;
   --cg-shadow: 0 1px 2px rgba(35,55,43,.035);
+  /* Compatibility aliases: every legacy component token resolves to this palette. */
+  --bg: var(--cg-canvas) !important;
+  --panel: var(--cg-surface) !important;
+  --surface: var(--cg-surface) !important;
+  --surface-2: var(--cg-surface-soft) !important;
+  --surface-3: #E2E9E1 !important;
+  --surface-hover: var(--cg-surface-hover) !important;
+  --card: var(--cg-surface) !important;
+  --border: var(--cg-border) !important;
+  --text: var(--cg-ink) !important;
+  --muted: var(--cg-muted) !important;
+  --brand: var(--cg-forest) !important;
+  --brand-2: var(--cg-forest) !important;
+  --btn: var(--cg-forest) !important;
+  --brand-soft: var(--cg-sage) !important;
+  --gold: var(--cg-forest) !important;
+  --gold-soft: var(--cg-sage) !important;
+  --ok: var(--cg-success-ink) !important;
+  --warn: var(--cg-warning-ink) !important;
+  --bad: var(--cg-danger-ink) !important;
+  --ok-soft: var(--cg-success-bg) !important;
+  --warn-soft: var(--cg-warning-bg) !important;
+  --bad-soft: var(--cg-danger-bg) !important;
+  --shadow: var(--cg-shadow) !important;
+  --radius: 11px !important;
+  --sherwood: var(--cg-forest) !important;
+  --sidebar: var(--cg-forest) !important;
+  --table-bg: var(--cg-surface) !important;
+  --table-row: var(--cg-surface) !important;
+  --table-row-alt: #F0F3EE !important;
+  --table-row-hover: var(--cg-surface-hover) !important;
+  --table-head: #E5EBE4 !important;
+  --table-line: var(--cg-border) !important;
+  --table-text: var(--cg-ink) !important;
+  --table-muted: var(--cg-muted) !important;
+  --data-list-bg: var(--cg-surface) !important;
+  --data-list-row: var(--cg-surface) !important;
+  --data-list-row-alt: #F0F3EE !important;
+  --data-list-row-hover: var(--cg-surface-hover) !important;
+  --data-list-head: #E5EBE4 !important;
+  --data-list-text: var(--cg-ink) !important;
+  --data-list-muted: var(--cg-muted) !important;
+  --planner-olive: var(--cg-forest) !important;
+  --planner-olive-deep: var(--cg-forest-hover) !important;
+  --planner-olive-soft: var(--cg-sage) !important;
+  --planner-olive-pale: var(--cg-surface-soft) !important;
+  --color-bg: var(--cg-canvas) !important;
+  --color-surface: var(--cg-surface) !important;
+  --color-surface-raised: var(--cg-surface-soft) !important;
+  --color-surface-active: var(--cg-surface-hover) !important;
+  --color-text: var(--cg-ink) !important;
+  --color-text-muted: var(--cg-muted) !important;
+  --color-accent: var(--cg-forest) !important;
+  --color-border: var(--cg-border) !important;
 }
 html { scroll-behavior: smooth; scroll-padding-top: 76px; }
 body:not(.auth-locked) {
@@ -469,6 +523,62 @@ body:not(.auth-locked) .main #tpContainer .tp-cal-day i { background: var(--cg-f
 body:not(.auth-locked) .main #tpContainer .tp-repeat-trigger:hover,
 body:not(.auth-locked) .main #tpContainer .tp-saved-entry button:hover,
 body:not(.auth-locked) .main #tpContainer .tp-repeat-cal-head button:hover { background: var(--cg-sage) !important; }
+
+/* Turf Ops uses ID-scoped legacy tokens and therefore gets an explicit neutral layer. */
+body:not(.auth-locked) .main #v-turfcare {
+  --turf-panel: var(--cg-surface) !important;
+  --turf-panel-soft: var(--cg-surface-soft) !important;
+  --turf-line: var(--cg-border) !important;
+  --turf-glow: rgba(49,84,67,.06) !important;
+}
+body:not(.auth-locked) .main #v-turfcare :is(
+  .turf-workboard-grid>.card,.turf-log-card,.turf-page-head,.turf-metric-card,
+  .turf-stock-category,.turf-plan-item,.turf-week-side-card,.turf-plan-group,
+  .turf-batch-entry-row,.turf-week-side-stack,.turf-variance-filters,
+  .turf-variance-table-wrap,.turf-featured-card,.turf-area-sidebar,
+  .turf-week-legend,.turf-stock-summary
+) {
+  background: var(--cg-surface) !important;
+  color: var(--cg-ink) !important;
+  border-color: var(--cg-border) !important;
+  box-shadow: none !important;
+}
+body:not(.auth-locked) .main #v-turfcare :is(
+  .turf-day-head b,.turf-plan-title,.turf-plan-item b,.turf-week-side-date b,
+  .turf-plan-group>summary,.turf-stock-category b,.turf-page-head h2,
+  .turf-category-head h3,.turf-card-head h3
+) { color: var(--cg-ink) !important; }
+body:not(.auth-locked) .main #v-turfcare :is(
+  .turf-day-head span,.turf-empty-day,.turf-plan-meta,.turf-plan-row-value,
+  .turf-week-side-date>span,.turf-week-side-products,.turf-week-side-summary,
+  .turf-featured-foot>span,.turf-category-head span,.turf-data-note,
+  .turf-variance-filters label,.turf-variance-table th,.turf-variance-table td small
+) { color: var(--cg-muted) !important; }
+body:not(.auth-locked) .main #v-turfcare :is(input,select,textarea) {
+  background: var(--cg-surface) !important;
+  color: var(--cg-ink) !important;
+  border-color: var(--cg-border-strong) !important;
+  color-scheme: light !important;
+}
+body:not(.auth-locked) .main #v-turfcare :is(.turf-add-day,.turf-batch-entry-row button,.turf-workboard-grid button) {
+  background: var(--cg-surface-soft) !important;
+  color: var(--cg-forest) !important;
+  border-color: var(--cg-border) !important;
+  box-shadow: none !important;
+}
+body:not(.auth-locked) .main #v-turfcare .turf-plan-item:hover,
+body:not(.auth-locked) .main #v-turfcare .turf-week-side-card:hover {
+  background: var(--cg-surface-hover) !important;
+  border-color: var(--cg-border-strong) !important;
+}
+body:not(.auth-locked) .main #v-turfcare .turf-plan-item .turf-plan-inline-dot { opacity: 1; }
+body:not(.auth-locked) .main #v-turfcare .turf-plan-item.fertilizer { border-left-color: #5B8666 !important; }
+body:not(.auth-locked) .main #v-turfcare .turf-plan-item.pesticide { border-left-color: #A36C59 !important; }
+body:not(.auth-locked) .main #v-turfcare .turf-plan-item.enhancer { border-left-color: #7776A7 !important; }
+body:not(.auth-locked) .main #v-turfcare .turf-add-day:hover {
+  background: var(--cg-sage) !important;
+  color: var(--cg-forest-hover) !important;
+}
 
 /* F&B and Party Planner */
 body:not(.auth-locked) .main :is(.fnb-party-shell,.fnb-panel,.fnb-dish-card,.fnb-recipe-card,.fnb-quick-add,.fnb-recipe-line) {
