@@ -82,8 +82,8 @@ export function createPartyPlannerModule({
     return {
       dishes,
       totalCost: dishes.reduce((sum, row) => sum + row.totalCost, 0),
-      priced: dishes.every(row => row.priced),
-      unpricedLines: dishes.reduce((count, row) => count + row.lines.filter(line => line.lineCost === null).length, 0),
+      priced: dishes.length > 0 && dishes.every(row => row.lines.length > 0 && row.priced),
+      unpricedLines: dishes.reduce((count, row) => count + Math.max(row.lines.length ? 0 : 1, row.lines.filter(line => line.lineCost === null).length), 0),
       costPerPax: Number(draft.pax) > 0 ? dishes.reduce((sum, row) => sum + row.totalCost, 0) / Number(draft.pax) : 0,
       shortages: dishes.flatMap(row => row.lines.filter(line => line.shortage > 0).map(line => ({ ...line, dishName: row.dish.name })))
     };
