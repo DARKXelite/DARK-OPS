@@ -83,6 +83,7 @@ export function createPartyPlannerModule({
       dishes,
       totalCost: dishes.reduce((sum, row) => sum + row.totalCost, 0),
       priced: dishes.every(row => row.priced),
+      unpricedLines: dishes.reduce((count, row) => count + row.lines.filter(line => line.lineCost === null).length, 0),
       costPerPax: Number(draft.pax) > 0 ? dishes.reduce((sum, row) => sum + row.totalCost, 0) / Number(draft.pax) : 0,
       shortages: dishes.flatMap(row => row.lines.filter(line => line.shortage > 0).map(line => ({ ...line, dishName: row.dish.name })))
     };
@@ -370,6 +371,7 @@ export function createPartyPlannerModule({
       '<label class="field"><span class="f">Event type</span><select data-plan-field="eventType">' + ["Party","Wedding","Corporate","Buffet","Conference","Other"].map(v => '<option' + (draft.eventType === v ? " selected" : "") + '>' + v + '</option>').join("") + '</select></label></div>' +
       '<label class="field"><span class="f">Notes</span><input data-plan-field="notes" maxlength="500" value="' + escHtml(draft.notes) + '" placeholder="Optional notes"></label></section>' +
       '<div class="fnb-party-kpis"><div class="stat"><div class="k">Guests</div><div class="v" data-kpi="pax">' + fmt(draft.pax, 0) + '</div></div><div class="stat"><div class="k">Menu dishes</div><div class="v">' + summary.dishes.length + '</div></div><div class="stat"><div class="k">Estimated food cost</div><div class="v" data-kpi="total">' + money(summary.totalCost) + '</div></div><div class="stat"><div class="k">Cost / PAX</div><div class="v" data-kpi="per-pax">' + money(summary.costPerPax) + '</div></div></div>' +
+      (summary.priced ? '' : '<div class="fnb-note fnb-cost-warning">' + summary.unpricedLines + ' ingredient line(s) are unpriced or use incompatible units. Check the inventory UOP, portion unit and purchase rate before relying on this estimate.</div>') +
       '<section class="fnb-menu-stack">' + (draft.menuItems.length ? draft.menuItems.map(renderDish).join("") : '<div class="card fnb-empty-state">Start by adding a dish, or load one from the Recipe Library.</div>') + '</section>' +
       '<div class="fnb-party-toolbar"><button type="button" class="btn" data-act="fnb-party-add-dish">+ Add menu item</button><button type="button" class="btn btn-primary" data-act="fnb-party-save">Save party plan</button><button type="button" class="btn" data-act="fnb-party-show-library">Recipe Library</button></div>' +
       '<section class="card fnb-panel"><div class="fnb-panel-head"><div><h3>Ingredient availability</h3><div class="fnb-note">Required quantity is calculated from PAX × portion size and compared with current inventory.</div></div></div>' +
