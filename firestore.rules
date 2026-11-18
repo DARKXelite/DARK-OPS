@@ -313,9 +313,24 @@ service cloud.firestore {
       allow read: if opsTeam();
       allow write: if opsTeam();
     }
+    function validFnbIngredientCreate() {
+      let d = request.resource.data;
+      return d.keys().hasOnly(['partName', 'category', 'domain', 'stockQuantity', 'unit', 'unitCost', 'reorderLevel', 'createdAt', 'updatedAt'])
+        && d.keys().hasAll(['partName', 'category', 'domain', 'stockQuantity', 'unit', 'unitCost', 'reorderLevel', 'createdAt', 'updatedAt'])
+        && d.partName is string && d.partName.size() > 0 && d.partName.size() <= 200
+        && d.category == 'F&B' && d.domain == 'F&B'
+        && d.stockQuantity == 0
+        && d.unit is string && d.unit.size() > 0 && d.unit.size() <= 30
+        && d.unitCost is number && d.unitCost >= 0
+        && d.reorderLevel == 0
+        && d.createdAt == request.time && d.updatedAt == request.time;
+    }
     match /inventory/{id} {
-      allow read: if signedIn() && hasRole(['admin', 'manager', 'storekeeper', 'operator']) && hasModuleAccess('inventory');
-      allow create, delete: if storeTeam();
+      // F&B staff may read the ingredient masters needed by the Party Planner without
+      // receiving access to the wider Inventory Master view.
+      allow read: if (signedIn() && hasRole(['admin', 'manager', 'storekeeper', 'operator']) && hasModuleAccess('inventory')) || fnbTeam();
+      allow create: if storeTeam() || (fnbTeam() && validFnbIngredientCreate());
+      allow delete: if storeTeam();
       allow update: if storeTeam()
         || (hasRole(['operator'])
           && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['stockQuantity', 'updatedAt'])
