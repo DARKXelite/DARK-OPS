@@ -328,7 +328,7 @@ service cloud.firestore {
     match /inventory/{id} {
       // F&B staff may read the ingredient masters needed by the Party Planner without
       // receiving access to the wider Inventory Master view.
-      allow read: if (signedIn() && hasRole(['admin', 'manager', 'storekeeper', 'operator']) && hasModuleAccess('inventory')) || (fnbTeam() && resource.data.category in ['F&B', 'Other']);
+      allow read: if (signedIn() && hasRole(['admin', 'manager', 'storekeeper', 'operator']) && hasModuleAccess('inventory')) || (fnbTeam() && resource.data.category == 'F&B');
       allow create: if storeTeam() || (fnbTeam() && validFnbIngredientCreate());
       allow delete: if storeTeam();
       allow update: if storeTeam()
