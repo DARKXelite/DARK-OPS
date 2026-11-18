@@ -2334,7 +2334,7 @@ function renderRecords() {
 const fnbModule = createFnbModule({
   db, CONFIG, collection, addDoc, doc, updateDoc, runTransaction, serverTimestamp,
   num, esc, money, today, S, $, setHTML, toast,
-  canWriteInventory: () => RBAC.can('inventory.write')
+  canWriteInventory: () => RBAC.can('inventory.write') || RBAC.can('fnb.write')
 });
 
 /* ================= NAV / RENDER LOOP ================= */
@@ -2452,7 +2452,7 @@ function syncListenersForView() {
   setConn('');
   const desired = new Set(VIEW_COLLECTIONS[cur] || []);
   Object.keys(CONFIG.COL).forEach(k => {
-    const permitted = RBAC.can(permissionForCollection(CONFIG.COL[k], false));
+    const permitted = RBAC.can(permissionForCollection(CONFIG.COL[k], false)) || (cur === 'fnb' && k === 'inventory' && RBAC.can('fnb.read'));
     const shouldListen = desired.has(k) && permitted;
     if (!shouldListen) {
       if (unsubs.has(k)) stopOneListener(k);
