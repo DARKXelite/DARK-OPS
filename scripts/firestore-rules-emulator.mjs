@@ -359,6 +359,8 @@ test("F&B staff can read inventory and create only zero-stock F&B ingredients, r
     pricedSnapshot: true,
     shortageSnapshot: [],
     status: "Draft",
+    revision: 1,
+    revisionHistory: [],
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp()
   }));
