@@ -34,7 +34,7 @@ export function calculateRecipeCost(recipe, pax, inventory = []) {
     const portionUnit = line.portionUnit || purchaseUnit;
     const requiredPerGuest = convertPortionToPurchaseUnit(portionQty, portionUnit, purchaseUnit);
     const requiredQty = requiredPerGuest === null ? null : requiredPerGuest * guests;
-    const cost = requiredQty === null || !Number.isFinite(rate) ? null : requiredQty * Math.max(0, rate);
+    const cost = requiredQty === null || !item || !Number.isFinite(rate) || rate <= 0 ? null : requiredQty * rate;
     const stock = Number(item?.stockQuantity || 0);
     return {
       ...line, itemName: line.itemName || item?.partName || "Unlinked ingredient",
@@ -127,7 +127,7 @@ export function createPartyPlannerModule({
   function addIngredient(index) {
     readDraftFromDOM();
     const dish = draft.menuItems[index];
-    if (dish) dish.ingredients.push({ itemId: "", itemName: "", purchaseUnit: "", purchaseRate: 0, portionQty: 0, portionUnit: "g" });
+    if (dish) dish.ingredients.push({ itemId: "", itemName: "", purchaseUnit: "", purchaseRate: 0, portionQty: 0, portionUnit: "" });
   }
 
   function removeDish(index) {
@@ -170,7 +170,7 @@ export function createPartyPlannerModule({
     draft.menuItems.push({
       name: recipe.name, category: recipe.category || "Main Course",
       recipeId: recipe.id, recipeVersion: recipe.version || 1,
-      ingredients: (recipe.ingredients || []).map(line => ({ ...line }))
+      ingredients: (recipe.ingredients || []).map(line => ({ ...line, purchaseRate: Number(findItem(line.itemId)?.unitCost ?? line.purchaseRate ?? 0), purchaseUnit: findItem(line.itemId)?.unit || line.purchaseUnit }))
     });
     section = "plan";
     toast("Recipe added to this party. Changes here will not alter the saved recipe.");
@@ -379,7 +379,8 @@ export function createPartyPlannerModule({
 
   function renderLibrary() {
     const cards = recipes().map(recipe => {
-      const cost = calculateRecipeCost(recipe, 1, inventoryItems());
+      const currentRecipe = { ...recipe, ingredients: (recipe.ingredients || []).map(line => ({ ...line, purchaseRate: Number(findItem(line.itemId)?.unitCost ?? line.purchaseRate ?? 0), purchaseUnit: findItem(line.itemId)?.unit || line.purchaseUnit })) };
+      const cost = calculateRecipeCost(currentRecipe, 1, inventoryItems());
       return '<article class="card fnb-recipe-card"><div><h3>' + escHtml(recipe.name) + '</h3><span class="fnb-status">' + escHtml(recipe.category || "Main Course") + '</span><p class="fnb-note">' + (recipe.ingredients || []).length + ' ingredients · Version ' + escHtml(recipe.version || 1) + '</p></div>' +
         '<div class="fnb-recipe-card-actions"><button type="button" class="btn btn-primary btn-sm" data-act="fnb-party-load" data-id="' + escHtml(recipe.id) + '">Load into party</button><span class="fnb-note">' + (cost.priced ? money(cost.totalCost) + ' / PAX at current rates' : "Review units and rates") + '</span></div></article>';
     }).join("");
