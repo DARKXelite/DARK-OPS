@@ -162,7 +162,7 @@ test("Breakfast Pass uses one room QR, a daily guest counter, and a direct Whats
   assert.match(module, /sendRoomWhatsApp\(p\)/);
   assert.match(module, /printer\.shareQrOnWhatsApp/);
   assert.match(printer, /wa\.me\//);
-  assert.match(module, /breakfast-pass\.html/);
+  assert.match(guestPage, /new URLSearchParams\(location\.search\)\.get\("t"\)/);
   assert.match(rules, /request\.resource\.data\.redeemedCount == resource\.data\.redeemedCount \+ 1/);
   assert.match(rules, /request\.resource\.data\.redeemedCount <= resource\.data\.guestCount/);
   assert.match(guestPage, /new QRCode\(target/);
