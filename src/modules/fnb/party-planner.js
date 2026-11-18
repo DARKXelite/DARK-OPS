@@ -1,9 +1,17 @@
 const MASS = Object.freeze({ kg: 1, g: 0.001 });
 const VOLUME = Object.freeze({ l: 1, ml: 0.001 });
-const COUNT = new Set(["nos", "pcs", "pc", "piece", "pieces", "pack", "packs", "box", "boxes", "bottle", "bottles", "tray", "trays", "dozen"]);
+const UNIT_ALIASES = Object.freeze({
+  kgs: "kg", kilogram: "kg", kilograms: "kg",
+  gm: "g", gms: "g", gram: "g", grams: "g",
+  ltr: "l", litre: "l", litres: "l", liter: "l", liters: "l",
+  millilitre: "ml", millilitres: "ml", milliliter: "ml", milliliters: "ml",
+  pc: "nos", pcs: "nos", no: "nos", piece: "nos", pieces: "nos",
+  packs: "pack", boxes: "box", bottles: "bottle", trays: "tray", dz: "dozen"
+});
 
 export function unitKey(value) {
-  return String(value || "").trim().toLowerCase().replace(/\./g, "");
+  const unit = String(value || "").trim().toLowerCase().replace(/\\./g, "");
+  return UNIT_ALIASES[unit] || unit;
 }
 
 export function convertPortionToPurchaseUnit(quantity, fromUnit, purchaseUnit) {
@@ -12,7 +20,7 @@ export function convertPortionToPurchaseUnit(quantity, fromUnit, purchaseUnit) {
   const from = unitKey(fromUnit), to = unitKey(purchaseUnit);
   if (MASS[from] && MASS[to]) return qty * MASS[from] / MASS[to];
   if (VOLUME[from] && VOLUME[to]) return qty * VOLUME[from] / VOLUME[to];
-  if ((COUNT.has(from) && COUNT.has(to) && from === to) || from === to) return qty;
+  if (from === to) return qty;
   return null;
 }
 
@@ -193,6 +201,7 @@ export function createPartyPlannerModule({
         partName: name, category: "F&B", domain: "F&B", stockQuantity: 0,
         unit, unitCost: rate, reorderLevel: 0, createdAt: serverTimestamp(), updatedAt: serverTimestamp()
       });
+      S.inventory = [...(S.inventory || []).filter(item => item.id !== ref.id), { id: ref.id, partName: name, category: "F&B", domain: "F&B", stockQuantity: 0, unit, unitCost: rate, reorderLevel: 0 }];
       draft.menuItems[index].ingredients.push({
         itemId: ref.id, itemName: name, purchaseUnit: unit, purchaseRate: rate,
         portionQty: 0, portionUnit: unit
@@ -323,8 +332,31 @@ export function createPartyPlannerModule({
       '<button type="button" class="btn btn-sm" data-act="fnb-party-quick" data-index="' + index + '">+ New inventory ingredient</button>' +
       '<button type="button" class="btn btn-sm" data-act="fnb-party-save-recipe" data-index="' + index + '">Save as recipe</button>' +
       (dish.recipeId ? '<button type="button" class="btn btn-sm" data-act="fnb-party-update-recipe" data-index="' + index + '">Update original recipe v' + escHtml(dish.recipeVersion || 1) + '</button>' : '') +
-      '<span class="fnb-cost-inline">Dish cost: <b>' + money(cost.totalCost) + '</b> · ' + (cost.priced ? money(cost.costPerPax) + ' / PAX' : "Check unit compatibility") + '</span></div>' +
+      '<span class="fnb-cost-inline" data-dish-cost="' + index + '">Dish cost: ' + money(cost.totalCost) + ' · ' + (cost.priced ? money(cost.costPerPax) + ' / PAX' : "Check unit compatibility") + '</span></div>' +
       quickForm + '</article>';
+  }
+
+  function ensureLiveBinding() {
+    const root = $("#fnbRoot");
+    if (!root || root.dataset.partyPlannerBound) return;
+    const refresh = event => {
+      if (!event.target.matches("[data-plan-field], [data-dish-field], [data-line-field]")) return;
+      readDraftFromDOM();
+      const summary = planCost();
+      const pax = root.querySelector("[data-kpi=pax]");
+      const total = root.querySelector("[data-kpi=total]");
+      const perPax = root.querySelector("[data-kpi=per-pax]");
+      if (pax) pax.textContent = fmt(draft.pax, 0);
+      if (total) total.textContent = money(summary.totalCost);
+      if (perPax) perPax.textContent = money(summary.costPerPax);
+      summary.dishes.forEach((row, index) => {
+        const cost = root.querySelector('[data-dish-cost="' + index + '"]');
+        if (cost) cost.textContent = "Dish cost: " + money(row.totalCost) + " · " + (row.priced ? money(row.costPerPax) + " / PAX" : "Check unit compatibility");
+      });
+    };
+    root.addEventListener("input", refresh);
+    root.addEventListener("change", refresh);
+    root.dataset.partyPlannerBound = "true";
   }
 
   function renderPlan() {
@@ -337,7 +369,7 @@ export function createPartyPlannerModule({
       '<label class="field"><span class="f">Number of PAX *</span><input data-plan-field="pax" type="number" min="1" step="1" value="' + escHtml(draft.pax) + '"></label>' +
       '<label class="field"><span class="f">Event type</span><select data-plan-field="eventType">' + ["Party","Wedding","Corporate","Buffet","Conference","Other"].map(v => '<option' + (draft.eventType === v ? " selected" : "") + '>' + v + '</option>').join("") + '</select></label></div>' +
       '<label class="field"><span class="f">Notes</span><input data-plan-field="notes" maxlength="500" value="' + escHtml(draft.notes) + '" placeholder="Optional notes"></label></section>' +
-      '<div class="fnb-party-kpis"><div class="stat"><div class="k">Guests</div><div class="v">' + fmt(draft.pax, 0) + '</div></div><div class="stat"><div class="k">Menu dishes</div><div class="v">' + summary.dishes.length + '</div></div><div class="stat"><div class="k">Estimated food cost</div><div class="v">' + money(summary.totalCost) + '</div></div><div class="stat"><div class="k">Cost / PAX</div><div class="v">' + money(summary.costPerPax) + '</div></div></div>' +
+      '<div class="fnb-party-kpis"><div class="stat"><div class="k">Guests</div><div class="v" data-kpi="pax">' + fmt(draft.pax, 0) + '</div></div><div class="stat"><div class="k">Menu dishes</div><div class="v">' + summary.dishes.length + '</div></div><div class="stat"><div class="k">Estimated food cost</div><div class="v" data-kpi="total">' + money(summary.totalCost) + '</div></div><div class="stat"><div class="k">Cost / PAX</div><div class="v" data-kpi="per-pax">' + money(summary.costPerPax) + '</div></div></div>' +
       '<section class="fnb-menu-stack">' + (draft.menuItems.length ? draft.menuItems.map(renderDish).join("") : '<div class="card fnb-empty-state">Start by adding a dish, or load one from the Recipe Library.</div>') + '</section>' +
       '<div class="fnb-party-toolbar"><button type="button" class="btn" data-act="fnb-party-add-dish">+ Add menu item</button><button type="button" class="btn btn-primary" data-act="fnb-party-save">Save party plan</button><button type="button" class="btn" data-act="fnb-party-show-library">Recipe Library</button></div>' +
       '<section class="card fnb-panel"><div class="fnb-panel-head"><div><h3>Ingredient availability</h3><div class="fnb-note">Required quantity is calculated from PAX × portion size and compared with current inventory.</div></div></div>' +
@@ -362,6 +394,7 @@ export function createPartyPlannerModule({
   }
 
   function renderHtml() {
+    ensureLiveBinding();
     return '<div class="fnb-party-shell"><div class="fnb-tabs">' +
       '<button class="btn fnb-tab ' + (section === "plan" ? "active" : "") + '" data-act="fnb-party-section" data-section="plan">Party Planner</button>' +
       '<button class="btn fnb-tab ' + (section === "library" ? "active" : "") + '" data-act="fnb-party-section" data-section="library">Recipe Library <span class="fnb-status">' + recipes().length + '</span></button>' +
