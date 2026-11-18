@@ -24,6 +24,8 @@ test("Firestore rules require authenticated role documents and deny unmatched co
   assert.match(rules, /match \/inventory\/\{id\}/);
   assert.match(rules, /match \/fnb_orders\/\{id\}/);
   assert.match(rules, /match \/fnb_receipts\/\{id\}/);
+  assert.match(rules, /match \/saved_recipes\/\{id\}/);
+  assert.match(rules, /match \/party_plans\/\{id\}/);
   assert.match(rules, /match \/\{document=\*\*\}\s*\{\s*allow read, write: if false;/);
   assert.doesNotMatch(rules, /allow read, write:\s*if true/);
 });
