@@ -462,6 +462,72 @@ body:not(.auth-locked) .main :is(#v-fuel,#v-shifts,#v-records,#v-turfcare,#v-reg
   color: var(--cg-ink) !important;
   border-color: var(--cg-border-strong) !important;
 }
+/* Legacy page-specific controls and KPI text use the same calm semantic palette. */
+body:not(.auth-locked) .main :is(#v-fuel,#v-registry,#v-users) .chip,
+body:not(.auth-locked) .main #ledgerCard .chip {
+  background: var(--cg-surface) !important;
+  color: var(--cg-forest) !important;
+  border-color: var(--cg-border) !important;
+}
+body:not(.auth-locked) .main :is(#v-fuel,#v-registry,#v-users) .chip.on,
+body:not(.auth-locked) .main #ledgerCard .chip.on {
+  background: var(--cg-sage) !important;
+  color: var(--cg-forest) !important;
+  border-color: var(--cg-focus) !important;
+}
+body:not(.auth-locked) .main #ledgerCard :is(.rangebar label,.dates label,.roi-chart-note) {
+  color: var(--cg-muted) !important;
+}
+body:not(.auth-locked) .main #ledgerCard .badge.mute {
+  background: var(--cg-surface-soft) !important;
+  color: var(--cg-muted) !important;
+  border-color: var(--cg-border) !important;
+}
+body:not(.auth-locked) .main #ledgerCard .badge.gold {
+  background: var(--cg-sage) !important;
+  color: var(--cg-forest) !important;
+  border-color: var(--cg-border) !important;
+}
+body:not(.auth-locked) .main :is(#v-fuel,#v-registry,#v-users,#ledgerCard) table tfoot td {
+  background: var(--cg-surface-soft) !important;
+  color: var(--cg-ink) !important;
+  border-color: var(--cg-border) !important;
+}
+body:not(.auth-locked) .main #v-registry #storeKpis :is(.kpi-label,.kpi-value,.kpi b) {
+  color: var(--cg-ink) !important;
+}
+body:not(.auth-locked) .main #v-registry .inv-category :is(.inv-cat-icon,.inv-cat-alert,.inv-cat-chevron,.inv-category-placeholder,.inv-category summary small) {
+  color: var(--cg-muted) !important;
+}
+body:not(.auth-locked) .main #v-users :is(.user-tools .muted,.user-count) { color: var(--cg-muted) !important; }
+body:not(.auth-locked) .main #usersTbl td .btn:not(.btn-danger) {
+  background: var(--cg-surface-soft) !important;
+  color: var(--cg-forest) !important;
+  border-color: var(--cg-border) !important;
+}
+body:not(.auth-locked) .main #usersTbl td .btn-danger {
+  background: var(--cg-danger-bg) !important;
+  color: var(--cg-danger-ink) !important;
+  border-color: #E4C2BC !important;
+}
+body:not(.auth-locked) .main #usersTbl td .btn-danger .material-symbols-rounded { color: var(--cg-danger-ink) !important; }
+body:not(.auth-locked) .main :is(#v-fuel,#v-users,#v-registry) .badge.ok,
+body:not(.auth-locked) .main .local-expenses .badge.ok {
+  background: var(--cg-success-bg) !important;
+  color: var(--cg-success-ink) !important;
+  border-color: #B7D1BC !important;
+}
+body:not(.auth-locked) .main :is(#v-users,#v-registry) .badge.warn,
+body:not(.auth-locked) .main .local-expenses .badge.warn {
+  background: var(--cg-warning-bg) !important;
+  color: var(--cg-warning-ink) !important;
+  border-color: #DFD0A9 !important;
+}
+body:not(.auth-locked) .main .expense-paid-toggle,
+body:not(.auth-locked) .main .expense-paid-toggle span { color: var(--cg-ink) !important; }
+body:not(.auth-locked) .main .expense-paid-toggle input,
+body:not(.auth-locked) .main .expense-stock-option input { accent-color: var(--cg-forest) !important; }
+
 /* Inventory: category accordions, summaries, alerts, tables and import modal. */
 body:not(.auth-locked) .main #v-registry :is(.card,.kpi,.inv-category,details.inv-category,.inv-category-body,.inv-category-table,.inv-category-placeholder) {
   background: var(--cg-surface) !important;
