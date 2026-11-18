@@ -347,7 +347,8 @@ test("F&B staff can read inventory and create only zero-stock F&B ingredients, r
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp()
   }));
-  await assertSucceeds(setDoc(doc(db, "party_plans", "wedding"), {
+  const partyRef = doc(db, "party_plans", "wedding");
+  await assertSucceeds(setDoc(partyRef, {
     eventName: "Wedding Reception",
     eventDate: "2026-11-25",
     pax: 250,
@@ -364,6 +365,16 @@ test("F&B staff can read inventory and create only zero-stock F&B ingredients, r
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp()
   }));
+  await assertSucceeds(updateDoc(partyRef, {
+    eventName: "Wedding Reception - Revised",
+    revision: 2,
+    revisionHistory: [{
+      revision: 1, eventName: "Wedding Reception", eventDate: "2026-11-25",
+      pax: 250, totalFoodCostSnapshot: 15000, foodCostPerPaxSnapshot: 60
+    }],
+    updatedAt: serverTimestamp()
+  }));
+  assert.equal((await getDoc(partyRef)).data().revision, 2);
 
   const operatorDb = testEnv.authenticatedContext("operator-no-fnb").firestore();
   await seed(["app_roles/operator-no-fnb", role("operator")]);
