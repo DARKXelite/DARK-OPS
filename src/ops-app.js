@@ -335,6 +335,8 @@ function exportWorkflowWorkbook() {
   addSheet('Users',generic(S.users));
   addSheet('FNB Orders',generic(S.fnbOrders));
   addSheet('FNB Receipts',generic(S.fnbReceipts));
+  addSheet('Saved Recipes',generic(S.savedRecipes));
+  addSheet('Party Plans',generic(S.partyPlans));
   if(assets){
     addSheet('Asset Register',assets.records||[]);
     addSheet('Asset Departments',assets.departments||[]);
@@ -1548,7 +1550,7 @@ function renderOpsAnalytics(){
   const views=(OA_VIEWS[OA.domain]||OA_VIEWS.overview),viewTabs=views.map(v=>'<button type="button" class="oa-view-tab '+(OA.view===v[0]?'active':'')+'" data-act="oa-view" data-view="'+v[0]+'">'+v[1]+'</button>').join('');
   const presetDefs=[['today','Today'],['yesterday','Yesterday'],['7d','7 days'],['30d','30 days'],['mtd','Month to date'],['last-month','Last month']];
   const presets=presetDefs.map(p=>'<button type="button" class="oa-preset" data-act="oa-preset" data-range="'+p[0]+'">'+p[1]+'</button>').join('');
-  const requiredMap={overview:['fuel','machines','shifts','inventory','plans','dailyPlans','maintenance','expenses','inwards','fnbOrders','fnbReceipts'],fuel:['fuel','machines','shifts'],turf:['plans','dailyPlans','inventory'],inventory:['inventory','inwards'],maintenance:['maintenance'],expenses:['expenses'],shifts:['shifts'],fnb:['fnbOrders','fnbReceipts'],assets:['machines']};
+  const requiredMap={overview:['fuel','machines','shifts','inventory','plans','dailyPlans','maintenance','expenses','inwards','fnbOrders','fnbReceipts'],fuel:['fuel','machines','shifts'],turf:['plans','dailyPlans','inventory'],inventory:['inventory','inwards'],maintenance:['maintenance'],expenses:['expenses'],shifts:['shifts'],fnb:['fnbOrders','fnbReceipts','savedRecipes','partyPlans'],assets:['machines']};
   const required=requiredMap[OA.domain]||[];
   const denied=required.filter(k=>!RBAC.can(permissionForCollection(CONFIG.COL[k],false)));
   const loading=required.filter(k=>!LOADED[k]&&RBAC.can(permissionForCollection(CONFIG.COL[k],false)));
@@ -2196,6 +2198,8 @@ const RESET_GROUPS = [
   {key:'expenses', label:'Local expenses', cols:['expenses'], note:'Local expense and bill records.'},
   {key:'fnbOrders', label:'F&B orders', cols:['fnbOrders'], note:'F&B order records. Review linked receipts before reset.'},
   {key:'fnbReceipts', label:'F&B receipts', cols:['fnbReceipts'], note:'F&B receipt records.'},
+   {key:'savedRecipes', label:'Saved F&B recipes', cols:['savedRecipes'], note:'Reusable recipe templates.'},
+   {key:'partyPlans', label:'Party plans', cols:['partyPlans'], note:'Party menus and historical costing snapshots.'},
   {key:'assetDepartments', label:'Asset departments', collections:['asset_departments'], note:'Assets module department masters.'},
   {key:'assetTypes', label:'Asset types & custom fields', collections:['asset_types'], note:'Assets module type and field definitions.'},
   {key:'assetRecords', label:'Asset records', collections:['asset_records'], note:'Standalone asset records. Fleet-linked machine records are in Machines / fleet.'}
