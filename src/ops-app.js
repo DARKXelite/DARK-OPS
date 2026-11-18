@@ -2896,7 +2896,7 @@ const H = {
   'fnb-party-save': async () => { await fnbModule.partyPlanner.saveParty(); fnbModule.render(); },
   'fnb-party-save-recipe': async d => { await fnbModule.partyPlanner.saveRecipe(Number(d.index), false); fnbModule.render(); },
   'fnb-party-update-recipe': async d => { await fnbModule.partyPlanner.saveRecipe(Number(d.index), true); fnbModule.render(); },
-  'fnb-party-quick': d => { fnbModule.partyPlanner.readDraftFromDOM(); fnbModule.partyPlanner.quickAddDish = Number(d.index); fnbModule.render(); },
+  'fnb-party-quick': d => { fnbModule.partyPlanner.openQuickAdd(Number(d.index)); fnbModule.render(); },
   'fnb-party-add-inventory': async d => { await fnbModule.partyPlanner.quickCreateIngredient(Number(d.dish)); fnbModule.render(); },
   'fnb-party-cancel-quick': () => { fnbModule.partyPlanner.cancelQuickAdd(); fnbModule.render(); },
   'fnb-party-show-library': () => { fnbModule.partyPlanner.setSection('library'); fnbModule.render(); },
