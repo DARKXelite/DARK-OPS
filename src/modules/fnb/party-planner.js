@@ -413,7 +413,7 @@ export function createPartyPlannerModule({
 
   function renderAnalysis() {
     const rows = plans().map(plan => '<tr><td><b>' + escHtml(plan.eventName) + '</b><div class="fnb-note">' + escHtml(plan.eventDate || "") + ' · v' + escHtml(plan.revision || 1) + '</div></td><td>' + num(plan.pax).toFixed(0) + '</td><td>' + (plan.menuItems || []).length + '</td><td>' + money(plan.totalFoodCostSnapshot || 0) + '</td><td>' + money(plan.foodCostPerPaxSnapshot || 0) + (plan.pricedSnapshot ? '' : '<div class="fnb-note">Partially priced</div>') + '</td><td><button class="btn btn-sm" data-act="fnb-party-edit" data-id="' + escHtml(plan.id) + '">Open / edit</button></td></tr>').join("");
-    return '<section class="card fnb-panel"><div class="fnb-panel-head"><div><h3>Party cost analysis</h3><div class="fnb-note">Saved estimates retain rate and quantity snapshots. Updating a party plan creates a new saved estimate.</div></div><button class="btn btn-primary" data-act="fnb-party-new">New party plan</button></div>' +
+    return '<section class="card fnb-panel"><div class="fnb-panel-head"><div><h3>Party cost analysis</h3><div class="fnb-note">Saved estimates retain rate and quantity snapshots. Each update preserves the previous costing snapshot in revision history.</div></div><button class="btn btn-primary" data-act="fnb-party-new">New party plan</button></div>' +
       '<div class="table-wrap"><table class="fnb-table"><thead><tr><th>Event</th><th>PAX</th><th>Dishes</th><th>Total food cost</th><th>Cost / PAX</th><th></th></tr></thead><tbody>' + (rows || '<tr><td colspan="6" class="fnb-empty">No party plans saved yet.</td></tr>') + '</tbody></table></div></section>';
   }
 
