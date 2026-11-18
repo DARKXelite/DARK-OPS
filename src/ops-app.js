@@ -2421,6 +2421,7 @@ function renderAll() { try { (RENDER[cur] || (() => {}))(); updateBadges(); if (
 let unsubs = new Map();
 let listenersStarted = false;
 const listenerEpochs = new Map();
+const listenerScopes = new Map();
 const VIEW_COLLECTIONS = {
   overview: ['fuel','machines','shifts','inventory','plans','dailyPlans','maintenance','logs'],
   fleet: ['machines','live','fuel','shifts'],
@@ -2445,6 +2446,7 @@ function stopOneListener(k) {
   if (unsubscribe) {
     try { unsubscribe(); } catch (_) {}
     unsubs.delete(k);
+    listenerScopes.delete(k);
   }
 }
 function syncListenersForView() {
@@ -2454,6 +2456,7 @@ function syncListenersForView() {
   Object.keys(CONFIG.COL).forEach(k => {
     const permitted = RBAC.can(permissionForCollection(CONFIG.COL[k], false)) || (cur === 'fnb' && k === 'inventory' && RBAC.can('fnb.read'));
     const shouldListen = desired.has(k) && permitted;
+    const scope = cur === "fnb" && k === "inventory" ? "fnb-inventory" : "full";
     if (!shouldListen) {
       if (unsubs.has(k)) stopOneListener(k);
       // Clear data not active on this screen, so a role/view transition never keeps
@@ -2464,7 +2467,8 @@ function syncListenersForView() {
       if (k === 'logs' || k === 'live') updateBadges(k);
       return;
     }
-    if (unsubs.has(k)) return;
+    if (unsubs.has(k) && listenerScopes.get(k) === scope) return;
+    if (unsubs.has(k)) stopOneListener(k);
 
     const epoch = (listenerEpochs.get(k) || 0) + 1;
     listenerEpochs.set(k, epoch);
@@ -2506,6 +2510,7 @@ function syncListenersForView() {
       if (collectionAffectsCurrentView(k)) scheduleRender();
     });
     unsubs.set(k, unsubscribe);
+    listenerScopes.set(k, scope);
   });
 }
 function startListeners() {
