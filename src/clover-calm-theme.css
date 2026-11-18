@@ -576,6 +576,136 @@ body:not(.auth-locked) .main #v-users :is(.user-search input,.user-role-filter s
   border-color: var(--cg-border-strong) !important;
 }
 
+/* Remaining module-local elements discovered in the cascade audit. */
+body:not(.auth-locked) .main :is(.bf-page,.gp-shell) :is(.bf-eyebrow,.gp-eyebrow,.bf-step) {
+  color: var(--cg-forest) !important;
+}
+body:not(.auth-locked) .main .bf-page :is(.bf-form-note,.bf-optional,.bf-footer-note,.bf-booking-main span,.bf-booking-main small,.bf-date-filter span,.bf-scan-result,.bf-scan-result.working) {
+  color: var(--cg-muted) !important;
+}
+body:not(.auth-locked) .main .bf-page .bf-scan-result,
+body:not(.auth-locked) .main .bf-page .bf-date-filter {
+  background: var(--cg-surface-soft) !important;
+  border-color: var(--cg-border) !important;
+}
+body:not(.auth-locked) .main .bf-page .bf-reader button {
+  background: var(--cg-surface) !important;
+  color: var(--cg-forest) !important;
+  border: 1px solid var(--cg-border) !important;
+}
+body:not(.auth-locked) .main .gp-shell :is(.gp-live,.gp-ledger-summary,.gp-category-meta,.gp-empty,.gp-category-top span,.gp-record p,.gp-record small,.gp-table td small) {
+  color: var(--cg-muted) !important;
+}
+body:not(.auth-locked) .main .gp-shell .gp-live { color: var(--cg-success-ink) !important; }
+body:not(.auth-locked) .main .gp-shell .gp-tag {
+  background: var(--cg-sage) !important;
+  color: var(--cg-forest) !important;
+  border: 1px solid var(--cg-border) !important;
+}
+body:not(.auth-locked) .main .gp-shell .gp-link:not(.danger) {
+  background: transparent !important;
+  color: var(--cg-forest) !important;
+  border: 1px solid transparent !important;
+}
+body:not(.auth-locked) .main .gp-shell .gp-link:hover:not(:disabled):not(.danger) {
+  background: var(--cg-sage) !important;
+  color: var(--cg-forest-hover) !important;
+}
+body:not(.auth-locked) .main .gp-shell .gp-qr-dialog {
+  background: var(--cg-surface) !important;
+  color: var(--cg-ink) !important;
+  border: 1px solid var(--cg-border) !important;
+  box-shadow: 0 10px 28px rgba(35,55,43,.12) !important;
+}
+body:not(.auth-locked) .main .gp-shell .gp-qr-modal { background: rgba(35,52,41,.30) !important; }
+body:not(.auth-locked) .main .gp-shell .gp-qr-dialog :is(h3,p,small) { color: var(--cg-ink) !important; }
+body:not(.auth-locked) .main .gp-shell .gp-modal-close { color: var(--cg-forest) !important; }
+body:not(.auth-locked) .main .gp-shell .gp-modal-close:hover { background: var(--cg-sage) !important; color: var(--cg-forest-hover) !important; }
+
+/* The turf-planner modal is a separate component from #tpContainer. */
+body:not(.auth-locked) .modal.turf-planner-modal,
+body:not(.auth-locked) .modal.turf-planner-confirm-modal {
+  background: var(--cg-surface) !important;
+  color: var(--cg-ink) !important;
+  border-color: var(--cg-border) !important;
+  box-shadow: 0 10px 30px rgba(35,55,43,.14) !important;
+}
+body:not(.auth-locked) .modal.turf-planner-modal :is(
+  .tp-other-days,.tp-other-day,.tp-product-search,.tp-search-empty,
+  .tp-product-row,.tp-area-sidebar,.tp-repeat-panel,.tp-repeat-qty-edit,
+  .tp-saved-list,.tp-floating-save,.tp-inline-review,.tp-review-table-wrap,
+  .tp-date-single
+) {
+  background: var(--cg-surface) !important;
+  color: var(--cg-ink) !important;
+  border-color: var(--cg-border) !important;
+  box-shadow: none !important;
+}
+body:not(.auth-locked) .modal.turf-planner-modal :is(
+  .tp-other-days>summary,.tp-other-day>summary,.tp-other-day-item,
+  .tp-other-day-name,.tp-repeat-cal-head,.tp-saved-entry,
+  .tp-saved-entry span,.tp-saved-list summary,.tp-repeat-qty-edit label,
+  .tp-area-button,.tp-category-tab,.tp-cal-day,.tp-inline-review-head
+) { color: var(--cg-ink) !important; }
+body:not(.auth-locked) .modal.turf-planner-modal :is(
+  .tp-other-days-title small,.tp-other-days-count,.tp-other-day-count,
+  .tp-other-chevron,.tp-other-day-item>.material-symbols-rounded,
+  .tp-other-day-name small,.tp-draft-status,.tp-repeat-panel>small,
+  .tp-repeat-actions,.tp-cal-weekday,.tp-floating-save>span,
+  .tp-search-empty span
+) { color: var(--cg-muted) !important; }
+body:not(.auth-locked) .modal.turf-planner-modal .tp-product-search input,
+body:not(.auth-locked) .modal.turf-planner-modal .tp-date-single input,
+body:not(.auth-locked) .modal.turf-planner-modal .tp-repeat-qty-edit input {
+  background: var(--cg-surface) !important;
+  color: var(--cg-ink) !important;
+  border-color: var(--cg-border-strong) !important;
+  box-shadow: none !important;
+  color-scheme: light !important;
+}
+body:not(.auth-locked) .modal.turf-planner-modal .tp-product-search input::placeholder { color: var(--cg-muted) !important; }
+body:not(.auth-locked) .modal.turf-planner-modal .tp-product-search kbd {
+  background: var(--cg-surface-soft) !important;
+  color: var(--cg-muted) !important;
+  border-color: var(--cg-border) !important;
+}
+body:not(.auth-locked) .modal.turf-planner-modal :is(.tp-area-button,.tp-category-tab,.tp-repeat-trigger,.tp-cal-day,.tp-repeat-cal-head button,.tp-saved-entry button) {
+  background: var(--cg-surface-soft) !important;
+  color: var(--cg-forest) !important;
+  border-color: var(--cg-border) !important;
+}
+body:not(.auth-locked) .modal.turf-planner-modal :is(.tp-area-button.is-active,.tp-repeat-trigger.is-active,.tp-cal-day.is-current) {
+  background: var(--cg-sage) !important;
+  color: var(--cg-forest) !important;
+  border-color: var(--cg-focus) !important;
+}
+body:not(.auth-locked) .modal.turf-planner-modal :is(.tp-cal-day.is-selected,.tp-category-tab.is-active,.tp-primary-action,button[data-act="tp-review-save"],.tp-inline-review-actions .btn-primary) {
+  background: var(--cg-forest) !important;
+  color: #FFFFFF !important;
+  border-color: var(--cg-forest) !important;
+}
+body:not(.auth-locked) .modal.turf-planner-modal .tp-cal-day:disabled {
+  background: #E7EBE5 !important;
+  color: #778278 !important;
+  border-color: var(--cg-border) !important;
+  opacity: 1 !important;
+}
+body:not(.auth-locked) .modal.turf-planner-modal .tp-cal-day i { background: var(--cg-forest) !important; }
+body:not(.auth-locked) .modal.turf-planner-modal .tp-saved-entry b,
+body:not(.auth-locked) .modal.turf-planner-modal .tp-other-day-item b { color: var(--cg-forest) !important; }
+body:not(.auth-locked) .modal.turf-planner-modal .tp-floating-save {
+  background: var(--cg-surface-soft) !important;
+  border-top-color: var(--cg-border) !important;
+}
+body:not(.auth-locked) .modal.turf-planner-confirm-modal .tp-review-table,
+body:not(.auth-locked) .modal.turf-planner-confirm-modal .tp-review-table th,
+body:not(.auth-locked) .modal.turf-planner-confirm-modal .tp-review-table td {
+  background: var(--cg-surface) !important;
+  color: var(--cg-ink) !important;
+  border-color: var(--cg-border) !important;
+}
+body:not(.auth-locked) .modal.turf-planner-confirm-modal .tp-review-table th { background: var(--cg-surface-soft) !important; }
+
 /* Modals, drawers, menus and overlays follow the workspace. */
 body:not(.auth-locked) :is(.modal,.modal-content,.drawer,.cmd-pal,.kmenu,.dropdown-menu,.popover,.calendar-popover) {
   background: var(--cg-surface) !important;
