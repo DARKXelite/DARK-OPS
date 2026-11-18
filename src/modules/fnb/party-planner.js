@@ -342,6 +342,12 @@ export function createPartyPlannerModule({
     if (!root || root.dataset.partyPlannerBound) return;
     const refresh = event => {
       if (!event.target.matches("[data-plan-field], [data-dish-field], [data-line-field]")) return;
+      if (event.target.matches("[data-line-field='itemId']")) {
+        const item = findItem(event.target.value);
+        const portion = event.target.closest("[data-line-index]")?.querySelector("[data-line-field='portionUnit']");
+        const defaultUnit = unitKey(item?.unit || "");
+        if (portion && [...portion.options].some(option => option.value === defaultUnit)) portion.value = defaultUnit;
+      }
       readDraftFromDOM();
       const summary = planCost();
       const pax = root.querySelector("[data-kpi=pax]");
